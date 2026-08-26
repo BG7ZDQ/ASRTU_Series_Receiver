@@ -1,0 +1,693 @@
+#include "main_window.h"
+
+#include "flowgraph.h"
+#include "rssi_meter.h"
+#include "snr_plot.h"
+
+#include <QApplication>
+#include <QCloseEvent>
+#include <QCoreApplication>
+#include <QDateTime>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QFrame>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QMessageBox>
+#include <QMetaObject>
+#include <QMouseEvent>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
+#include <QResizeEvent>
+#include <QSettings>
+#include <QScreen>
+#include <QSplitter>
+#include <QTabWidget>
+#include <QTextStream>
+#include <QTimer>
+#include <QUrlQuery>
+#include <QVBoxLayout>
+#include <QWidget>
+
+#include <qwt_plot.h>
+#include <qwt_text.h>
+
+#include <algorithm>
+#include <cmath>
+#include <functional>
+#include <stdexcept>
+
+namespace {
+class RightClickResetFilter final : public QObject
+{
+public:
+    RightClickResetFilter(std::function<void()> reset, QObject* parent)
+        : QObject(parent), reset_(std::move(reset)) {}
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (event->type() == QEvent::MouseButtonPress) {
+            auto* mouse = static_cast<QMouseEvent*>(event);
+            if (mouse->button() == Qt::RightButton) {
+                reset_();
+                event->accept();
+                return true;
+            }
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    std::function<void()> reset_;
+};
+
+class EqualAxisScaleFilter final : public QObject
+{
+public:
+    EqualAxisScaleFilter(QwtPlot* plot, QObject* parent)
+        : QObject(parent), plot_(plot)
+    {
+        if (plot_ && plot_->canvas())
+            plot_->canvas()->installEventFilter(this);
+    }
+
+    void synchronize()
+    {
+        if (!plot_ || !plot_->canvas() || updating_)
+            return;
+        const int width = plot_->canvas()->width();
+        const int height = plot_->canvas()->height();
+        if (width < 2 || height < 2)
+            return;
+
+        updating_ = true;
+        const double aspect = double(width) / double(height);
+        const double xHalfRange = aspect >= 1.0 ? 2.0 * aspect : 2.0;
+        const double yHalfRange = aspect >= 1.0 ? 2.0 : 2.0 / aspect;
+        plot_->setAxisScale(QwtPlot::xBottom, -xHalfRange, xHalfRange);
+        plot_->setAxisScale(QwtPlot::yLeft, -yHalfRange, yHalfRange);
+        plot_->replot();
+        updating_ = false;
+    }
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (plot_ && watched == plot_->canvas() &&
+            (event->type() == QEvent::Resize || event->type() == QEvent::Show)) {
+            synchronize();
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    QwtPlot* plot_ = nullptr;
+    bool updating_ = false;
+};
+
+class ResponsivePlotSplitter final : public QSplitter
+{
+public:
+    explicit ResponsivePlotSplitter(QWidget* parent = nullptr)
+        : QSplitter(Qt::Vertical, parent)
+    {
+    }
+
+protected:
+    void resizeEvent(QResizeEvent* event) override
+    {
+        QSplitter::resizeEvent(event);
+        const int available = height() - handleWidth();
+        if (available <= 0 || count() < 2)
+            return;
+        // The Qwt constellation widget needs roughly the right-column width
+        // as its outer height for the inner -2..2 canvas to appear square.
+        const int maxConstellationHeight =
+            std::max(300, std::min(430, available - 150));
+        const int constellationHeight = std::clamp(
+            width() - 20, 300, maxConstellationHeight);
+        setSizes({constellationHeight, available - constellationHeight});
+    }
+};
+
+class ResponsiveMainSplitter final : public QSplitter
+{
+public:
+    explicit ResponsiveMainSplitter(QWidget* parent = nullptr)
+        : QSplitter(Qt::Horizontal, parent)
+    {
+    }
+
+protected:
+    void resizeEvent(QResizeEvent* event) override
+    {
+        QSplitter::resizeEvent(event);
+        const int available = width() - handleWidth();
+        if (available <= 0 || count() < 2)
+            return;
+
+        // Keep the demodulator column close to the GNU Radio proportions.
+        // On a normal window it occupies about 48%; on a wide/full-screen
+        // window it stops growing at 520 px and the plots receive the rest.
+        const int maxRightWidth = std::max(420, std::min(520, available - 300));
+        const int rightWidth = std::clamp(
+            static_cast<int>(std::lround(width() * 0.48)), 420, maxRightWidth);
+        setSizes({available - rightWidth, rightWidth});
+    }
+};
+
+void installRightClickReset(QWidget* widget,
+                            QObject* owner,
+                            std::function<void()> reset)
+{
+    auto* filter = new RightClickResetFilter(std::move(reset), owner);
+    widget->installEventFilter(filter);
+    const auto descendants = widget->findChildren<QObject*>();
+    for (auto* child : descendants)
+        child->installEventFilter(filter);
+    widget->setToolTip(QStringLiteral("Right-click to restore the default view"));
+}
+
+void reducePlotTitleFont(QWidget* widget)
+{
+    QList<QObject*> candidates = widget->findChildren<QObject*>();
+    candidates.prepend(widget);
+    for (auto* candidate : candidates) {
+        if (!candidate->inherits("QwtPlot"))
+            continue;
+        auto* plot = static_cast<QwtPlot*>(candidate);
+        QwtText title = plot->title();
+        QFont titleFont = title.font();
+        titleFont.setPointSize(9);
+        title.setFont(titleFont);
+        plot->setTitle(title);
+    }
+}
+
+QString requestedSessionDirectory()
+{
+    const QStringList arguments = QCoreApplication::arguments();
+    const int option = arguments.indexOf(QStringLiteral("--session-dir"));
+    if (option >= 0 && option + 1 < arguments.size())
+        return QDir::cleanPath(arguments.at(option + 1));
+    return {};
+}
+
+QString createSessionDirectory()
+{
+    QString directory = requestedSessionDirectory();
+    if (directory.isEmpty()) {
+        const QString root = QDir::cleanPath(
+            QDir(QCoreApplication::applicationDirPath())
+                .absoluteFilePath(QStringLiteral("../ASRTU1_Records")));
+        directory = QDir(root).filePath(
+            QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_HHmmss_zzz")));
+    }
+    if (!QDir().mkpath(directory))
+        throw std::runtime_error(
+            QStringLiteral("Unable to create session directory: %1")
+                .arg(directory).toUtf8().constData());
+    return QDir(directory).absolutePath();
+}
+
+bool requestedRealIf12k()
+{
+    return QCoreApplication::arguments().contains(QStringLiteral("--real-if-12k"));
+}
+
+bool requestedSharedIqBridge()
+{
+    return QCoreApplication::arguments().contains(
+        QStringLiteral("--sdrsharp-iq-bridge"));
+}
+
+int requestedAudioDevice()
+{
+    const QStringList arguments = QCoreApplication::arguments();
+    const int option = arguments.indexOf(QStringLiteral("--audio-device"));
+    if (option < 0 || option + 1 >= arguments.size())
+        return -1;
+    bool valid = false;
+    const int device = arguments.at(option + 1).toInt(&valid);
+    return valid ? device : -1;
+}
+
+bool requestedRecordingEnabled()
+{
+    return !QCoreApplication::arguments().contains(QStringLiteral("--no-record"));
+}
+
+QString requestedWavPath()
+{
+    const QStringList arguments = QCoreApplication::arguments();
+    const int option = arguments.indexOf(QStringLiteral("--wav"));
+    if (option >= 0 && option + 1 < arguments.size())
+        return QDir::cleanPath(arguments.at(option + 1));
+    return {};
+}
+
+QString requestedOption(const QString& name)
+{
+    const QStringList arguments = QCoreApplication::arguments();
+    const int option = arguments.indexOf(name);
+    if (option >= 0 && option + 1 < arguments.size())
+        return arguments.at(option + 1);
+    return {};
+}
+
+QString compactSessionPath(const QString& sessionDirectory, const QString& path)
+{
+    return QStringLiteral("/%1/%2")
+        .arg(QFileInfo(sessionDirectory).fileName(), QFileInfo(path).fileName());
+}
+}
+
+MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
+{
+    setWindowTitle(QCoreApplication::translate("ASRTU", "阿斯图系列卫星接收解码"));
+    setMinimumSize(760, 640);
+    if (const QScreen* screen = QGuiApplication::primaryScreen()) {
+        const QSize available = screen->availableGeometry().size();
+        resize(std::clamp(int(available.width() * 0.72), 860, 1360),
+               std::clamp(int(available.height() * 0.90), 720, 1080));
+    } else {
+        resize(960, 900);
+    }
+
+    session_directory_ = createSessionDirectory();
+    const QString playbackPath = requestedWavPath();
+    bool validNorad = false;
+    satnogs_norad_id_ = requestedOption(QStringLiteral("--satnogs-norad"))
+                              .toInt(&validNorad);
+    satnogs_source_ = requestedOption(QStringLiteral("--satnogs-source")).trimmed();
+    bool validLongitude = false;
+    bool validLatitude = false;
+    satnogs_longitude_ = requestedOption(QStringLiteral("--satnogs-longitude"))
+                              .toDouble(&validLongitude);
+    satnogs_latitude_ = requestedOption(QStringLiteral("--satnogs-latitude"))
+                             .toDouble(&validLatitude);
+    const bool satnogsRequested = validNorad && satnogs_norad_id_ > 0 &&
+                                  !satnogs_source_.isEmpty() && validLongitude &&
+                                  validLatitude;
+    if (satnogsRequested && playbackPath.isEmpty())
+        satnogs_network_ = new QNetworkAccessManager(this);
+    const QString logPath = QDir(session_directory_).filePath(
+        QStringLiteral("decoder.log"));
+    if (playbackPath.isEmpty() && requestedRecordingEnabled())
+        recording_path_ = QDir(session_directory_).filePath(
+            QStringLiteral("recording.wav"));
+
+    // GNU Radio 3.10's Windows WAV sink ultimately opens a narrow-character
+    // filename.  Passing UTF-8 here breaks whenever the install/session path
+    // contains Chinese characters.  QFile::encodeName uses the Windows local
+    // filename encoding expected by that API.
+    if (!recording_path_.isEmpty()) {
+        QFile recordingProbe(recording_path_);
+        if (!recordingProbe.open(QIODevice::WriteOnly))
+            throw std::runtime_error(
+                QStringLiteral("Unable to create WAV file: %1\n%2")
+                    .arg(recording_path_, recordingProbe.errorString())
+                    .toUtf8().constData());
+        recordingProbe.close();
+        recordingProbe.remove();
+    }
+    log_file_.setFileName(logPath);
+    if (!log_file_.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text))
+        throw std::runtime_error(
+            QStringLiteral("Unable to open log file: %1")
+                .arg(logPath).toUtf8().constData());
+
+    try {
+        AsrtuFlowgraph::Options options;
+        if (!playbackPath.isEmpty())
+            options.wav_path = QFile::encodeName(playbackPath).constData();
+        if (!recording_path_.isEmpty())
+            options.record_wav_path = QFile::encodeName(recording_path_).constData();
+        options.real_if_12khz = requestedRealIf12k();
+        options.shared_iq_bridge = requestedSharedIqBridge();
+        options.audio_device_id = requestedAudioDevice();
+        if (satnogs_network_) {
+            options.payload_callback = [this](const std::vector<std::uint8_t>& payload) {
+                const QByteArray frame(reinterpret_cast<const char*>(payload.data()),
+                                       int(payload.size()));
+                QMetaObject::invokeMethod(
+                    this, [this, frame] { submitSatnogsFrame(frame); },
+                    Qt::QueuedConnection);
+            };
+        }
+        if (options.real_if_12khz)
+            options.input_frequency_hz = -12000.0;
+        flowgraph_ = std::make_unique<AsrtuFlowgraph>([this](const std::string& line) {
+            const QString text = QString::fromStdString(line);
+            QMetaObject::invokeMethod(this, [this, text] { appendLog(text); },
+                                      Qt::QueuedConnection);
+        }, options);
+        buildUi();
+        appendLog(QStringLiteral("C++/Qt demodulator initialized"));
+        appendLog(QStringLiteral("TCP PDU: 127.0.0.1:9985; ZMQ PUB: 127.0.0.1:5555"));
+        if (satnogs_network_) {
+            appendLog(QStringLiteral("SatNOGS upload enabled: NORAD %1; source %2")
+                          .arg(satnogs_norad_id_)
+                          .arg(satnogs_source_));
+        } else if (satnogsRequested && !playbackPath.isEmpty()) {
+            appendLog(QStringLiteral("SatNOGS upload disabled during recording playback"));
+        }
+        appendLog(QStringLiteral("Log file: %1")
+                      .arg(compactSessionPath(session_directory_, logPath)));
+        if (!playbackPath.isEmpty()) {
+            appendLog(QStringLiteral("Playback file: /%1")
+                          .arg(QFileInfo(playbackPath).fileName()));
+        } else if (!recording_path_.isEmpty()) {
+            appendLog(QStringLiteral("Automatic WAV recording: %1")
+                          .arg(compactSessionPath(session_directory_, recording_path_)));
+        } else {
+            appendLog(QStringLiteral("Automatic WAV recording: disabled"));
+        }
+        appendLog(!playbackPath.isEmpty()
+                      ? (options.real_if_12khz
+                             ? QStringLiteral("Input mode: WAV mono real IF centered at +12 kHz")
+                             : QStringLiteral("Input mode: WAV stereo zero-IF I/Q"))
+                      : options.shared_iq_bridge
+                      ? QStringLiteral("Input mode: SDRSharp local RAW I/Q bridge")
+                      : options.real_if_12khz
+                            ? QStringLiteral("Input mode: real mono IF centered at +12 kHz")
+                            : QStringLiteral("Input mode: stereo zero-IF I/Q"));
+        if (playbackPath.isEmpty() && !options.shared_iq_bridge)
+            appendLog(QStringLiteral("Audio input device ID: %1")
+                          .arg(options.audio_device_id));
+        flowgraph_->start();
+        appendLog(QStringLiteral("Flowgraph started"));
+    } catch (const std::exception& e) {
+        QMessageBox::critical(this, QStringLiteral("Initialization failed"),
+                              QString::fromUtf8(e.what()));
+        throw;
+    }
+
+    status_timer_ = new QTimer(this);
+    connect(status_timer_, &QTimer::timeout, this, &MainWindow::updateStatus);
+    status_timer_->start(200);
+    snr_log_timer_.start();
+    updateStatus();
+
+    QSettings settings(QStringLiteral("ASRTU"), QStringLiteral("ASRTU1_Demod_CQt_v3"));
+    const auto geometry = settings.value(QStringLiteral("geometry")).toByteArray();
+    if (!geometry.isEmpty()) {
+        restoreGeometry(geometry);
+        bool visible = false;
+        for (const QScreen* screen : QGuiApplication::screens()) {
+            if (screen->availableGeometry().intersects(frameGeometry())) {
+                visible = true;
+                break;
+            }
+        }
+        if (!visible)
+            move(QGuiApplication::primaryScreen()->availableGeometry().topLeft() +
+                 QPoint(30, 30));
+    }
+}
+
+MainWindow::~MainWindow()
+{
+    if (flowgraph_)
+        flowgraph_->stop();
+    log_file_.close();
+}
+
+void MainWindow::buildUi()
+{
+    auto* central = new QWidget(this);
+    central->setObjectName(QStringLiteral("decoderRoot"));
+    central->setStyleSheet(QStringLiteral(
+        "QWidget#decoderRoot { background:#f7faff; color:#17202a; }"
+        "QFrame#statusCard { background:#ffffff; border:1px solid #d9e5f2; "
+        "border-radius:8px; }"
+        "QLabel#metric { color:#243447; font-weight:600; }"
+        "QTabWidget::pane { background:#ffffff; border:1px solid #d9e5f2; "
+        "border-radius:0 7px 7px 7px; }"
+        "QTabBar::tab { color:#52606d; background:#edf5ff; "
+        "border:1px solid #d9e5f2; border-bottom:0; padding:7px 14px; "
+        "min-width:78px; }"
+        "QTabBar::tab:first { border-top-left-radius:6px; }"
+        "QTabBar::tab:last { border-top-right-radius:6px; }"
+        "QTabBar::tab:selected { color:#145ca8; background:#ffffff; "
+        "font-weight:600; }"
+        "QTabBar::tab:hover:!selected { background:#e4f0ff; }"
+        "QDoubleSpinBox { min-height:28px; padding:0 7px; background:#ffffff; "
+        "border:1px solid #cbd5e1; border-radius:5px; }"
+        "QSlider::groove:horizontal { height:5px; background:#dbe3eb; "
+        "border-radius:2px; }"
+        "QSlider::sub-page:horizontal { background:#2b7de9; border-radius:2px; }"
+        "QSlider::handle:horizontal { width:15px; margin:-5px 0; "
+        "background:#ffffff; border:2px solid #2b7de9; border-radius:7px; }"
+        "QSplitter::handle { background:#f7faff; }"
+        "QSplitter::handle:horizontal { width:8px; }"
+        "QSplitter::handle:vertical { height:8px; }"));
+    auto* outerLayout = new QVBoxLayout(central);
+    outerLayout->setContentsMargins(10, 10, 10, 10);
+    outerLayout->setSpacing(0);
+
+    auto* mainSplitter = new ResponsiveMainSplitter(central);
+    mainSplitter->setChildrenCollapsible(false);
+    mainSplitter->setOpaqueResize(false);
+    mainSplitter->setHandleWidth(8);
+    outerLayout->addWidget(mainSplitter);
+
+    auto* leftSplitter = new QSplitter(Qt::Vertical, mainSplitter);
+    leftSplitter->setChildrenCollapsible(false);
+    leftSplitter->setOpaqueResize(false);
+    leftSplitter->setHandleWidth(8);
+
+    auto* tabs = new QTabWidget(mainSplitter);
+    tabs->setDocumentMode(true);
+    tabs->setMinimumWidth(390);
+
+    auto* demod = new QWidget(tabs);
+    demod->setStyleSheet(QStringLiteral("background:#ffffff;"));
+    auto* demodLayout = new QVBoxLayout(demod);
+    demodLayout->setContentsMargins(4, 4, 4, 4);
+    demodLayout->setSpacing(3);
+
+    auto* statusCard = new QFrame(demod);
+    statusCard->setObjectName(QStringLiteral("statusCard"));
+    auto* status = new QHBoxLayout(statusCard);
+    status->setContentsMargins(12, 7, 9, 7);
+    status->setSpacing(8);
+    QFont infoFont = font();
+    infoFont.setPointSize(10);
+    infoFont.setBold(true);
+    infoFont.setStyleStrategy(static_cast<QFont::StyleStrategy>(
+        QFont::PreferAntialias | QFont::PreferQuality));
+    snr_label_ = new QLabel(QStringLiteral("SNR: -- dB"), demod);
+    frequency_label_ = new QLabel(QStringLiteral("Loop df: -- Hz"), demod);
+    sync_label_ = new QLabel(QStringLiteral("NOSYNC"), demod);
+    for (auto* label : { snr_label_, frequency_label_, sync_label_ }) {
+        label->setFont(infoFont);
+        label->setObjectName(QStringLiteral("metric"));
+    }
+    sync_label_->setAlignment(Qt::AlignCenter);
+    sync_label_->setMinimumWidth(115);
+    setSyncDisplay(false);
+
+    status->addWidget(snr_label_);
+    status->addWidget(frequency_label_);
+    status->addStretch(1);
+    status->addWidget(sync_label_);
+    demodLayout->addWidget(statusCard);
+    snr_plot_ = new SnrPlot(demod);
+    snr_plot_->setMaximumHeight(130);
+    demodLayout->addWidget(snr_plot_);
+
+    rssi_meter_ = new RssiMeter(demod);
+    auto* constellation = flowgraph_->constellationWidget();
+    constellation->setMinimumHeight(300);
+    constellation->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    QwtPlot* constellationPlot = dynamic_cast<QwtPlot*>(constellation);
+    if (!constellationPlot) {
+        for (QWidget* child : constellation->findChildren<QWidget*>()) {
+            if ((constellationPlot = dynamic_cast<QwtPlot*>(child)))
+                break;
+        }
+    }
+    auto* equalAxisScale = constellationPlot
+                               ? new EqualAxisScaleFilter(constellationPlot, this)
+                               : nullptr;
+    auto* loopSpectrum = flowgraph_->loopSpectrumWidget();
+    loopSpectrum->setMinimumHeight(150);
+    demodLayout->addWidget(rssi_meter_);
+    auto* demodPlots = new ResponsivePlotSplitter(demod);
+    demodPlots->setChildrenCollapsible(false);
+    demodPlots->setOpaqueResize(false);
+    demodPlots->setHandleWidth(7);
+    demodPlots->addWidget(constellation);
+    demodPlots->addWidget(loopSpectrum);
+    demodPlots->setStretchFactor(0, 4);
+    demodPlots->setStretchFactor(1, 1);
+    demodPlots->setSizes({420, 300});
+    demodLayout->addWidget(demodPlots, 1);
+    tabs->addTab(demod, QStringLiteral("Demodulator"));
+
+    auto* waterfall = flowgraph_->waterfallWidget();
+    auto* inputSpectrum = flowgraph_->inputSpectrumWidget();
+    for (auto* plotWidget : { waterfall, inputSpectrum, constellation, loopSpectrum })
+        reducePlotTitleFont(plotWidget);
+    leftSplitter->addWidget(waterfall);
+    leftSplitter->addWidget(inputSpectrum);
+    leftSplitter->setStretchFactor(0, 1);
+    leftSplitter->setStretchFactor(1, 1);
+    leftSplitter->setSizes({500, 500});
+    mainSplitter->addWidget(leftSplitter);
+    mainSplitter->addWidget(tabs);
+    mainSplitter->setStretchFactor(0, 11);
+    mainSplitter->setStretchFactor(1, 10);
+    mainSplitter->setSizes({520, 480});
+
+    installRightClickReset(inputSpectrum, this,
+                           [this] { flowgraph_->resetInputSpectrum(); });
+    installRightClickReset(waterfall, this,
+                           [this] { flowgraph_->resetWaterfall(); });
+    installRightClickReset(constellation, this,
+                           [this, equalAxisScale] {
+                               flowgraph_->resetConstellation();
+                               if (equalAxisScale)
+                                   equalAxisScale->synchronize();
+                           });
+    installRightClickReset(loopSpectrum, this,
+                           [this] { flowgraph_->resetLoopSpectrum(); });
+    setCentralWidget(central);
+    if (equalAxisScale) {
+        QTimer::singleShot(0, this,
+                           [equalAxisScale] { equalAxisScale->synchronize(); });
+    }
+}
+
+void MainWindow::updateStatus()
+{
+    if (!flowgraph_ || !flowgraph_->running()) {
+        setSyncDisplay(false);
+        return;
+    }
+    try {
+        if (!flowgraph_->inputActive(0.5)) {
+            snr_plot_->addGap();
+            snr_label_->setText(QStringLiteral("SNR: -- dB"));
+            frequency_label_->setText(QStringLiteral("Loop df: -- Hz"));
+            setSyncDisplay(false);
+            return;
+        }
+        const double snr = flowgraph_->snr();
+        if (std::isfinite(snr)) {
+            snr_plot_->addValue(snr); // starts immediately, independent of frames
+            snr_label_->setText(QStringLiteral("SNR: %1 dB").arg(snr, 0, 'f', 2));
+            const qint64 elapsed = snr_log_timer_.elapsed();
+            if (elapsed - last_snr_log_ms_ >= 1000) {
+                appendLog(QStringLiteral("SVR SNR: %1 dB").arg(snr, 0, 'f', 6));
+                last_snr_log_ms_ = elapsed;
+            }
+        }
+        frequency_label_->setText(QStringLiteral("Loop df: %1 Hz")
+                                      .arg(flowgraph_->loopFrequencyHz(), 0, 'f', 1));
+        const double rssi = flowgraph_->rssi();
+        if (std::isfinite(rssi)) {
+            const double targetMin = std::floor((rssi - 10.0) / 5.0) * 5.0;
+            const double targetMax = std::ceil((rssi + 15.0) / 5.0) * 5.0;
+            if (!rssi_range_ready_) {
+                rssi_min_ = targetMin;
+                rssi_max_ = targetMax;
+                rssi_range_ready_ = true;
+            } else {
+                rssi_min_ = targetMin < rssi_min_
+                                ? targetMin
+                                : rssi_min_ * 0.65 + targetMin * 0.35;
+                rssi_max_ = targetMax > rssi_max_
+                                ? targetMax
+                                : rssi_max_ * 0.65 + targetMax * 0.35;
+            }
+            rssi_meter_->setReading(rssi, rssi_min_, rssi_max_);
+        }
+        setSyncDisplay(flowgraph_->synced(1.5));
+    } catch (const std::exception& e) {
+        appendLog(QStringLiteral("Status read failed: %1").arg(QString::fromUtf8(e.what())));
+    }
+}
+
+void MainWindow::setSyncDisplay(bool synced)
+{
+    sync_label_->setText(synced ? QStringLiteral("SYNCED") : QStringLiteral("NOSYNC"));
+    sync_label_->setStyleSheet(QStringLiteral(
+        "QLabel { color:white; background:%1; border-radius:3px; padding:3px 10px; }")
+        .arg(synced ? QStringLiteral("#159447") : QStringLiteral("#b43b3b")));
+}
+
+void MainWindow::appendLog(const QString& text)
+{
+    const QString line = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss.zzz ")) + text;
+    if (log_file_.isOpen()) {
+        QTextStream stream(&log_file_);
+        stream.setCodec("UTF-8");
+        stream << line << '\n';
+        stream.flush();
+    }
+}
+
+void MainWindow::submitSatnogsFrame(const QByteArray& frame)
+{
+    if (!satnogs_network_ || frame.isEmpty())
+        return;
+
+    const auto coordinate = [](double value, QChar positive, QChar negative) {
+        return QStringLiteral("%1%2")
+            .arg(std::abs(value), 0, 'f', 6)
+            .arg(value >= 0.0 ? positive : negative);
+    };
+    QUrlQuery form;
+    form.addQueryItem(QStringLiteral("noradID"),
+                      QString::number(satnogs_norad_id_));
+    form.addQueryItem(QStringLiteral("source"), satnogs_source_);
+    form.addQueryItem(QStringLiteral("locator"), QStringLiteral("longLat"));
+    form.addQueryItem(QStringLiteral("longitude"),
+                      coordinate(satnogs_longitude_, QLatin1Char('E'),
+                                 QLatin1Char('W')));
+    form.addQueryItem(QStringLiteral("latitude"),
+                      coordinate(satnogs_latitude_, QLatin1Char('N'),
+                                 QLatin1Char('S')));
+    form.addQueryItem(QStringLiteral("version"), QStringLiteral("1.6.6"));
+    form.addQueryItem(QStringLiteral("frame"),
+                      QString::fromLatin1(frame.toHex().toUpper()));
+    form.addQueryItem(QStringLiteral("timestamp"),
+                      QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs));
+
+    QUrl endpoint(QStringLiteral("https://db.satnogs.org/api/telemetry/"));
+    endpoint.setQuery(form);
+    QNetworkRequest request(endpoint);
+    request.setHeader(QNetworkRequest::ContentTypeHeader,
+                      QStringLiteral("application/x-www-form-urlencoded"));
+    QNetworkReply* reply = satnogs_network_->post(
+        request, form.query(QUrl::FullyEncoded).toUtf8());
+    connect(reply, &QNetworkReply::finished, this, [this, reply] {
+        const int status = reply->attribute(
+            QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        if (reply->error() == QNetworkReply::NoError) {
+            appendLog(QStringLiteral("SatNOGS upload accepted (HTTP %1)")
+                          .arg(status));
+        } else {
+            appendLog(QStringLiteral("SatNOGS upload failed (HTTP %1): %2")
+                          .arg(status)
+                          .arg(reply->errorString()));
+        }
+        reply->deleteLater();
+    });
+}
+
+void MainWindow::closeEvent(QCloseEvent* event)
+{
+    if (status_timer_)
+        status_timer_->stop();
+    if (flowgraph_)
+        flowgraph_->stop();
+    QSettings settings(QStringLiteral("ASRTU"), QStringLiteral("ASRTU1_Demod_CQt_v3"));
+    settings.setValue(QStringLiteral("geometry"), saveGeometry());
+    event->accept();
+}

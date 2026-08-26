@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net46</TargetFramework>
+    <OutputType>Library</OutputType>
+    <PlatformTarget>x86</PlatformTarget>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>SDRSharp.AstroSeriesBridge</AssemblyName>
+    <RootNamespace>SDRSharp.AstroSeriesBridge</RootNamespace>
+  </PropertyGroup>
+</Project>

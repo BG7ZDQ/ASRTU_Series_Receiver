@@ -1,69 +1,30 @@
-# Prerequisites
-*.d
+# Build and release output
+/outputs/
+/asrtu-qt/build/
+/asrtu-qt/build-*/
+/asrtu-qt/portable/
+/asrtu-qt/ui-*.png
+/asrtu-suite/stage/
+/asrtu-suite/dist/
+/asrtu-suite/launcher*.png
+/sdrsharp-iq-bridge/bin/
+/sdrsharp-iq-bridge/obj/
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+# Local research/build workspace and vendored applications
+/work/
+/vendor/
+/tools/
 
-# Precompiled Headers
-*.gch
-*.pch
-
-# Linker files
-*.ilk
-
-# Debugger Files
+# User and runtime state
+config.cfg
+*.user
+*.suo
 *.pdb
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-*.so.*
-
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
-
-# Build directories
-build/
-Build/
-build-*/
-
-# CMake generated files
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-Makefile
-install_manifest.txt
-compile_commands.json
-
-# Temporary files
-*.tmp
+*.ilk
 *.log
-*.bak
-*.swp
-
-# vcpkg
-vcpkg_installed/
-
-# debug information files
-*.dwo
-
-# test output & cache
-Testing/
-.cache/
+ASRTU1_Records/
+.vs/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

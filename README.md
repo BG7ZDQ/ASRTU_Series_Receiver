@@ -1,0 +1,126 @@
+# ASRTU Series Satellite Receiver 1.5
+
+ASRTU 系列卫星接收、解调、遥测转发与自动多普勒工具。项目包含 C++/Qt 接收解码器、桌面启动器、遥测代理启动包装器，以及 SDR# 本地 RAW I/Q 桥接插件。
+
+Author: **BG7ZDQ**
+
+Languages: **中文** · [English](README_EN.md) · [日本語](README_JA.md)
+
+## 主要功能
+
+- 本地共享内存 RAW I/Q、立体声零中频 I/Q、单声道 12 kHz 实数中频和录音文件输入
+- BPSK 解调、卷积码/Viterbi 与 FEC 帧输出
+- 实时瀑布图、频谱、星座图、SNR、RSSI、环路频偏及同步状态
+- 可选 WAV 自动录制，完整帧、SVR 和运行日志按会话保存
+- 多 TLE 源下载、卫星选择、频率预设、SGP4 跟踪和 SDR# 自动多普勒控制
+- 遥测上传代理及地面站呼号、经纬度配置
+- 根据系统语言自动切换：中文系统使用中文、日文系统使用日文，其他系统使用英语
+- 可选将实时解码的 FEC 帧直接上传至 SatNOGS（录音回放不会上传）
+
+## Quick overview (English)
+
+ASRTU Series Satellite Receiver is a C++/Qt desktop suite for receiving, demodulating and forwarding ASRTU-family satellite telemetry. It supports shared-memory SDR# RAW I/Q, stereo zero-IF audio, mono 12 kHz real IF, recorded-file playback, and optional live-frame submission to SatNOGS. The UI automatically uses Chinese, Japanese or English according to the operating-system language.
+
+## 使用教程
+
+### 1. 安装与首次设置
+
+1. 运行 `ASRTU_Series_Receiver_Setup.exe`，按需求选择是否安装随包提供的 SDR# 遥测预设。
+2. 从桌面打开 **ASRTU 系列卫星启动器**。
+3. 填写呼号、经度、纬度和海拔。坐标用于卫星跟踪与多普勒计算；启动器会在本机保存设置。
+4. 根据接收链路选择“输入”。只有声卡输入模式会显示“声卡”下拉框。
+
+### 2. 选择接收输入
+
+| 输入模式 | 适用场景 | 信号要求 |
+| --- | --- | --- |
+| 本地内存共享 RAW 模式 I/Q 桥接 | 使用安装包内的 SDR# 和 ASRTU 插件 | SDR# 输出的零中频复数 RAW I/Q |
+| 立体声零中频 RAW 模式 I/Q 输入 | SDR 软件通过虚拟声卡输出 I/Q | 左右声道分别为 I、Q，中心频率为 0 Hz |
+| 单声道实数域 12 kHz 电台 IF 输入 | 电台、接收机或录音设备输出实数中频 | 目标信号以 +12 kHz 为中心 |
+
+选择声卡模式时，在“声卡”中选择实际输入设备。运行中更换声卡，应先停止当前接收，再选择设备并重新启动。
+
+### 3. 使用 SDR# RAW I/Q 桥接
+
+1. 点击 **打开 SDR# 遥测预设**。
+2. 在 SDR# 中选择接收设备、设置卫星下行频率并开始播放。
+3. 在 ASRTU 插件面板启用本地 RAW I/Q 桥接；需要自动修正频率时，再启用自动多普勒。
+4. 回到启动器，选择 **本地内存共享 RAW 模式 I/Q 桥接**，点击 **启动接收**。
+
+如果 SDR# 尚未开始输出样本，解码器会保持 `NOSYNC`。暂停或关闭 SDR# 后，旧的 SNR 显示不应被当作仍在接收信号。
+
+### 4. 使用声卡输入
+
+立体声 I/Q 输入应选择能够提供双声道、零中频 RAW 数据的设备；普通扬声器音频不是 I/Q。电台实数中频应选择单声道模式，并保证目标信号位于音频频谱的 12 kHz 附近。解码器的实数输入图会把 12 kHz 显示为 0 Hz，以便直接观察频偏。
+
+选好模式和声卡后点击 **启动接收**。如需保留本次原始输入，先勾选 **自动保存本次接收录音**。
+
+### 5. 判断是否正确接收
+
+- 输入瀑布图中应能看到持续的目标信号，而不是只有宽带噪声。
+- BPSK 星座点应逐渐聚集到 I 轴左右两侧。
+- `SNR` 上升且环路频偏逐渐稳定时，载波和时钟环通常已进入有效工作区。
+- 状态显示 `SYNCED` 表示近期持续收到可用帧；`NOSYNC` 表示尚未同步或已经超过判定时间没有新帧。
+- 日志中的 `FEC frame`、完整十六进制 PDU 和 SVR 输出可用于确认实际解码，而不能只看 SNR 曲线。
+
+### 6. 遥测上传
+
+1. 确认呼号和地面站坐标填写正确。
+2. 点击 **启动上传代理**，在弹出的列表中选择本次要上传的卫星。
+3. 代理使用独立控制台显示 WebSocket 连接和上传信息；启动接收与启动代理互相独立，可以只进行本地解码。
+4. 收到 FEC 帧后，检查代理窗口是否显示连接成功和数据转发记录。
+
+### 7. 卫星跟踪与自动多普勒
+
+点击 **卫星跟踪与自动多普勒** 打开独立窗口。程序会下载并合并设置中的全部 TLE 来源，然后可选择卫星和频率预设，也可输入自定义下行频率。确认方位角、仰角、距离和 TLE 历元合理后，再在 SDR# 插件中开启自动多普勒。
+
+自动多普勒只负责修正接收频率，不代表已经成功解码；最终仍以 `SYNCED`、FEC 帧和日志为准。
+
+### 8. 录音与回放
+
+- 勾选自动录音后，每次接收会在 `ASRTU1_Records/<时间>/` 中保存 WAV 和日志。
+- 点击 **打开录音与日志** 可直接进入记录目录。
+- **播放录音文件** 用于选择任意受支持的录音；单声道文件按 12 kHz 实数中频处理，双声道文件按零中频 I/Q 处理。
+- **快速播放录音文件** 提供更直接的文件选择与回归检查入口，不会改用实时声卡。
+
+### 9. 常见问题
+
+- **一直 NOSYNC：** 检查卫星是否过境、频率/多普勒是否正确、输入模式是否匹配，以及瀑布图中是否确实有信号。
+- **频谱出现镜像或混叠：** 检查是否把单声道实数中频误选为立体声 I/Q，或左右 I/Q 声道是否接反。
+- **启动后没有样本：** 对共享内存模式检查 SDR# 是否正在播放且插件桥接已开启；对声卡模式重新选择当前存在的输入设备。
+- **有 SNR 但没有帧：** 查看星座、环路频偏和 FEC 日志；载波存在并不等于帧同步和纠错成功。
+- **不希望上传：** 只点击“启动接收”，不要启动上传代理即可。
+
+## 目录
+
+- `asrtu-qt/` — C++/Qt launcher, decoder, tracker and benchmark helper
+- `sdrsharp-iq-bridge/` — SDR# legacy-compatible RAW I/Q and Doppler bridge plugin
+- `asrtu-suite/` — Windows staging and Inno Setup packaging scripts
+- `tools/` — translation and asset maintenance scripts
+- `docs/` — architecture, build, translation and release documentation
+
+## 构建
+
+Windows 快速构建：
+
+```powershell
+.\asrtu-qt\build_release.ps1
+```
+
+完整环境、Linux/macOS 现状及依赖说明见 [docs/BUILDING.md](docs/BUILDING.md)。安装包构建见 [docs/PACKAGING.md](docs/PACKAGING.md)。
+
+## 文档
+
+- [架构与数据流](docs/ARCHITECTURE.md)
+- [构建说明](docs/BUILDING.md)
+- [翻译维护](docs/TRANSLATIONS.md)
+- [打包与发布](docs/PACKAGING.md)
+- [开源发布检查表](docs/OPEN_SOURCE_CHECKLIST.md)
+
+## 开源与第三方组件
+
+本项目由 BG7ZDQ 以 [MIT License](LICENSE) 开源。第三方组件仍分别适用各自上游许可证，详见 [THIRD_PARTY.md](THIRD_PARTY.md)；MIT 许可不替代、修改或扩大任何第三方授权。
+
+GNU Radio 3.x、`gr-lilacsat` 和 `gr-hyacinthsat` 属 GPL 系依赖。MIT 源码可以与 GPL 组件配合使用，但包含和链接这些组件的完整二进制发行物还必须满足相应 GPL 源码、许可证和版权告知义务。SDR# 与上传代理不属于本项目 MIT 授权范围。
+
+本项目与 SDR#、GNU Radio 及所支持卫星的原作者或运营方不存在官方隶属或背书关系，除非相应权利方另有书面说明。
