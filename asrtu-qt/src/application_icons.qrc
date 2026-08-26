@@ -1,6 +1,0 @@
-<RCC>
-  <qresource prefix="/icons">
-    <file alias="win98_dsp.png">../assets/win98_dsp.png</file>
-    <file alias="win98_doppler.png">../assets/win98_doppler.png</file>
-  </qresource>
-</RCC>

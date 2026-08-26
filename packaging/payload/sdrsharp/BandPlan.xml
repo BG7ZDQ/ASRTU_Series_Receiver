@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ArrayOfRangeEntry xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <RangeEntry minFrequency="148500" maxFrequency="283500" color="900000FF" mode="AM" step="3000">Long Wave</RangeEntry>
+  <RangeEntry minFrequency="526500" maxFrequency="1606500" color="900000FF" mode="USB" step="100">Medium Wave</RangeEntry>
+  <RangeEntry minFrequency="2300000" maxFrequency="2468000" color="900000FF" mode="AM" step="5000">Shortwave Broadcast</RangeEntry>
+  <RangeEntry minFrequency="3200000" maxFrequency="3400000" color="900000FF" mode="AM" step="5000">Shortwave Broadcast</RangeEntry>
+  <RangeEntry minFrequency="3950000" maxFrequency="4000000" color="900000FF" mode="AM" step="5000">Shortwave Broadcast</RangeEntry>
+  <RangeEntry minFrequency="4750000" maxFrequency="4995000" color="900000FF" mode="AM" step="5000">Shortwave Broadcast</RangeEntry>
+  <RangeEntry minFrequency="5005000" maxFrequency="5060000" color="900000FF" mode="AM" step="5000">Shortwave Broadcast</RangeEntry>
+  <RangeEntry minFrequency="5900000" maxFrequency="6200000" color="900000FF" mode="AM" step="5000">Shortwave Broadcast</RangeEntry>
+  <RangeEntry minFrequency="7200000" maxFrequency="7450000" color="900000FF" mode="AM" step="5000">Shortwave Broadcast</RangeEntry>
+  <RangeEntry minFrequency="9400000" maxFrequency="9900000" color="900000FF" mode="AM" step="5000">Shortwave Broadcast</RangeEntry>
+  <RangeEntry minFrequency="11600000" maxFrequency="12100000" color="900000FF" mode="AM" step="5000">Shortwave Broadcast</RangeEntry>
+  <RangeEntry minFrequency="13570000" maxFrequency="13870000" color="900000FF" mode="AM" step="5000">Shortwave Broadcast</RangeEntry>
+  <RangeEntry minFrequency="15100000" maxFrequency="15800000" color="900000FF" mode="AM" step="5000">Shortwave Broadcast</RangeEntry>
+  <RangeEntry minFrequency="17480000" maxFrequency="17900000" color="900000FF" mode="AM" step="5000">Shortwave Broadcast</RangeEntry>
+  <RangeEntry minFrequency="18900000" maxFrequency="19020000" color="900000FF" mode="AM" step="5000">Shortwave Broadcast</RangeEntry>
+  <RangeEntry minFrequency="21450000" maxFrequency="21850000" color="900000FF" mode="AM" step="5000">Shortwave Broadcast</RangeEntry>
+  <RangeEntry minFrequency="25670000" maxFrequency="26100000" color="900000FF" mode="AM" step="5000">Shortwave Broadcast</RangeEntry>
+  <RangeEntry minFrequency="87500000" maxFrequency="108000000" color="90FF0000" mode="RAW" step="1000">FM Broadcast</RangeEntry>
+  <RangeEntry minFrequency="108000000" maxFrequency="118000000" color="900000FF" mode="CW" step="100">Air Band VOR/ILS</RangeEntry>
+  <RangeEntry minFrequency="118000000" maxFrequency="137000000" color="900000FF" mode="AM" step="5000">Air Band Voice</RangeEntry>
+  <RangeEntry minFrequency="1800000" maxFrequency="2000000" color="50AAAAAA" mode="CW" step="10">160m Ham Band</RangeEntry>
+  <RangeEntry minFrequency="3500000" maxFrequency="3950000" color="90FF0000" mode="AM" step="10">80m Ham Band</RangeEntry>
+  <RangeEntry minFrequency="5351500" maxFrequency="5366500" color="900000FF" mode="USB" step="10">60m Ham Band</RangeEntry>
+  <RangeEntry minFrequency="7000000" maxFrequency="7200000" color="90008000" mode="LSB" step="10">40m Ham Band</RangeEntry>
+  <RangeEntry minFrequency="10100000" maxFrequency="10150000" color="90FF0000" mode="USB" step="5000">30m Ham Band</RangeEntry>
+  <RangeEntry minFrequency="14000000" maxFrequency="14350000" color="90FF0000" mode="USB" step="10">20m Ham Band</RangeEntry>
+  <RangeEntry minFrequency="18068000" maxFrequency="18168000" color="90FF0000" mode="USB" step="10">17m Ham Band</RangeEntry>
+  <RangeEntry minFrequency="21000000" maxFrequency="21450000" color="90FF0000" mode="USB" step="10">15m Ham Band</RangeEntry>
+  <RangeEntry minFrequency="24890000" maxFrequency="24990000" color="90FF0000" mode="USB" step="10">12m Ham Band</RangeEntry>
+  <RangeEntry minFrequency="26960000" maxFrequency="27410000" color="90FF0000" mode="AM" step="5000">CB</RangeEntry>
+  <RangeEntry minFrequency="28000000" maxFrequency="29750000" color="90FF0000" mode="USB" step="10">10m Ham Band</RangeEntry>
+  <RangeEntry minFrequency="50000000" maxFrequency="54000000" color="90FF0000" mode="USB" step="10">6m Ham Band</RangeEntry>
+  <RangeEntry minFrequency="144000000" maxFrequency="148000000" color="90FF0000" mode="CW" step="100">2m Ham Band</RangeEntry>
+  <RangeEntry minFrequency="156000000" maxFrequency="162025000" color="90000080" mode="NFM" step="12500">Marine</RangeEntry>
+  <RangeEntry minFrequency="222000000" maxFrequency="225000000" color="90FF0000" mode="NFM" step="12500">1.25m Ham Band</RangeEntry>
+  <RangeEntry minFrequency="225000000" maxFrequency="380000000" color="90FF0000" mode="CW" step="100">Military Air</RangeEntry>
+  <RangeEntry minFrequency="420000000" maxFrequency="450000000" color="90FF0000" mode="RAW" step="1000">70cm Ham Band</RangeEntry>
+  <RangeEntry minFrequency="902000000" maxFrequency="928000000" color="90FF0000" mode="NFM" step="12500">33cm Ham Band</RangeEntry>
+  <RangeEntry minFrequency="1240000000" maxFrequency="1300000000" color="90FF0000" mode="NFM" step="12500">23cm Ham Band</RangeEntry>
+  <RangeEntry minFrequency="2300000000" maxFrequency="2310000000" color="90FF0000" mode="NFM" step="12500">13cm Ham Band</RangeEntry>
+  <RangeEntry minFrequency="2390000000" maxFrequency="2450000000" color="90FF0000" mode="NFM" step="12500">13cm Ham Band</RangeEntry>
+</ArrayOfRangeEntry>

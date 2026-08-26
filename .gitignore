@@ -1,19 +1,17 @@
 # Build and release output
 /outputs/
-/asrtu-qt/build/
-/asrtu-qt/build-*/
-/asrtu-qt/portable/
-/asrtu-qt/ui-*.png
-/asrtu-suite/stage/
-/asrtu-suite/dist/
-/asrtu-suite/launcher*.png
-/sdrsharp-iq-bridge/bin/
-/sdrsharp-iq-bridge/obj/
+/build/
+/build-*/
+/portable/
+/ui-*.png
+/packaging/inno/stage/
+/packaging/inno/dist/
+/packaging/inno/launcher*.png
+/plugins/sdrsharp-bridge/bin/
+/plugins/sdrsharp-bridge/obj/
 
-# Local research/build workspace and vendored applications
+# Local research/build workspace
 /work/
-/vendor/
-/tools/
 
 # User and runtime state
 config.cfg

@@ -91,19 +91,27 @@ SDR#からサンプルが届くまでは`NOSYNC`のままです。SDR#を一時�
 
 ## リポジトリ構成
 
-- `asrtu-qt/` — C++/Qtランチャー、デコーダー、追跡、ベンチマーク
-- `sdrsharp-iq-bridge/` — SDR#互換RAW I/Q・ドップラーブリッジプラグイン
-- `asrtu-suite/` — WindowsステージングとInno Setupパッケージスクリプト
+- `apps/` — DSP受信機、ランチャー、ドップラー画面、プロキシラッパー
+- `libs/` — 復調/FECパイプラインと共通コード
+- `plugins/` — SDR#ローカルRAW I/Q・ドップラーブリッジ
+- `assets/` — ブランド画像、アイコン、UI素材、翻訳
+- `third_party/` — 上流ライセンスを保持する第三者ソース
+- `packaging/inno/` — Inno Setupスクリプト
+- `packaging/payload/` — 完全版インストーラー用の統合ランタイム
+- `tests/` — DSPベンチマークと回帰テスト入口
 - `tools/` — 翻訳・アセット保守スクリプト
 - `docs/` — アーキテクチャ、ビルド、翻訳、リリース文書
 
 ## ビルド
 
-Windowsでの簡易ビルド：
+Visual Studio 2022 Build ToolsとInno Setup 6があれば、リポジトリのルートから完全なインストーラーを作成できます：
 
 ```powershell
-.\asrtu-qt\build_release.ps1
+.\build_installer.ps1
 ```
+
+同梱ポータブル版ではなくDSPを再コンパイルする場合は
+`.\packaging\inno\build_installer.ps1 -RebuildDsp`を使用し、radioconda/GNU Radio開発環境も用意してください。
 
 完全な環境、Linux/macOSの現状、依存関係は[docs/BUILDING.md](docs/BUILDING.md)を、インストーラー作成は[docs/PACKAGING.md](docs/PACKAGING.md)を参照してください。
 

@@ -93,19 +93,27 @@ ASRTU Series Satellite Receiver is a C++/Qt desktop suite for receiving, demodul
 
 ## 目录
 
-- `asrtu-qt/` — C++/Qt launcher, decoder, tracker and benchmark helper
-- `sdrsharp-iq-bridge/` — SDR# legacy-compatible RAW I/Q and Doppler bridge plugin
-- `asrtu-suite/` — Windows staging and Inno Setup packaging scripts
+- `apps/` — DSP 接收器、启动器、多普勒窗口与代理包装器
+- `libs/` — 解调/FEC 数据链和公共代码
+- `plugins/` — SDR# 本地 RAW I/Q 与多普勒桥接插件
+- `assets/` — 品牌图、程序图标、界面资源与翻译
+- `third_party/` — 保留上游许可的第三方源码
+- `packaging/inno/` — Inno Setup 安装脚本
+- `packaging/payload/` — 生成完整安装包所需的集成运行组件
+- `tests/` — DSP 基准和回归测试入口
 - `tools/` — translation and asset maintenance scripts
 - `docs/` — architecture, build, translation and release documentation
 
 ## 构建
 
-Windows 快速构建：
+只安装 Visual Studio 2022 Build Tools 与 Inno Setup 6，即可从仓库根目录生成完整安装包：
 
 ```powershell
-.\asrtu-qt\build_release.ps1
+.\build_installer.ps1
 ```
+
+如需从源码重编 DSP（而非使用仓库中的便携运行包），使用
+`.\packaging\inno\build_installer.ps1 -RebuildDsp`，并另行安装 radioconda/GNU Radio 开发依赖。
 
 完整环境、Linux/macOS 现状及依赖说明见 [docs/BUILDING.md](docs/BUILDING.md)。安装包构建见 [docs/PACKAGING.md](docs/PACKAGING.md)。
 

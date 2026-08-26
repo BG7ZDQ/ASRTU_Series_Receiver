@@ -91,19 +91,27 @@ Doppler correction only adjusts the receiver frequency; it does not prove succes
 
 ## Repository layout
 
-- `asrtu-qt/` — C++/Qt launcher, decoder, tracker, and benchmark helper
-- `sdrsharp-iq-bridge/` — legacy-compatible SDR# RAW I/Q and Doppler bridge plugin
-- `asrtu-suite/` — Windows staging and Inno Setup packaging scripts
+- `apps/` — DSP receiver, launcher, Doppler window, and proxy wrapper
+- `libs/` — demodulation/FEC pipeline and shared code
+- `plugins/` — SDR# local RAW I/Q and Doppler bridge
+- `assets/` — branding, icons, UI resources, and translations
+- `third_party/` — third-party source with upstream licenses retained
+- `packaging/inno/` — Inno Setup scripts
+- `packaging/payload/` — integrated runtime components used by the full installer
+- `tests/` — DSP benchmark and regression entry points
 - `tools/` — translation and asset-maintenance scripts
 - `docs/` — architecture, build, translation, and release documentation
 
 ## Building
 
-Quick Windows build:
+With Visual Studio 2022 Build Tools and Inno Setup 6 installed, build the complete installer from the repository root:
 
 ```powershell
-.\asrtu-qt\build_release.ps1
+.\build_installer.ps1
 ```
+
+To rebuild the DSP instead of using the bundled portable payload, run
+`.\packaging\inno\build_installer.ps1 -RebuildDsp`; this additionally requires the radioconda/GNU Radio development environment.
 
 See [docs/BUILDING.md](docs/BUILDING.md) for the complete environment, current Linux/macOS status, and dependencies. See [docs/PACKAGING.md](docs/PACKAGING.md) for installer packaging.
 

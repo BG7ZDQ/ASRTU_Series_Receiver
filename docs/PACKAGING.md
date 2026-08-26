@@ -2,21 +2,26 @@
 
 ## 便携版
 
-`asrtu-qt/package_portable.ps1` 从 Release 构建复制程序、Qt 平台插件、GNU Radio/Qt 运行库、英文 `.qm` 和必要许可证文件。
+`packaging/package_portable.ps1` 从 Release 构建复制程序、Qt 平台插件、GNU Radio/Qt 运行库、翻译 `.qm` 和必要许可证文件。
 
 ## 安装器
 
-安装器使用 Inno Setup 6，版本号当前为 1.5.0。完整套件构建脚本会编译解码器和 SDR# 插件、整理 staging 目录并生成安装器：
+安装器使用 Inno Setup 6，版本号当前为 1.5.0。全新 Windows 环境只需安装 Visual Studio 2022 Build Tools 和 Inno Setup 6，然后运行：
 
 ```powershell
-.\asrtu-suite\build_installer.ps1 `
-  -ProxySource C:\path\to\proxy_mmt_gui `
-  -SdrSharpPresetSource C:\path\to\SDRSharp `
-  -SdrSharpApiRoot C:\path\to\SDRSharp
+.\build_installer.ps1
 ```
 
-生成文件为 `asrtu-suite/dist/ASRTU_Series_Receiver_Setup.exe`。安装器启动时始终由用户从简体中文、English、日本語中选择安装向导语言，不根据系统语言自动决定，也不沿用上一次安装语言。应用运行时语言仍由系统 locale 决定，并可用调试参数强制指定。
+该默认路径会重新编译 SDR# 桥接插件，从 `packaging/payload/` 创建干净的 staging，并生成 `packaging/inno/dist/ASRTU_Series_Receiver_Setup.exe`。安装器启动时始终由用户从简体中文、English、日本語中选择安装向导语言。
+
+若还要重编 DSP、启动器和代理包装器：
+
+```powershell
+.\packaging\inno\build_installer.ps1 -RebuildDsp
+```
+
+此路径另外要求安装 radioconda/GNU Radio、Qt、Qwt、`gr-lilacsat` 和 `gr-hyacinthsat` 开发环境。
 
 ## 第三方再分发
 
-源码发布不包含上传代理、SDR# 或其他第三方二进制。制作公开安装包前必须确认其许可允许捆绑再分发，并随包附带相应版权与许可证。不能确认时，应只发布本项目源码和让用户自行提供依赖的构建说明。
+`packaging/payload/` 中的第三方运行组件不适用本项目 MIT 许可，仍须保留各自条款、版权声明和安装器内的第三方告知。

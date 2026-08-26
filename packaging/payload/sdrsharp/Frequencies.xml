@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ArrayOfMemoryEntry xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <MemoryEntry>
+    <IsFavourite>true</IsFavourite>
+    <Name>JAMX01 SSDV(B)</Name>
+    <GroupName>Satellites</GroupName>
+    <Frequency>435075000</Frequency>
+    <DetectorType>RAW</DetectorType>
+    <Shift>0</Shift>
+    <FilterBandwidth>24000</FilterBandwidth>
+  </MemoryEntry>
+  <MemoryEntry>
+    <IsFavourite>false</IsFavourite>
+    <Name>JAMX01 CW</Name>
+    <GroupName>Satellites</GroupName>
+    <Frequency>435175000</Frequency>
+    <DetectorType>RAW</DetectorType>
+    <Shift>0</Shift>
+    <FilterBandwidth>24000</FilterBandwidth>
+  </MemoryEntry>
+  <MemoryEntry>
+    <IsFavourite>true</IsFavourite>
+    <Name>Center of BY04&amp;JAMX01 TLM</Name>
+    <GroupName>Satellites</GroupName>
+    <Frequency>436471500</Frequency>
+    <DetectorType>RAW</DetectorType>
+    <Shift>0</Shift>
+    <FilterBandwidth>24000</FilterBandwidth>
+  </MemoryEntry>
+  <MemoryEntry>
+    <IsFavourite>true</IsFavourite>
+    <Name>ASRTU-1 TLM</Name>
+    <GroupName>Satellites</GroupName>
+    <Frequency>435400000</Frequency>
+    <DetectorType>RAW</DetectorType>
+    <Shift>0</Shift>
+    <FilterBandwidth>24000</FilterBandwidth>
+  </MemoryEntry>
+  <MemoryEntry>
+    <IsFavourite>true</IsFavourite>
+    <Name>JAMX01 TLM&amp;FM&amp;SSDV(A)</Name>
+    <GroupName>Satellites</GroupName>
+    <Frequency>435500000</Frequency>
+    <DetectorType>RAW</DetectorType>
+    <Shift>0</Shift>
+    <FilterBandwidth>24000</FilterBandwidth>
+  </MemoryEntry>
+  <MemoryEntry>
+    <IsFavourite>true</IsFavourite>
+    <Name>ASRTU-1 SSDV(baseband)</Name>
+    <GroupName>Satellites</GroupName>
+    <Frequency>436210000</Frequency>
+    <DetectorType>RAW</DetectorType>
+    <Shift>0</Shift>
+    <FilterBandwidth>24000</FilterBandwidth>
+  </MemoryEntry>
+  <MemoryEntry>
+    <IsFavourite>true</IsFavourite>
+    <Name>BY-04 TLM</Name>
+    <GroupName>Satellites</GroupName>
+    <Frequency>437443000</Frequency>
+    <DetectorType>RAW</DetectorType>
+    <Shift>0</Shift>
+    <FilterBandwidth>24000</FilterBandwidth>
+  </MemoryEntry>
+</ArrayOfMemoryEntry>

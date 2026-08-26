@@ -12,25 +12,25 @@
 - radioconda（默认路径为 `C:\ProgramData\radioconda`）
 
 ```powershell
-.\asrtu-qt\build_release.ps1
+.\build_release.ps1
 ```
 
 可覆盖运行环境和构建目录：
 
 ```powershell
-.\asrtu-qt\build_release.ps1 `
+.\build_release.ps1 `
   -RuntimeRoot C:\ProgramData\radioconda `
   -BuildDir C:\build\asrtu
 ```
 
-输出的便携目录位于 `asrtu-qt/portable/ASRTU1_Demod_CQt`。
+输出的便携目录位于 `portable/ASRTU1_Demod_CQt`。
 
 ## SDR# 插件
 
 插件面向兼容旧版插件 API 的 SDR#，需要合法取得的 SDR# API 程序集：
 
 ```powershell
-.\sdrsharp-iq-bridge\build_legacy.ps1 `
+.\plugins\sdrsharp-bridge\build_legacy.ps1 `
   -SdrSharpApiRoot C:\path\to\SDRSharp `
   -Configuration Release
 ```
@@ -56,7 +56,7 @@ sudo apt install build-essential cmake ninja-build pkg-config \
 `CMAKE_PREFIX_PATH`、`CMAKE_INCLUDE_PATH` 和 `CMAKE_LIBRARY_PATH`。
 
 ```bash
-cmake -S asrtu-qt -B build-linux -G Ninja \
+cmake -S . -B build-linux -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   -DASRTU_BUILD_BENCHMARK=OFF
 cmake --build build-linux --parallel

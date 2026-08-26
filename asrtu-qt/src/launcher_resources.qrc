@@ -1,6 +1,0 @@
-<RCC>
-  <qresource prefix="/launcher">
-    <file alias="astro_series_launcher.png">../assets/astro_series_launcher.png</file>
-    <file alias="combo_arrow.png">../assets/combo_arrow.png</file>
-  </qresource>
-</RCC>
