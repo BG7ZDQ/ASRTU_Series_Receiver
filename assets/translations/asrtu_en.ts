@@ -502,5 +502,21 @@ Packets: %6 (%7–%8, %9 missing in range)   Status: %10</translation>
             <source>保存路径：%1</source>
             <translation>Saved to: %1</translation>
         </message>
+        <message>
+            <source>来源卫星：%1</source>
+            <translation>Source satellite: %1</translation>
+        </message>
+        <message>
+            <source>图像ID：%1　分辨率：%2×%3　质量：%4</source>
+            <translation>Image ID: %1   Resolution: %2×%3   Quality: %4</translation>
+        </message>
+        <message>
+            <source>数据包：0/0</source>
+            <translation>Packets: 0/0</translation>
+        </message>
+        <message>
+            <source>区间缺失 %1</source>
+            <translation>%1 missing in range</translation>
+        </message>
     </context>
 </TS>

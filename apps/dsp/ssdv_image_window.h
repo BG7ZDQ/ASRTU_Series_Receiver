@@ -8,7 +8,9 @@
 
 #include <functional>
 
+class QFrame;
 class QLabel;
+class QProgressBar;
 class QPushButton;
 
 class SsdvImageWindow final : public QDialog
@@ -24,12 +26,18 @@ protected:
     void resizeEvent(QResizeEvent* event) override;
 
 private:
+    void buildUi();
     void refreshPixmap();
     void showGalleryImage(int index);
     void refreshMetadata();
 
+    QLabel* title_label_ = nullptr;
+    QLabel* status_badge_ = nullptr;
+    QLabel* detail_label_ = nullptr;
+    QProgressBar* progress_bar_ = nullptr;
+    QLabel* progress_label_ = nullptr;
     QLabel* image_label_ = nullptr;
-    QLabel* metadata_label_ = nullptr;
+    QLabel* placeholder_label_ = nullptr;
     QLabel* path_label_ = nullptr;
     QPushButton* open_directory_button_ = nullptr;
     QPushButton* previous_button_ = nullptr;
@@ -41,3 +49,4 @@ private:
     int gallery_index_ = -1;
     std::function<void()> clear_callback_;
 };
+

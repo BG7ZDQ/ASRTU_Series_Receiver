@@ -502,5 +502,21 @@
             <source>保存路径：%1</source>
             <translation>保存先：%1</translation>
         </message>
+        <message>
+            <source>来源卫星：%1</source>
+            <translation>送信元衛星：%1</translation>
+        </message>
+        <message>
+            <source>图像ID：%1　分辨率：%2×%3　质量：%4</source>
+            <translation>画像ID：%1　解像度：%2×%3　品質：%4</translation>
+        </message>
+        <message>
+            <source>数据包：0/0</source>
+            <translation>パケット：0/0</translation>
+        </message>
+        <message>
+            <source>区间缺失 %1</source>
+            <translation>範囲内欠落：%1</translation>
+        </message>
     </context>
 </TS>
