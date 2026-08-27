@@ -8,6 +8,7 @@
 
 namespace {
 constexpr std::int64_t kDuplicateWindowMs = 2000;
+constexpr auto kCandidateArbitrationWindow = std::chrono::milliseconds(50);
 
 std::int64_t nowMs()
 {
@@ -38,13 +39,35 @@ FrameMonitor::FrameMonitor(Callback callback, PayloadCallback payloadCallback,
         message_port_register_in(port);
         set_msg_handler(port, [this, name](pmt::pmt_t msg) { handle(msg, name); });
     }
-    const auto local = pmt::intern("local");
-    message_port_register_in(local);
-    set_msg_handler(local, [this](pmt::pmt_t msg) { handleLocalCandidate(msg); });
+    for (const auto& entry : {
+             std::pair{"local_openhoshimi", CandidatePriority::OpenHoshimi},
+             std::pair{"local_soundmodem", CandidatePriority::Soundmodem},
+             std::pair{"local_original", CandidatePriority::Original},
+         }) {
+        const auto port = pmt::intern(entry.first);
+        message_port_register_in(port);
+        set_msg_handler(port, [this, priority = entry.second](pmt::pmt_t msg) {
+            handleLocalCandidate(msg, priority);
+        });
+    }
     message_port_register_out(pmt::intern("out"));
+    candidate_worker_ = std::thread([this] { candidateWorker(); });
 }
 
-void FrameMonitor::handleLocalCandidate(const pmt::pmt_t& message)
+FrameMonitor::~FrameMonitor()
+{
+    {
+        std::lock_guard<std::mutex> lock(candidate_mutex_);
+        stop_candidate_worker_ = true;
+        pending_candidates_.clear();
+    }
+    candidate_cv_.notify_all();
+    if (candidate_worker_.joinable())
+        candidate_worker_.join();
+}
+
+void FrameMonitor::handleLocalCandidate(const pmt::pmt_t& message,
+                                        CandidatePriority priority)
 {
     if (!local_candidate_callback_)
         return;
@@ -53,7 +76,75 @@ void FrameMonitor::handleLocalCandidate(const pmt::pmt_t& message)
         return;
     std::size_t length = 0;
     const auto* bytes = pmt::u8vector_elements(data, length);
-    local_candidate_callback_(std::vector<std::uint8_t>(bytes, bytes + length));
+    std::vector<std::uint8_t> payload(bytes, bytes + length);
+    std::lock_guard<std::mutex> lock(candidate_mutex_);
+    const auto now = std::chrono::steady_clock::now();
+    const auto key = candidateKey(payload);
+    auto [it, inserted] = pending_candidates_.try_emplace(key);
+    if (inserted) {
+        it->second.deadline = now + kCandidateArbitrationWindow;
+        it->second.priority = priority;
+        it->second.payload = std::move(payload);
+    } else if (priority < it->second.priority) {
+        it->second.priority = priority;
+        it->second.payload = std::move(payload);
+    }
+    candidate_cv_.notify_all();
+}
+
+void FrameMonitor::candidateWorker()
+{
+    std::unique_lock<std::mutex> lock(candidate_mutex_);
+    while (!stop_candidate_worker_) {
+        candidate_cv_.wait(lock, [this] {
+            return stop_candidate_worker_ || !pending_candidates_.empty();
+        });
+        if (stop_candidate_worker_)
+            break;
+        const auto earliest = std::min_element(
+            pending_candidates_.begin(), pending_candidates_.end(),
+            [](const auto& left, const auto& right) {
+                return left.second.deadline < right.second.deadline;
+            })->second.deadline;
+        candidate_cv_.wait_until(lock, earliest);
+        if (stop_candidate_worker_)
+            break;
+        const auto now = std::chrono::steady_clock::now();
+        std::vector<std::vector<std::uint8_t>> ready;
+        for (auto it = pending_candidates_.begin();
+             it != pending_candidates_.end();) {
+            if (it->second.deadline <= now) {
+                ready.push_back(std::move(it->second.payload));
+                it = pending_candidates_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        if (ready.empty())
+            continue;
+        lock.unlock();
+        if (local_candidate_callback_) {
+            for (const auto& payload : ready)
+                local_candidate_callback_(payload);
+        }
+        lock.lock();
+    }
+}
+
+std::uint32_t FrameMonitor::candidateKey(
+    const std::vector<std::uint8_t>& payload)
+{
+    if (payload.size() >= 8) {
+        // CCSDS short header is 5 bytes; a DSLWP SSDV packet then starts with
+        // image_id and a 16-bit packet_id. This identity remains stable when
+        // replay runs faster than the 50 ms arbitration window.
+        return (std::uint32_t(payload[5]) << 16) |
+               (std::uint32_t(payload[6]) << 8) | payload[7];
+    }
+    std::uint32_t key = 2166136261u;
+    for (const auto byte : payload)
+        key = (key ^ byte) * 16777619u;
+    return key;
 }
 
 void FrameMonitor::handle(const pmt::pmt_t& message, const char* path)
@@ -66,6 +157,14 @@ void FrameMonitor::handle(const pmt::pmt_t& message, const char* path)
     const auto* bytes = pmt::u8vector_elements(data, length);
     std::vector<std::uint8_t> payload(bytes, bytes + length);
     const auto timestamp = nowMs();
+    // A successful FEC result always wins over every failed local candidate.
+    // Upload remains immediate; only failed SSDV fallback waits 50 ms for the
+    // other decoder branches to finish.
+    {
+        std::lock_guard<std::mutex> candidateLock(candidate_mutex_);
+        pending_candidates_.erase(candidateKey(payload));
+    }
+    candidate_cv_.notify_all();
     std::lock_guard<std::mutex> dispatchLock(dispatch_mutex_);
 
     last_frame_ms_.store(timestamp, std::memory_order_relaxed);

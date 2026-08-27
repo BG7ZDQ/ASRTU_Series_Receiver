@@ -2,6 +2,7 @@
 
 #include "ssdv_receiver.h"
 
+#include <QCoreApplication>
 #include <QDialog>
 #include <QImage>
 #include <QVector>
@@ -12,9 +13,12 @@ class QFrame;
 class QLabel;
 class QProgressBar;
 class QPushButton;
+class SsdvProgressBar;
 
 class SsdvImageWindow final : public QDialog
 {
+    Q_DECLARE_TR_FUNCTIONS(ASRTU)
+
 public:
     explicit SsdvImageWindow(QWidget* parent = nullptr);
 
@@ -34,7 +38,7 @@ private:
     QLabel* title_label_ = nullptr;
     QLabel* status_badge_ = nullptr;
     QLabel* detail_label_ = nullptr;
-    QProgressBar* progress_bar_ = nullptr;
+    SsdvProgressBar* progress_bar_ = nullptr;
     QLabel* progress_label_ = nullptr;
     QLabel* image_label_ = nullptr;
     QLabel* placeholder_label_ = nullptr;
@@ -49,4 +53,3 @@ private:
     int gallery_index_ = -1;
     std::function<void()> clear_callback_;
 };
-

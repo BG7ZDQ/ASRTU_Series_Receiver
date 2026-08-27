@@ -335,10 +335,16 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
         ssdv_receiver_ = std::make_unique<SsdvReceiver>(
             session_directory_,
             [this](const SsdvImageUpdate& update) {
-                if (ssdv_window_)
-                    ssdv_window_->updateImage(update);
+                QMetaObject::invokeMethod(this, [this, update] {
+                    if (ssdv_window_)
+                        ssdv_window_->updateImage(update);
+                }, Qt::QueuedConnection);
             },
-            [this](const QString& line) { appendLog(line); });
+            [this](const QString& line) {
+                QMetaObject::invokeMethod(
+                    this, [this, line] { appendLog(line); },
+                    Qt::QueuedConnection);
+            });
         ssdv_window_->setClearCallback([this] {
             if (ssdv_receiver_)
                 ssdv_receiver_->clear();
@@ -406,8 +412,11 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
 MainWindow::~MainWindow()
 {
-    if (flowgraph_)
+    if (flowgraph_) {
         flowgraph_->stop();
+        flowgraph_.reset();
+    }
+    ssdv_receiver_.reset();
     log_file_.close();
 }
 
@@ -644,6 +653,8 @@ std::unique_ptr<AsrtuFlowgraph> MainWindow::createFlowgraph(
     options.payload_callback = [this](const std::vector<std::uint8_t>& payload) {
         const QByteArray frame(reinterpret_cast<const char*>(payload.data()),
                                int(payload.size()));
+        if (ssdv_receiver_)
+            ssdv_receiver_->ingestFrame(frame);
         QMetaObject::invokeMethod(
             this, [this, frame] { handleDecodedFrame(frame); },
             Qt::QueuedConnection);
@@ -651,10 +662,8 @@ std::unique_ptr<AsrtuFlowgraph> MainWindow::createFlowgraph(
     options.local_candidate_callback = [this](const std::vector<std::uint8_t>& payload) {
         const QByteArray frame(reinterpret_cast<const char*>(payload.data()),
                                int(payload.size()));
-        QMetaObject::invokeMethod(this, [this, frame] {
-            if (ssdv_receiver_)
-                ssdv_receiver_->ingestFrame(frame);
-        }, Qt::QueuedConnection);
+        if (ssdv_receiver_)
+            ssdv_receiver_->ingestFrame(frame);
     };
     if (options.real_if_12khz)
         options.input_frequency_hz = -12000.0;
@@ -667,8 +676,6 @@ std::unique_ptr<AsrtuFlowgraph> MainWindow::createFlowgraph(
 
 void MainWindow::handleDecodedFrame(const QByteArray& frame)
 {
-    if (ssdv_receiver_)
-        ssdv_receiver_->ingestFrame(frame);
     // Replayed recordings may be decoded locally, but must never be uploaded
     // again because telemetry frames do not contain a trustworthy timestamp.
     if (playback_path_.isEmpty())
@@ -729,7 +736,6 @@ void MainWindow::switchAudioDevice(int deviceId)
     status_timer_->stop();
     QWidget* oldCentral = takeCentralWidget();
     const int oldDeviceId = audio_device_id_;
-    const QString oldRecordingPath = recording_path_;
     try {
         if (flowgraph_)
             flowgraph_->stop();
@@ -755,7 +761,6 @@ void MainWindow::switchAudioDevice(int deviceId)
     } catch (const std::exception& error) {
         delete oldCentral;
         flowgraph_.reset();
-        recording_path_ = oldRecordingPath;
         audio_device_id_ = oldDeviceId;
         appendLog(QStringLiteral("Audio device switch failed: %1")
                       .arg(QString::fromUtf8(error.what())));
@@ -765,10 +770,25 @@ void MainWindow::switchAudioDevice(int deviceId)
                 "ASRTU", "无法切换到所选声卡。请重新选择可用设备或重新启动接收。\n%1")
                 .arg(QString::fromUtf8(error.what())));
         try {
+            // Never reopen a closed WAV segment: wavfile_sink creates the
+            // target with truncation, so using the pre-switch path here would
+            // destroy the recording captured before the device change.
+            if (recording_enabled_) {
+                ++recording_segment_;
+                recording_path_ = QDir(session_directory_).filePath(
+                    QStringLiteral("recording_part%1.wav")
+                        .arg(recording_segment_, 2, 10, QLatin1Char('0')));
+            } else {
+                recording_path_.clear();
+            }
             flowgraph_ = createFlowgraph(oldDeviceId, recording_path_);
             buildUi();
             flowgraph_->start();
             appendLog(QStringLiteral("Previous audio input restored"));
+            if (recording_enabled_)
+                appendLog(QStringLiteral("Automatic WAV recording restored in new segment: %1")
+                              .arg(compactSessionPath(session_directory_,
+                                                      recording_path_)));
         } catch (const std::exception& restoreError) {
             flowgraph_.reset();
             auto* unavailable = new QWidget(this);

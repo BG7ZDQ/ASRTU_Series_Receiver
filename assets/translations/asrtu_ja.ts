@@ -87,32 +87,12 @@
             <translation>地上局：%1°、%2°、%3 m</translation>
         </message>
         <message>
-            <source>正在下载：%1</source>
-            <translation>ダウンロード中：%1</translation>
-        </message>
-        <message>
             <source>在线合并</source>
             <translation>オンライン統合</translation>
         </message>
         <message>
             <source>所有 TLE 来源均下载失败</source>
             <translation>すべてのTLE取得元からのダウンロードに失敗しました</translation>
-        </message>
-        <message>
-            <source>在线更新失败，继续使用本地合并文件</source>
-            <translation>オンライン更新に失敗しました。ローカル統合ファイルを使用します</translation>
-        </message>
-        <message>
-            <source>已下载 %1/%2 个来源，合并 %3 颗卫星%4：all_sources.tle</source>
-            <translation>%1/%2件の取得元をダウンロードし、%3機の衛星を統合%4：all_sources.tle</translation>
-        </message>
-        <message>
-            <source>并保存</source>
-            <translation>して保存しました</translation>
-        </message>
-        <message>
-            <source>，但保存失败</source>
-            <translation>しましたが、保存に失敗しました</translation>
         </message>
         <message>
             <source>自定义</source>
@@ -139,10 +119,6 @@
 %1</source>
             <translation>起動できません：
 %1</translation>
-        </message>
-        <message>
-            <source>尚未配置上传信息，请先保存设置。</source>
-            <translation>アップロード情報が未設定です。先に設定を保存してください。</translation>
         </message>
         <message>
             <source>上传代理启动后立即退出（代码 %1）。</source>
@@ -175,10 +151,6 @@
         <message>
             <source>仅支持单声道或双声道录音文件。</source>
             <translation>モノラルまたはステレオの録音ファイルのみ対応しています。</translation>
-        </message>
-        <message>
-            <source>所选卫星没有可用的 SatNOGS NORAD ID。</source>
-            <translation>選択した衛星には使用可能なSatNOGS NORAD IDがありません。</translation>
         </message>
         <message>
             <source>阿斯图系列卫星启动器</source>
@@ -257,28 +229,12 @@
             <translation>録音ファイルを再生</translation>
         </message>
         <message>
-            <source>快速播放录音文件</source>
-            <translation>録音ファイルをクイック再生</translation>
-        </message>
-        <message>
-            <source>打开录音与日志</source>
-            <translation>録音とログを開く</translation>
-        </message>
-        <message>
             <source>就绪</source>
             <translation>準備完了</translation>
         </message>
         <message>
-            <source>保存设置</source>
-            <translation>設定を保存</translation>
-        </message>
-        <message>
             <source>启动接收</source>
             <translation>受信を開始</translation>
-        </message>
-        <message>
-            <source>启动上传代理</source>
-            <translation>アップロードプロキシを起動</translation>
         </message>
         <message>
             <source>SDR# 启动失败</source>
@@ -305,14 +261,6 @@
             <translation>再生中：/%1；ログ：%2</translation>
         </message>
         <message>
-            <source>快速播放失败</source>
-            <translation>クイック再生に失敗しました</translation>
-        </message>
-        <message>
-            <source>正在重放：/%1/%2</source>
-            <translation>再生中：/%1/%2</translation>
-        </message>
-        <message>
             <source>上传代理启动失败</source>
             <translation>アップロードプロキシの起動に失敗しました</translation>
         </message>
@@ -325,20 +273,12 @@
             <translation>起動に失敗しました</translation>
         </message>
         <message>
-            <source>接收已启动；SatNOGS 上传已启用；录音与日志：%1</source>
-            <translation>受信を開始しました；SatNOGSアップロード有効；録音とログ：%1</translation>
-        </message>
-        <message>
             <source>接收已启动；录音与日志：%1</source>
             <translation>受信を開始しました；録音とログ：%1</translation>
         </message>
         <message>
             <source>系统默认输入设备</source>
             <translation>システム既定の入力デバイス</translation>
-        </message>
-        <message>
-            <source>选择上传卫星</source>
-            <translation>アップロード対象衛星を選択</translation>
         </message>
         <message>
             <source>本次遥测上传目标：</source>
@@ -459,12 +399,24 @@
             <translation>SSDV画像データを待機中</translation>
         </message>
         <message>
-            <source>复制图像</source>
-            <translation>画像をコピー</translation>
+            <source>接收中</source>
+            <translation>受信中</translation>
         </message>
         <message>
-            <source>打开目录</source>
-            <translation>フォルダーを開く</translation>
+            <source>已接收</source>
+            <translation>受信済み</translation>
+        </message>
+        <message>
+            <source>确认缺失</source>
+            <translation>欠落確定</translation>
+        </message>
+        <message>
+            <source>尚未确定</source>
+            <translation>未確定</translation>
+        </message>
+        <message>
+            <source>尚未接收到数据包</source>
+            <translation>パケット未受信</translation>
         </message>
         <message>
             <source>上一张图像</source>
@@ -475,6 +427,14 @@
             <translation>次の画像</translation>
         </message>
         <message>
+            <source>复制图像</source>
+            <translation>画像をコピー</translation>
+        </message>
+        <message>
+            <source>打开目录</source>
+            <translation>フォルダーを開く</translation>
+        </message>
+        <message>
             <source>清除图像</source>
             <translation>画像をクリア</translation>
         </message>
@@ -483,40 +443,28 @@
             <translation>保存先：—</translation>
         </message>
         <message>
-            <source>来源卫星：%1　图像ID：%2
-分辨率：%3×%4　质量：%5
-数据包：%6（%7–%8，区间缺失%9）　状态：%10</source>
-            <translation>送信衛星：%1　画像ID：%2
-解像度：%3×%4　品質：%5
-パケット：%6（%7–%8、範囲内欠落%9）　状態：%10</translation>
+            <source>%1 · SSDV 图像 %2</source>
+            <translation>%1 · SSDV画像 %2</translation>
+        </message>
+        <message>
+            <source>分辨率 %1 × %2　·　质量 %3</source>
+            <translation>解像度 %1 × %2　·　品質 %3</translation>
+        </message>
+        <message>
+            <source>已接收 %1 / %2 包　·　缺失 %3 包　·　完整率 %4%</source>
+            <translation>受信 %1 / %2　·　欠落 %3　·　完全率 %4%</translation>
+        </message>
+        <message>
+            <source>已接收 %1 包　·　确认缺失 %2 包　·　最新包序号 %3　·　总包数待确定</source>
+            <translation>受信 %1　·　欠落確定 %2　·　最新パケット %3　·　総数はEOI待ち</translation>
         </message>
         <message>
             <source>完成</source>
             <translation>完了</translation>
         </message>
         <message>
-            <source>接收中</source>
-            <translation>受信中</translation>
-        </message>
-        <message>
             <source>保存路径：%1</source>
             <translation>保存先：%1</translation>
-        </message>
-        <message>
-            <source>来源卫星：%1</source>
-            <translation>送信元衛星：%1</translation>
-        </message>
-        <message>
-            <source>图像ID：%1　分辨率：%2×%3　质量：%4</source>
-            <translation>画像ID：%1　解像度：%2×%3　品質：%4</translation>
-        </message>
-        <message>
-            <source>数据包：0/0</source>
-            <translation>パケット：0/0</translation>
-        </message>
-        <message>
-            <source>区间缺失 %1</source>
-            <translation>範囲内欠落：%1</translation>
         </message>
     </context>
 </TS>

@@ -8,39 +8,26 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QProgressBar>
+#include <QPainter>
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QVBoxLayout>
 #include <QUrl>
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 namespace {
 
-QString tr(const char* source)
-{
-    return QCoreApplication::translate("ASRTU", source);
-}
-
-QString kCardStyle = QStringLiteral(
-    "QFrame { background:#ffffff; border:1px solid #e2e8f0; "
-    "border-radius:10px; }");
-
 QString kTitleStyle = QStringLiteral(
-    "font-size:15px; font-weight:700; color:#17202a;");
+    "font-size:16px; font-weight:700; color:#17202a;");
 
 QString kDetailStyle = QStringLiteral(
     "font-size:12px; color:#5b6b7d;");
 
-QString kProgressBarStyle = QStringLiteral(
-    "QProgressBar { background:#e9eef5; border:none; border-radius:5px; "
-    "text-align:center; color:#334155; font-size:11px; min-height:16px; }"
-    "QProgressBar::chunk { background:#2b7de9; border-radius:5px; }");
-
 QString kProgressTextStyle = QStringLiteral(
-    "font-size:12px; color:#334155; font-weight:600;");
+    "font-size:12px; color:#334155;");
 
 QString kPathStyle = QStringLiteral(
     "font-size:11px; color:#7b8794;");
@@ -79,27 +66,102 @@ QString kGalleryButtonStyle = QStringLiteral(
     "QPushButton:disabled { color:#a7b3c2; background:#f5f7fa; "
     "border-color:#e2e8f0; }");
 
+QString kDangerButtonStyle = QStringLiteral(
+    "QPushButton { min-height:30px; padding:0 14px; color:#ffffff; "
+    "background:#d43d3d; border:1px solid #d43d3d; border-radius:6px; "
+    "font-size:12px; font-weight:600; }"
+    "QPushButton:hover { background:#c03333; border-color:#c03333; }"
+    "QPushButton:pressed { background:#a52c2c; }"
+    "QPushButton:disabled { color:#e8c6c6; background:#dd9a9a; "
+    "border-color:#dd9a9a; }");
+
 } // namespace
+
+// Packet reception map. It intentionally does not pretend that the final
+// packet count is known before EOI: blue is received, coral is a confirmed
+// hole inside the observed sequence, and the neutral track is still unknown.
+class SsdvProgressBar final : public QWidget
+{
+public:
+    explicit SsdvProgressBar(QWidget* parent = nullptr) : QWidget(parent)
+    {
+        setMinimumHeight(24);
+        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    }
+
+    void setPackets(const std::vector<std::uint16_t>& received,
+                    const std::vector<std::uint16_t>& missing,
+                    int lastPacket,
+                    bool complete)
+    {
+        received_ = received;
+        missing_ = missing;
+        last_packet_ = lastPacket;
+        complete_ = complete;
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter painter(this);
+        painter.setPen(Qt::NoPen);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+
+        const QRect bar(0, 2, width() - 1, height() - 4);
+        painter.setBrush(QColor(226, 232, 240));
+        painter.drawRoundedRect(bar, 6, 6);
+        if (last_packet_ < 0)
+            return;
+
+        const int knownCount = last_packet_ + 1;
+        const int displayCount = complete_
+                                     ? knownCount
+                                     : std::max(knownCount + 1,
+                                                int(std::ceil(knownCount * 1.12)));
+        const double scale = double(bar.width()) / std::max(1, displayCount);
+        auto paintPacket = [&](std::uint16_t id, const QColor& color) {
+            const int x0 = std::clamp(int(std::floor(id * scale)), 0, bar.width());
+            const int x1 = std::clamp(int(std::ceil((id + 1) * scale)), 0, bar.width());
+            if (x1 > x0)
+                painter.fillRect(bar.left() + x0, bar.top(), x1 - x0,
+                                 bar.height(), color);
+        };
+        for (const auto id : received_)
+            paintPacket(id, QColor(43, 125, 233));
+        for (const auto id : missing_)
+            paintPacket(id, QColor(224, 82, 82));
+    }
+
+private:
+    std::vector<std::uint16_t> received_;
+    std::vector<std::uint16_t> missing_;
+    int last_packet_ = -1;
+    bool complete_ = false;
+};
 
 SsdvImageWindow::SsdvImageWindow(QWidget* parent) : QDialog(parent)
 {
     setWindowTitle(tr("SSDV图像接收"));
     setWindowFlag(Qt::Window, true);
-    resize(660, 620);
-    setMinimumSize(440, 420);
-    setStyleSheet(QStringLiteral("QDialog { background:#eef2f7; }"));
+    resize(760, 680);
+    setMinimumSize(520, 480);
+    setStyleSheet(QStringLiteral(
+        "QDialog { background:#f7faff; color:#17202a; }"
+        "QFrame#ssdvCard { background:#ffffff; border:1px solid #d9e5f2; "
+        "border-radius:9px; }"));
     buildUi();
 }
 
 void SsdvImageWindow::buildUi()
 {
     auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(16, 16, 16, 14);
+    root->setContentsMargins(18, 18, 18, 14);
     root->setSpacing(12);
 
-    // ---- Metadata card ------------------------------------------------
+    // ---- Reception summary card --------------------------------------
     auto* metaCard = new QFrame(this);
-    metaCard->setStyleSheet(kCardStyle);
+    metaCard->setObjectName(QStringLiteral("ssdvCard"));
     auto* metaLayout = new QVBoxLayout(metaCard);
     metaLayout->setContentsMargins(14, 12, 14, 12);
     metaLayout->setSpacing(8);
@@ -120,17 +182,26 @@ void SsdvImageWindow::buildUi()
     detail_label_->setWordWrap(true);
     metaLayout->addWidget(detail_label_);
 
-    auto* progressRow = new QHBoxLayout;
-    progress_bar_ = new QProgressBar(metaCard);
-    progress_bar_->setRange(0, 100);
-    progress_bar_->setValue(0);
-    progress_bar_->setTextVisible(true);
-    progress_bar_->setFormat(QStringLiteral("%p%"));
-    progress_bar_->setStyleSheet(kProgressBarStyle);
-    progress_label_ = new QLabel(tr("数据包：0/0"), metaCard);
+    auto* legendRow = new QHBoxLayout;
+    legendRow->setSpacing(12);
+    auto makeLegend = [metaCard](const QColor& color, const QString& text) {
+        auto* item = new QLabel(QStringLiteral("●  ") + text, metaCard);
+        item->setStyleSheet(QStringLiteral("color:%1; font-size:11px;")
+                                .arg(color.name()));
+        return item;
+    };
+    legendRow->addWidget(makeLegend(QColor(43, 125, 233), tr("已接收")));
+    legendRow->addWidget(makeLegend(QColor(224, 82, 82), tr("确认缺失")));
+    legendRow->addWidget(makeLegend(QColor(148, 163, 184), tr("尚未确定")));
+    legendRow->addStretch(1);
+    metaLayout->addLayout(legendRow);
+
+    auto* progressRow = new QVBoxLayout;
+    progressRow->setSpacing(5);
+    progress_bar_ = new SsdvProgressBar(metaCard);
+    progress_label_ = new QLabel(tr("尚未接收到数据包"), metaCard);
     progress_label_->setStyleSheet(kProgressTextStyle);
-    progressRow->addWidget(progress_bar_, 1);
-    progressRow->addSpacing(8);
+    progressRow->addWidget(progress_bar_);
     progressRow->addWidget(progress_label_);
     metaLayout->addLayout(progressRow);
 
@@ -186,7 +257,7 @@ void SsdvImageWindow::buildUi()
     open_directory_button_->setEnabled(false);
     open_directory_button_->setStyleSheet(kPrimaryButtonStyle);
     auto* clearButton = new QPushButton(tr("清除图像"), this);
-    clearButton->setStyleSheet(kButtonStyle);
+    clearButton->setStyleSheet(kDangerButtonStyle);
     buttons->addWidget(copyButton);
     buttons->addWidget(open_directory_button_);
     buttons->addWidget(clearButton);
@@ -273,23 +344,36 @@ void SsdvImageWindow::refreshMetadata()
         return;
     const auto& update = gallery_.at(gallery_index_);
 
-    title_label_->setText(tr("来源卫星：%1").arg(update.satellite));
+    title_label_->setText(tr("%1 · SSDV 图像 %2")
+                              .arg(update.satellite)
+                              .arg(update.image_id));
 
     detail_label_->setText(
-        tr("图像ID：%1　分辨率：%2×%3　质量：%4")
-            .arg(update.image_id)
+        tr("分辨率 %1 × %2　·　质量 %3")
             .arg(update.width)
             .arg(update.height)
             .arg(update.quality));
 
-    const int totalPackets = std::max(1, update.last_packet + 1);
-    progress_bar_->setRange(0, totalPackets);
-    progress_bar_->setValue(update.received_packets);
-    progress_bar_->setFormat(QStringLiteral("%1 / %2")
-                                 .arg(update.received_packets)
-                                 .arg(totalPackets));
-    progress_label_->setText(
-        tr("区间缺失 %1").arg(update.missing_packets));
+    progress_bar_->setPackets(update.received_packet_ids,
+                              update.missing_packet_ids,
+                              update.last_packet,
+                              update.complete);
+    if (update.complete) {
+        const int totalPackets = std::max(1, update.last_packet + 1);
+        const double integrity = 100.0 * update.received_packets / totalPackets;
+        progress_label_->setText(
+            tr("已接收 %1 / %2 包　·　缺失 %3 包　·　完整率 %4%")
+                .arg(update.received_packets)
+                .arg(totalPackets)
+                .arg(update.missing_packets)
+                .arg(integrity, 0, 'f', 1));
+    } else {
+        progress_label_->setText(
+            tr("已接收 %1 包　·　确认缺失 %2 包　·　最新包序号 %3　·　总包数待确定")
+                .arg(update.received_packets)
+                .arg(update.missing_packets)
+                .arg(update.last_packet));
+    }
 
     if (update.complete) {
         status_badge_->setText(tr("完成"));
@@ -320,10 +404,8 @@ void SsdvImageWindow::clearDisplay()
     placeholder_label_->show();
     title_label_->setText(tr("等待SSDV图像数据"));
     detail_label_->setText(tr("等待SSDV图像数据"));
-    progress_bar_->setRange(0, 100);
-    progress_bar_->setValue(0);
-    progress_bar_->setFormat(QStringLiteral("%p%"));
-    progress_label_->setText(tr("数据包：0/0"));
+    progress_bar_->setPackets({}, {}, -1, false);
+    progress_label_->setText(tr("尚未接收到数据包"));
     status_badge_->setText(tr("接收中"));
     status_badge_->setStyleSheet(kBadgeBaseStyle +
                                  QStringLiteral("background:#d97706;"));

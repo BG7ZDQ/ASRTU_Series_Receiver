@@ -21,10 +21,6 @@
 %1</translation>
         </message>
         <message>
-            <source>尚未配置上传信息，请先保存设置。</source>
-            <translation>Upload information is not configured. Save the settings first.</translation>
-        </message>
-        <message>
             <source>上传代理启动后立即退出（代码 %1）。</source>
             <translation>The upload proxy exited immediately after launch (code %1).</translation>
         </message>
@@ -129,28 +125,12 @@ Last output:
             <translation>Play Recording File</translation>
         </message>
         <message>
-            <source>快速播放录音文件</source>
-            <translation>Quick Play Recording File</translation>
-        </message>
-        <message>
-            <source>打开录音与日志</source>
-            <translation>Open Recordings and Logs</translation>
-        </message>
-        <message>
             <source>就绪</source>
             <translation>Ready</translation>
         </message>
         <message>
-            <source>保存设置</source>
-            <translation>Save Settings</translation>
-        </message>
-        <message>
             <source>启动接收</source>
             <translation>Start Receiver</translation>
-        </message>
-        <message>
-            <source>启动上传代理</source>
-            <translation>Start Upload Proxy</translation>
         </message>
         <message>
             <source>SDR# 启动失败</source>
@@ -177,14 +157,6 @@ Last output:
             <translation>Playing: /%1; log: %2</translation>
         </message>
         <message>
-            <source>快速播放失败</source>
-            <translation>Quick Playback Failed</translation>
-        </message>
-        <message>
-            <source>正在重放：/%1/%2</source>
-            <translation>Replaying: /%1/%2</translation>
-        </message>
-        <message>
             <source>上传代理启动失败</source>
             <translation>Failed to Start Upload Proxy</translation>
         </message>
@@ -203,10 +175,6 @@ Last output:
         <message>
             <source>系统默认输入设备</source>
             <translation>System Default Input Device</translation>
-        </message>
-        <message>
-            <source>选择上传卫星</source>
-            <translation>Select Upload Satellite</translation>
         </message>
         <message>
             <source>本次遥测上传目标：</source>
@@ -323,32 +291,12 @@ Last output:
             <translation>Ground station: %1°, %2°, %3 m</translation>
         </message>
         <message>
-            <source>正在下载：%1</source>
-            <translation>Downloading: %1</translation>
-        </message>
-        <message>
             <source>在线合并</source>
             <translation>online merge</translation>
         </message>
         <message>
             <source>所有 TLE 来源均下载失败</source>
             <translation>All TLE sources failed to download</translation>
-        </message>
-        <message>
-            <source>在线更新失败，继续使用本地合并文件</source>
-            <translation>Online update failed; continuing with the local merged file</translation>
-        </message>
-        <message>
-            <source>已下载 %1/%2 个来源，合并 %3 颗卫星%4：all_sources.tle</source>
-            <translation>Downloaded %1/%2 sources and merged %3 satellites%4: all_sources.tle</translation>
-        </message>
-        <message>
-            <source>并保存</source>
-            <translation> and saved</translation>
-        </message>
-        <message>
-            <source>，但保存失败</source>
-            <translation>, but saving failed</translation>
         </message>
         <message>
             <source>自定义</source>
@@ -363,16 +311,8 @@ Last output:
             <translation>ASRTU Series Satellite Receiver and Decoder</translation>
         </message>
         <message>
-            <source>所选卫星没有可用的 SatNOGS NORAD ID。</source>
-            <translation>The selected satellite has no available SatNOGS NORAD ID.</translation>
-        </message>
-        <message>
             <source>同时上传至 SatNOGS</source>
             <translation>Also upload to SatNOGS</translation>
-        </message>
-        <message>
-            <source>接收已启动；SatNOGS 上传已启用；录音与日志：%1</source>
-            <translation>Receiver started; SatNOGS upload enabled; recording and logs: %1</translation>
         </message>
         <message>
             <source>启动上传</source>
@@ -459,12 +399,24 @@ Select ‘Mono Real 12 kHz Radio IF Input’ in the launcher.</translation>
             <translation>Waiting for SSDV image data</translation>
         </message>
         <message>
-            <source>复制图像</source>
-            <translation>Copy Image</translation>
+            <source>接收中</source>
+            <translation>Receiving</translation>
         </message>
         <message>
-            <source>打开目录</source>
-            <translation>Open Folder</translation>
+            <source>已接收</source>
+            <translation>Received</translation>
+        </message>
+        <message>
+            <source>确认缺失</source>
+            <translation>Confirmed missing</translation>
+        </message>
+        <message>
+            <source>尚未确定</source>
+            <translation>Pending</translation>
+        </message>
+        <message>
+            <source>尚未接收到数据包</source>
+            <translation>No packets received yet</translation>
         </message>
         <message>
             <source>上一张图像</source>
@@ -475,6 +427,14 @@ Select ‘Mono Real 12 kHz Radio IF Input’ in the launcher.</translation>
             <translation>Next Image</translation>
         </message>
         <message>
+            <source>复制图像</source>
+            <translation>Copy Image</translation>
+        </message>
+        <message>
+            <source>打开目录</source>
+            <translation>Open Folder</translation>
+        </message>
+        <message>
             <source>清除图像</source>
             <translation>Clear Image</translation>
         </message>
@@ -483,40 +443,28 @@ Select ‘Mono Real 12 kHz Radio IF Input’ in the launcher.</translation>
             <translation>Saved to: —</translation>
         </message>
         <message>
-            <source>来源卫星：%1　图像ID：%2
-分辨率：%3×%4　质量：%5
-数据包：%6（%7–%8，区间缺失%9）　状态：%10</source>
-            <translation>Source satellite: %1   Image ID: %2
-Resolution: %3×%4   Quality: %5
-Packets: %6 (%7–%8, %9 missing in range)   Status: %10</translation>
+            <source>%1 · SSDV 图像 %2</source>
+            <translation>%1 · SSDV Image %2</translation>
+        </message>
+        <message>
+            <source>分辨率 %1 × %2　·　质量 %3</source>
+            <translation>Resolution %1 × %2  ·  Quality %3</translation>
+        </message>
+        <message>
+            <source>已接收 %1 / %2 包　·　缺失 %3 包　·　完整率 %4%</source>
+            <translation>Received %1 / %2  ·  Missing %3  ·  Integrity %4%</translation>
+        </message>
+        <message>
+            <source>已接收 %1 包　·　确认缺失 %2 包　·　最新包序号 %3　·　总包数待确定</source>
+            <translation>Received %1  ·  Confirmed missing %2  ·  Latest packet %3  ·  Total pending EOI</translation>
         </message>
         <message>
             <source>完成</source>
             <translation>Complete</translation>
         </message>
         <message>
-            <source>接收中</source>
-            <translation>Receiving</translation>
-        </message>
-        <message>
             <source>保存路径：%1</source>
             <translation>Saved to: %1</translation>
-        </message>
-        <message>
-            <source>来源卫星：%1</source>
-            <translation>Source satellite: %1</translation>
-        </message>
-        <message>
-            <source>图像ID：%1　分辨率：%2×%3　质量：%4</source>
-            <translation>Image ID: %1   Resolution: %2×%3   Quality: %4</translation>
-        </message>
-        <message>
-            <source>数据包：0/0</source>
-            <translation>Packets: 0/0</translation>
-        </message>
-        <message>
-            <source>区间缺失 %1</source>
-            <translation>%1 missing in range</translation>
         </message>
     </context>
 </TS>

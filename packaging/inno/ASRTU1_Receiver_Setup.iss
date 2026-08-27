@@ -1,5 +1,5 @@
 #define AppName "ASRTU Series Satellite Receiver and Upload"
-#define AppVersion "1.5.1"
+#define AppVersion "1.5.2"
 
 [Setup]
 AppId={{957BAE5B-4E42-4ACB-932D-9759FB28DD44}

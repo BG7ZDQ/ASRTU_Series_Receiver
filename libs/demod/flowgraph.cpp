@@ -1,4 +1,5 @@
 #include "flowgraph.h"
+#include "fec_candidate_sink.h"
 #include "openhoshimi_decoder_sink.h"
 #include "shared_iq_source.h"
 
@@ -16,7 +17,6 @@
 #include <gnuradio/blocks/rms_cf.h>
 #include <gnuradio/blocks/rms_ff.h>
 #include <gnuradio/blocks/sub.h>
-#include <gnuradio/blocks/keep_one_in_n.h>
 #include <gnuradio/blocks/throttle.h>
 #include <gnuradio/blocks/unpack_k_bits_bb.h>
 #include <gnuradio/blocks/wavfile_sink.h>
@@ -33,7 +33,6 @@
 #include <gnuradio/fft/window.h>
 #include <gnuradio/filter/firdes.h>
 #include <gnuradio/filter/fir_filter_blk.h>
-#include <gnuradio/lilacsat/fec_decode_b.h>
 #include <gnuradio/lilacsat/vitfilt27_fb.h>
 #include <gnuradio/network/socket_pdu.h>
 #include <gnuradio/io_signature.h>
@@ -179,13 +178,18 @@ public:
         // adaptation. A transient must never be able to blow the taps up to
         // infinity: once NaN enters the stream it poisons the Viterbi/FEC
         // path, the SNR estimator and every Qt plot that displays it.
-        if (!std::isfinite(tap.real()) || !std::isfinite(tap.imag()) ||
-            !std::isfinite(input.real()) || !std::isfinite(input.imag()) ||
-            !std::isfinite(error.real()) || !std::isfinite(error.imag()))
+        if (!std::isfinite(tap.real()) || !std::isfinite(tap.imag()))
             return gr_complex{};
+        if (!std::isfinite(input.real()) || !std::isfinite(input.imag()) ||
+            !std::isfinite(error.real()) || !std::isfinite(error.imag()))
+            return tap;
 
-        return std::conj(std::conj(tap) + gain_->load(std::memory_order_relaxed) *
-                                          input * std::conj(error));
+        const auto updated = std::conj(
+            std::conj(tap) + gain_->load(std::memory_order_relaxed) *
+                                 input * std::conj(error));
+        return std::isfinite(updated.real()) && std::isfinite(updated.imag())
+                   ? updated
+                   : tap;
     }
 
     void initialize_taps(std::vector<gr_complex>& taps) override
@@ -310,8 +314,8 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
     const auto viterbi_b = gr::lilacsat::vitfilt27_fb::make();
     const auto unpack_a = gr::blocks::unpack_k_bits_bb::make(8);
     const auto unpack_b = gr::blocks::unpack_k_bits_bb::make(8);
-    const auto fec_a = gr::lilacsat::fec_decode_b::make(223, true, false, false);
-    const auto fec_b = gr::lilacsat::fec_decode_b::make(223, true, false, false);
+    const auto fec_a = FecCandidateSink::make();
+    const auto fec_b = FecCandidateSink::make();
 
     // Synchronizer diversity based on the useful topology of
     // Lilacsat-soundmodem-CLI. Input conditioning is shared, so its expensive
@@ -328,8 +332,8 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
     const auto parallel_viterbi_b = gr::lilacsat::vitfilt27_fb::make();
     const auto parallel_unpack_a = gr::blocks::unpack_k_bits_bb::make(8);
     const auto parallel_unpack_b = gr::blocks::unpack_k_bits_bb::make(8);
-    const auto parallel_fec_a = gr::lilacsat::fec_decode_b::make(223, true, false, false);
-    const auto parallel_fec_b = gr::lilacsat::fec_decode_b::make(223, true, false, false);
+    const auto parallel_fec_a = FecCandidateSink::make();
+    const auto parallel_fec_b = FecCandidateSink::make();
 
     snr_probe_ = gr::digital::probe_mpsk_snr_est_c::make(
         gr::digital::SNR_EST_SVR, 10000, 0.001);
@@ -422,22 +426,6 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
                                         ? OpenHoshimiDecoderSink::make()
                                         : OpenHoshimiDecoderSink::sptr{};
 
-    if (options.enable_gui && options.real_if_12khz) {
-        // Raw mono float samples feed both GUI sinks before any I+j0
-        // construction or frequency translation.
-        if (options.fast_playback) {
-            // Decimate the spectrum sink input during fast replay so its FFT
-            // work cannot slow the accelerated playback; the waterfall keeps
-            // the full-rate stream and its 10 ms gate.
-            const auto spectrumDecim =
-                gr::blocks::keep_one_in_n::make(sizeof(float), 2);
-            tb_->connect(source, 0, spectrumDecim, 0);
-            tb_->connect(spectrumDecim, 0, input_spectrum_real_, 0);
-        } else {
-            tb_->connect(source, 0, input_spectrum_real_, 0);
-        }
-        tb_->connect(source, 0, waterfall_real_, 0);
-    }
     if (!options.shared_iq_bridge)
         tb_->connect(source, 0, to_complex, 0);
     if (options.real_if_12khz && !options.shared_iq_bridge) {
@@ -469,32 +457,40 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
                 tb_->connect(source, 1, recorder, 1);
         }
     }
+    gr::basic_block_sptr replayClockedSource = complexSource;
     if (options.fast_playback) {
         // The raw WAV source can run at ~60x. Replay that fast finishes the
         // file in under a second, so the waterfall never gets to scroll and
         // the window looks frozen at 1x. Throttle the demodulator chain to a
-        // visibly accelerated rate (default 10x); the spectrum/waterfall
-        // sinks sample the raw stream ahead of this gate and still flash at
-        // the accelerated data rate.
+        // visibly accelerated rate. The spectrum/waterfall branch uses this
+        // same clock so its time axis tracks the actual decoder throughput.
         const auto replayThrottle = gr::blocks::throttle::make(
             sizeof(gr_complex), kIfRate * options.replay_rate);
         tb_->connect(complexSource, 0, replayThrottle, 0);
         tb_->connect(replayThrottle, 0, mixer, 0);
+        replayClockedSource = replayThrottle;
     } else {
         tb_->connect(complexSource, 0, mixer, 0);
     }
     tb_->connect(oscillator, 0, mixer, 1);
     if (options.enable_gui) {
-        if (!options.real_if_12khz) {
+        if (options.real_if_12khz) {
             if (options.fast_playback) {
-                const auto spectrumDecim =
-                    gr::blocks::keep_one_in_n::make(sizeof(gr_complex), 2);
-                tb_->connect(complexSource, 0, spectrumDecim, 0);
-                tb_->connect(spectrumDecim, 0, input_spectrum_, 0);
+                // Use the same replay clock as the decoder. Converting I+j0
+                // back to float is lossless and keeps the real-IF display
+                // centered at 12 kHz without letting an unthrottled GUI
+                // branch dominate file playback.
+                const auto displayReal = gr::blocks::complex_to_real::make(1);
+                tb_->connect(replayClockedSource, 0, displayReal, 0);
+                tb_->connect(displayReal, 0, input_spectrum_real_, 0);
+                tb_->connect(displayReal, 0, waterfall_real_, 0);
             } else {
-                tb_->connect(complexSource, 0, input_spectrum_, 0);
+                tb_->connect(source, 0, input_spectrum_real_, 0);
+                tb_->connect(source, 0, waterfall_real_, 0);
             }
-            tb_->connect(complexSource, 0, waterfall_, 0);
+        } else {
+            tb_->connect(replayClockedSource, 0, input_spectrum_, 0);
+            tb_->connect(replayClockedSource, 0, waterfall_, 0);
         }
     }
     tb_->connect(mixer, 0, gain, 0);
@@ -505,8 +501,10 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
     tb_->connect(gain, 0, lowpass, 0);
     if (options.enable_gui) {
         if (options.fast_playback) {
-            const auto loopDecim0 =
-                gr::blocks::keep_one_in_n::make(sizeof(gr_complex), 2);
+            const auto loopDecim0 = gr::filter::fir_filter_ccf::make(
+                2, gr::filter::firdes::low_pass(
+                       1.0, kIfRate, 10000.0, 2000.0,
+                       gr::fft::window::WIN_HAMMING, 6.76));
             tb_->connect(gain, 0, loopDecim0, 0);
             tb_->connect(loopDecim0, 0, loop_spectrum_, 0);
         } else {
@@ -520,8 +518,10 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
     tb_->connect(agc, 0, fll_, 0);
     if (options.enable_gui) {
         if (options.fast_playback) {
-            const auto loopDecim1 =
-                gr::blocks::keep_one_in_n::make(sizeof(gr_complex), 2);
+            const auto loopDecim1 = gr::filter::fir_filter_ccf::make(
+                2, gr::filter::firdes::low_pass(
+                       1.0, kIfRate, 10000.0, 2000.0,
+                       gr::fft::window::WIN_HAMMING, 6.76));
             tb_->connect(fll_, 0, loopDecim1, 0);
             tb_->connect(loopDecim1, 0, loop_spectrum_, 1);
         } else {
@@ -560,14 +560,20 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
     }
     if (openHoshimiDecoder) {
         tb_->msg_connect(openHoshimiDecoder, "out", frame_monitor_, "parallel");
-        tb_->msg_connect(openHoshimiDecoder, "failed", frame_monitor_, "local");
+        tb_->msg_connect(openHoshimiDecoder, "failed", frame_monitor_,
+                         "local_openhoshimi");
     }
 
-    for (const auto& fec : { fec_a, fec_b })
+    for (const auto& fec : { fec_a, fec_b }) {
         tb_->msg_connect(fec, "out", frame_monitor_, "primary");
+        tb_->msg_connect(fec, "failed", frame_monitor_, "local_original");
+    }
     if (options.enable_parallel_decoder) {
-        for (const auto& fec : { parallel_fec_a, parallel_fec_b })
+        for (const auto& fec : { parallel_fec_a, parallel_fec_b }) {
             tb_->msg_connect(fec, "out", frame_monitor_, "parallel");
+            tb_->msg_connect(fec, "failed", frame_monitor_,
+                             "local_soundmodem");
+        }
     }
 
     if (options.enable_network) {
