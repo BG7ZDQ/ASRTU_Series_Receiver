@@ -77,13 +77,15 @@ while ($queue.Count -gt 0) {
     foreach ($dependency in (Get-Dependencies $binary)) {
         if ($knownSystem.Contains($dependency) -or $dependency -like 'api-ms-win-*') { continue }
         $destination = Join-Path $OutputDir $dependency
-        if (-not (Test-Path -LiteralPath $destination)) {
-            $source = Find-RuntimeDll $dependency
-            if (-not $source) {
+        $source = Find-RuntimeDll $dependency
+        if ($source) {
+            # Always refresh runtime DLLs. Keeping an existing file made
+            # incremental packages silently retain stale OOT modules after a
+            # local rebuild (notably gnuradio-hyacinthsat.dll).
+            Copy-Item -LiteralPath $source -Destination $destination -Force
+        } elseif (-not (Test-Path -LiteralPath $destination)) {
                 Write-Warning "Dependency not found in radioconda (assumed system): $dependency"
                 continue
-            }
-            Copy-Item -LiteralPath $source -Destination $destination -Force
         }
         $queue.Enqueue($destination)
     }
@@ -100,10 +102,8 @@ while ($queue.Count -gt 0) {
     foreach ($dependency in (Get-Dependencies $binary)) {
         if ($knownSystem.Contains($dependency) -or $dependency -like 'api-ms-win-*') { continue }
         $destination = Join-Path $OutputDir $dependency
-        if (-not (Test-Path -LiteralPath $destination)) {
-            $source = Find-RuntimeDll $dependency
-            if ($source) { Copy-Item -LiteralPath $source -Destination $destination -Force }
-        }
+        $source = Find-RuntimeDll $dependency
+        if ($source) { Copy-Item -LiteralPath $source -Destination $destination -Force }
         if (Test-Path -LiteralPath $destination) { $queue.Enqueue($destination) }
     }
 }
@@ -127,7 +127,9 @@ Set-Content -LiteralPath (Join-Path $OutputDir 'README.txt') -Encoding UTF8 -Val
     'TCP PDU output: 127.0.0.1:9985',
     'ZeroMQ PUB output: tcp://127.0.0.1:5555',
     '',
-    'This package contains GNU Radio and GPL-licensed OOT modules. Distribute it under the applicable licenses.'
+    'This package contains GNU Radio, GPL-licensed OOT modules and the OpenHoshimi ASRTU soundmodem core.',
+    'OpenHoshimi decoder credits: BG6HNY / Hyacinth Satellite Team and the upstream HIT LilacSat soundmodem authors.',
+    'Distribute these components under their applicable licenses.'
 )
 
 $files = Get-ChildItem -LiteralPath $OutputDir -File -Recurse

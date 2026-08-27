@@ -16,6 +16,24 @@ find_library(ASRTU_LILACSAT_LIBRARY NAMES gnuradio-lilacsat REQUIRED)
 find_library(ASRTU_HYACINTHSAT_LIBRARY NAMES gnuradio-hyacinthsat REQUIRED)
 find_library(QWT_LIBRARY NAMES qwt qwt-qt5 REQUIRED)
 
+set(OPENHOSHIMI_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/third_party/openhoshimi_soundmodem)
+add_library(openhoshimi_soundmodem STATIC
+    ${OPENHOSHIMI_ROOT}/csrc/smdsp.c
+    ${OPENHOSHIMI_ROOT}/csrc/sm_api.c
+    ${OPENHOSHIMI_ROOT}/vendor/ccsds.c
+    ${OPENHOSHIMI_ROOT}/vendor/viterbi27.c
+    ${OPENHOSHIMI_ROOT}/vendor/rs.c
+    ${OPENHOSHIMI_ROOT}/vendor/randomizer.c
+    ${OPENHOSHIMI_ROOT}/vendor/tab.c
+    ${OPENHOSHIMI_ROOT}/vendor/fifobuf.c)
+target_include_directories(openhoshimi_soundmodem PUBLIC
+    ${OPENHOSHIMI_ROOT}/csrc ${OPENHOSHIMI_ROOT}/vendor)
+target_compile_definitions(openhoshimi_soundmodem PRIVATE
+    _GNU_SOURCE _USE_MATH_DEFINES)
+if(MSVC)
+    target_compile_options(openhoshimi_soundmodem PRIVATE /w)
+endif()
+
 set(ASRTU_DEMOD_SOURCES
     apps/dsp/main.cpp
     apps/dsp/main_window.cpp
@@ -30,6 +48,8 @@ set(ASRTU_DEMOD_SOURCES
     libs/demod/flowgraph.h
     libs/demod/frame_monitor.cpp
     libs/demod/frame_monitor.h
+    libs/demod/openhoshimi_decoder_sink.cpp
+    libs/demod/openhoshimi_decoder_sink.h
     libs/common/translation.cpp
     libs/common/translation.h
     apps/dsp/application_icons.qrc
@@ -67,6 +87,7 @@ target_link_libraries(ASRTU1_Demod_CQt PRIVATE
     ${QWT_LIBRARY}
     ${ASRTU_LILACSAT_LIBRARY}
     ${ASRTU_HYACINTHSAT_LIBRARY}
+    openhoshimi_soundmodem
 )
 if(WIN32)
     target_link_libraries(ASRTU1_Demod_CQt PRIVATE Qt5::WinMain)
@@ -143,6 +164,8 @@ add_executable(ASRTU1_Benchmark
     libs/demod/flowgraph.h
     libs/demod/frame_monitor.cpp
     libs/demod/frame_monitor.h
+    libs/demod/openhoshimi_decoder_sink.cpp
+    libs/demod/openhoshimi_decoder_sink.h
 )
 target_compile_definitions(ASRTU1_Benchmark PRIVATE
     _USE_MATH_DEFINES HYACINTHSAT_GR_310)
@@ -166,6 +189,7 @@ target_link_libraries(ASRTU1_Benchmark PRIVATE
     gnuradio::gnuradio-zeromq
     ${ASRTU_LILACSAT_LIBRARY}
     ${ASRTU_HYACINTHSAT_LIBRARY}
+    openhoshimi_soundmodem
 )
 if(WIN32)
     target_link_libraries(ASRTU1_Benchmark PRIVATE Psapi)

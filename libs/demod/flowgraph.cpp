@@ -1,4 +1,5 @@
 #include "flowgraph.h"
+#include "openhoshimi_decoder_sink.h"
 #include "shared_iq_source.h"
 
 #include <gnuradio/analog/agc2_cc.h>
@@ -15,6 +16,7 @@
 #include <gnuradio/blocks/probe_signal.h>
 #include <gnuradio/blocks/rms_cf.h>
 #include <gnuradio/blocks/rms_ff.h>
+#include <gnuradio/blocks/sub.h>
 #include <gnuradio/blocks/unpack_k_bits_bb.h>
 #include <gnuradio/blocks/wavfile_sink.h>
 #include <gnuradio/digital/adaptive_algorithm.h>
@@ -185,12 +187,19 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
     if (expects_stereo_iq_) {
         const auto iRms = gr::blocks::rms_ff::make(0.001f);
         const auto qRms = gr::blocks::rms_ff::make(0.001f);
+        const auto iqDifference = gr::blocks::sub_ff::make(1);
+        const auto iqDifferenceRms = gr::blocks::rms_ff::make(0.001f);
         i_rms_probe_ = gr::blocks::probe_signal_f::make();
         q_rms_probe_ = gr::blocks::probe_signal_f::make();
+        iq_difference_rms_probe_ = gr::blocks::probe_signal_f::make();
         tb_->connect(source, 0, iRms, 0);
         tb_->connect(source, 1, qRms, 0);
+        tb_->connect(source, 0, iqDifference, 0);
+        tb_->connect(source, 1, iqDifference, 1);
         tb_->connect(iRms, 0, i_rms_probe_, 0);
         tb_->connect(qRms, 0, q_rms_probe_, 0);
+        tb_->connect(iqDifference, 0, iqDifferenceRms, 0);
+        tb_->connect(iqDifferenceRms, 0, iq_difference_rms_probe_, 0);
     }
 
     if (options.enable_gui) {
@@ -249,6 +258,9 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
 
     frame_monitor_ = FrameMonitor::make(
         std::move(callback), options.payload_callback);
+    const auto openHoshimiDecoder = options.enable_openhoshimi_decoder
+                                        ? OpenHoshimiDecoderSink::make()
+                                        : OpenHoshimiDecoderSink::sptr{};
 
     if (options.enable_gui && options.real_if_12khz) {
         // Raw mono float samples feed both GUI sinks before any I+j0
@@ -296,6 +308,10 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
         }
     }
     tb_->connect(mixer, 0, gain, 0);
+    // The reference decoder owns its exact LPF/AGC/FLL/Gardner/Costas chain,
+    // so branch before the native receiver's low-pass filter.
+    if (openHoshimiDecoder)
+        tb_->connect(gain, 0, openHoshimiDecoder, 0);
     tb_->connect(gain, 0, lowpass, 0);
     if (options.enable_gui)
         tb_->connect(gain, 0, loop_spectrum_, 0);
@@ -334,6 +350,8 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
         tb_->connect(parallel_unpack_a, 0, parallel_fec_a, 0);
         tb_->connect(parallel_unpack_b, 0, parallel_fec_b, 0);
     }
+    if (openHoshimiDecoder)
+        tb_->msg_connect(openHoshimiDecoder, "out", frame_monitor_, "parallel");
 
     for (const auto& fec : { fec_a, fec_b })
         tb_->msg_connect(fec, "out", frame_monitor_, "primary");
@@ -397,9 +415,19 @@ bool AsrtuFlowgraph::stereoIqContentMismatch() const
     const double q = std::abs(double(q_rms_probe_->level()));
     const double stronger = std::max(i, q);
     const double weaker = std::min(i, q);
-    // Ignore silence. A sustained >30 dB channel imbalance is characteristic
-    // of mono/real audio being supplied to a complex RAW I/Q input.
-    return stronger > 1.0e-3 && weaker < stronger * 0.0316227766;
+    // Ignore silence. Mono/real audio commonly arrives either in just one
+    // channel or duplicated bit-for-bit into both channels by the Windows
+    // audio driver. The latter has balanced RMS levels, so imbalance alone
+    // cannot detect it. A difference more than 50 dB below either channel is
+    // deliberately conservative to avoid flagging valid narrow BPSK I/Q.
+    if (stronger <= 1.0e-3)
+        return false;
+    const bool severeImbalance = weaker < stronger * 0.0316227766;
+    const double difference = iq_difference_rms_probe_
+                                  ? std::abs(double(iq_difference_rms_probe_->level()))
+                                  : stronger;
+    const bool duplicatedMono = difference < stronger * 0.00316227766;
+    return severeImbalance || duplicatedMono;
 }
 
 double AsrtuFlowgraph::loopFrequencyHz() const

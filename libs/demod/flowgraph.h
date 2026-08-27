@@ -41,6 +41,7 @@ public:
         bool enable_gui = true;
         bool enable_network = true;
         bool enable_parallel_decoder = true;
+        bool enable_openhoshimi_decoder = true;
         bool use_legacy_feedforward_agc = false; // benchmark/regression only
         FrameMonitor::PayloadCallback payload_callback;
     };
@@ -86,6 +87,7 @@ private:
     std::shared_ptr<gr::blocks::probe_signal_f> rssi_probe_;
     std::shared_ptr<gr::blocks::probe_signal_f> i_rms_probe_;
     std::shared_ptr<gr::blocks::probe_signal_f> q_rms_probe_;
+    std::shared_ptr<gr::blocks::probe_signal_f> iq_difference_rms_probe_;
     std::shared_ptr<gr::digital::fll_band_edge_cc> fll_;
     std::shared_ptr<gr::digital::pfb_clock_sync_ccf> clock_sync_;
     std::shared_ptr<gr::digital::costas_loop_cc> costas_;

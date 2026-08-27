@@ -30,8 +30,8 @@ double fileTimeSeconds(const FILETIME& time)
 int main(int argc, char* argv[])
 {
     QCoreApplication application(argc, argv);
-    if (application.arguments().size() < 3 || application.arguments().size() > 6) {
-        std::cerr << "Usage: ASRTU1_Benchmark <input.wav> <result.json> [if_hz] [--real-if] [--no-parallel] [--legacy-agc]\n";
+    if (application.arguments().size() < 3 || application.arguments().size() > 7) {
+        std::cerr << "Usage: ASRTU1_Benchmark <input.wav> <result.json> [if_hz] [--real-if] [--no-parallel] [--no-openhoshimi] [--legacy-agc]\n";
         return 2;
     }
 
@@ -47,6 +47,8 @@ int main(int argc, char* argv[])
     for (const auto& argument : application.arguments().mid(3)) {
         if (argument == QStringLiteral("--no-parallel"))
             options.enable_parallel_decoder = false;
+        else if (argument == QStringLiteral("--no-openhoshimi"))
+            options.enable_openhoshimi_decoder = false;
         else if (argument == QStringLiteral("--legacy-agc"))
             options.use_legacy_feedforward_agc = true;
         else if (argument == QStringLiteral("--real-if")) {
