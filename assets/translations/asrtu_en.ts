@@ -408,5 +408,31 @@ For a radio 12 kHz IF or SDR# USB audio, select ‘Mono Real 12 kHz Radio IF Inp
             <source>正在下载第 %1/%2 个 TLE 来源</source>
             <translation>Downloading TLE source %1 of %2</translation>
         </message>
+        <message>
+            <source>在线更新失败，继续使用本地 TLE 数据</source>
+            <translation>Online update failed; continuing with local TLE data</translation>
+        </message>
+        <message>
+            <source>TLE 更新完成：%1/%2 个来源</source>
+            <translation>TLE update complete: %1 of %2 sources</translation>
+        </message>
+        <message>
+            <source>快速重放录音</source>
+            <translation>Quick Replay Recording</translation>
+        </message>
+        <message>
+            <source>快速重放失败</source>
+            <translation>Quick Replay Failed</translation>
+        </message>
+        <message>
+            <source>I/Q 输入异常</source>
+            <translation>I/Q Input Mismatch</translation>
+        </message>
+        <message>
+            <source>检测到 I/Q 两路幅度严重不平衡，当前输入可能是单声道 USB/实数音频，因此频谱会出现镜像。
+请在启动器中改选“单声道实数域 12KHz 电台 IF 输入”。</source>
+            <translation>The I and Q channel levels are severely imbalanced. The input may be mono USB/real audio, which produces a mirrored spectrum.
+Select ‘Mono Real 12 kHz Radio IF Input’ in the launcher.</translation>
+        </message>
     </context>
 </TS>

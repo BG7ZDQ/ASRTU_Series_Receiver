@@ -296,17 +296,15 @@ void SatelliteTrackerDialog::finishDownloads()
     if (successfulDownloads_ == 0 || !installTle(downloadedTle_, QCoreApplication::translate("ASRTU", "在线合并"))) {
         status_->setText(satellites_.isEmpty()
                              ? QCoreApplication::translate("ASRTU", "所有 TLE 来源均下载失败")
-                             : QCoreApplication::translate("ASRTU", "在线更新失败，继续使用本地合并文件"));
+                             : QCoreApplication::translate("ASRTU", "在线更新失败，继续使用本地 TLE 数据"));
         return;
     }
     QFile cache(cachePath());
-    const bool saved = cache.open(QIODevice::WriteOnly | QIODevice::Truncate) &&
-                       cache.write(downloadedTle_) == downloadedTle_.size();
-    status_->setText(QCoreApplication::translate("ASRTU", "已下载 %1/%2 个来源，合并 %3 颗卫星%4：all_sources.tle")
+    if (cache.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        cache.write(downloadedTle_);
+    status_->setText(QCoreApplication::translate("ASRTU", "TLE 更新完成：%1/%2 个来源")
                          .arg(successfulDownloads_)
-                         .arg(downloadSources_.size())
-                         .arg(satellites_.size())
-                         .arg(saved ? QCoreApplication::translate("ASRTU", "并保存") : QCoreApplication::translate("ASRTU", "，但保存失败")));
+                         .arg(downloadSources_.size()));
 }
 
 bool SatelliteTrackerDialog::installTle(const QByteArray& data, const QString& source)

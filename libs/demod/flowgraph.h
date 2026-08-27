@@ -40,6 +40,8 @@ public:
         bool shared_iq_bridge = false;
         bool enable_gui = true;
         bool enable_network = true;
+        bool enable_parallel_decoder = true;
+        bool use_legacy_feedforward_agc = false; // benchmark/regression only
         FrameMonitor::PayloadCallback payload_callback;
     };
 
@@ -54,9 +56,12 @@ public:
     double snr() const;
     double rssi() const;
     double loopFrequencyHz() const;
+    bool stereoIqContentMismatch() const;
     bool inputActive(double timeoutSeconds = 0.5) const;
     bool synced(double timeoutSeconds = 1.5) const;
     std::uint64_t frameCount() const;
+    std::uint64_t primaryFrameCount() const;
+    std::uint64_t parallelFrameCount() const;
 
     QWidget* inputSpectrumWidget() const;
     QWidget* waterfallWidget() const;
@@ -79,6 +84,8 @@ private:
     std::shared_ptr<gr::digital::probe_mpsk_snr_est_c> snr_probe_;
     std::shared_ptr<SharedIqSource> shared_iq_source_;
     std::shared_ptr<gr::blocks::probe_signal_f> rssi_probe_;
+    std::shared_ptr<gr::blocks::probe_signal_f> i_rms_probe_;
+    std::shared_ptr<gr::blocks::probe_signal_f> q_rms_probe_;
     std::shared_ptr<gr::digital::fll_band_edge_cc> fll_;
     std::shared_ptr<gr::digital::pfb_clock_sync_ccf> clock_sync_;
     std::shared_ptr<gr::digital::costas_loop_cc> costas_;
@@ -90,5 +97,6 @@ private:
     std::shared_ptr<gr::qtgui::freq_sink_c> loop_spectrum_;
     std::shared_ptr<gr::qtgui::const_sink_c> constellation_sink_;
     FrameMonitor::sptr frame_monitor_;
+    bool expects_stereo_iq_ = false;
     bool running_ = false;
 };

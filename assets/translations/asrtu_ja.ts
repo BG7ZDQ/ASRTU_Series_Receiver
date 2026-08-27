@@ -408,5 +408,31 @@
             <source>正在下载第 %1/%2 个 TLE 来源</source>
             <translation>TLEソース %1/%2 をダウンロード中</translation>
         </message>
+        <message>
+            <source>在线更新失败，继续使用本地 TLE 数据</source>
+            <translation>オンライン更新に失敗しました。ローカルTLEデータを使用します</translation>
+        </message>
+        <message>
+            <source>TLE 更新完成：%1/%2 个来源</source>
+            <translation>TLE更新完了：%1/%2ソース</translation>
+        </message>
+        <message>
+            <source>快速重放录音</source>
+            <translation>録音をクイック再生</translation>
+        </message>
+        <message>
+            <source>快速重放失败</source>
+            <translation>クイック再生に失敗しました</translation>
+        </message>
+        <message>
+            <source>I/Q 输入异常</source>
+            <translation>I/Q入力異常</translation>
+        </message>
+        <message>
+            <source>检测到 I/Q 两路幅度严重不平衡，当前输入可能是单声道 USB/实数音频，因此频谱会出现镜像。
+请在启动器中改选“单声道实数域 12KHz 电台 IF 输入”。</source>
+            <translation>I/Qチャンネルのレベルに大きな偏りがあります。モノラルUSB/実数音声が入力され、スペクトルが鏡像になっている可能性があります。
+ランチャーで「モノラル実数12 kHz無線機IF入力」を選択してください。</translation>
+        </message>
     </context>
 </TS>

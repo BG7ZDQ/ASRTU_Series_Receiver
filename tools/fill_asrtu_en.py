@@ -6,6 +6,8 @@ ROOT = Path(__file__).resolve().parents[1]
 TS = ROOT / "assets" / "translations" / "asrtu_en.ts"
 
 TRANSLATIONS = {
+    "I/Q 输入异常": "I/Q Input Mismatch",
+    "检测到 I/Q 两路幅度严重不平衡，当前输入可能是单声道 USB/实数音频，因此频谱会出现镜像。\n请在启动器中改选“单声道实数域 12KHz 电台 IF 输入”。": "The I and Q channel levels are severely imbalanced. The input may be mono USB/real audio, which produces a mirrored spectrum.\nSelect ‘Mono Real 12 kHz Radio IF Input’ in the launcher.",
     "无法创建录音和日志目录：\n%1": "Unable to create the recording and log directory:\n%1",
     "找不到程序：\n%1": "Program not found:\n%1",
     "无法启动：\n%1": "Unable to start:\n%1",
@@ -26,8 +28,12 @@ TRANSLATIONS = {
     "单声道实数域 12KHz 电台 IF 输入": "Mono Real 12 kHz Radio IF Input",
     "输入声道不匹配": "Input Channel Mismatch",
     "打开录音目录": "Open Recordings Folder",
+    "快速重放录音": "Quick Replay Recording",
+    "快速重放失败": "Quick Replay Failed",
     "多普勒工具启动失败": "Unable to Start Doppler Tool",
     "正在下载第 %1/%2 个 TLE 来源": "Downloading TLE source %1 of %2",
+    "TLE 更新完成：%1/%2 个来源": "TLE update complete: %1 of %2 sources",
+    "在线更新失败，继续使用本地 TLE 数据": "Online update failed; continuing with local TLE data",
     "尚未配置上传信息，请先填写呼号和地面站资料。": "Upload information is not configured. Enter the call sign and ground-station details first.",
     "当前模式需要双声道 I/Q，但所选声卡仅提供单声道。\n若输入来自电台 12 kHz 中频或 SDR# 的 USB 音频，请改选“单声道实数域 12KHz 电台 IF 输入”。": "This mode requires stereo I/Q, but the selected audio device provides only one channel.\nFor a radio 12 kHz IF or SDR# USB audio, select ‘Mono Real 12 kHz Radio IF Input’.",
     "自动保存本次接收录音": "Automatically save this reception recording",

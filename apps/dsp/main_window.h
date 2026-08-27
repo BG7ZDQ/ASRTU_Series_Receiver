@@ -44,5 +44,7 @@ private:
     double rssi_min_ = 0.0;
     double rssi_max_ = 10.0;
     qint64 last_snr_log_ms_ = -1000;
+    int iq_mismatch_ticks_ = 0;
+    bool iq_mismatch_warned_ = false;
     QNetworkAccessManager* satnogs_network_ = nullptr;
 };

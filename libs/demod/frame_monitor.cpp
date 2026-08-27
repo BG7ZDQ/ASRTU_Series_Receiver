@@ -25,30 +25,55 @@ FrameMonitor::FrameMonitor(Callback callback, PayloadCallback payloadCallback)
       callback_(std::move(callback)),
       payload_callback_(std::move(payloadCallback))
 {
-    const auto port = pmt::intern("in");
-    message_port_register_in(port);
-    set_msg_handler(port, [this](pmt::pmt_t msg) { handle(msg); });
+    for (const char* name : { "primary", "parallel" }) {
+        const auto port = pmt::intern(name);
+        message_port_register_in(port);
+        set_msg_handler(port, [this, name](pmt::pmt_t msg) { handle(msg, name); });
+    }
+    message_port_register_out(pmt::intern("out"));
 }
 
-void FrameMonitor::handle(const pmt::pmt_t& message)
+void FrameMonitor::handle(const pmt::pmt_t& message, const char* path)
 {
-    last_frame_ms_.store(nowMs(), std::memory_order_relaxed);
+    pmt::pmt_t data = pmt::is_pair(message) ? pmt::cdr(message) : message;
+    if (!pmt::is_u8vector(data))
+        return;
+
+    std::size_t length = 0;
+    const auto* bytes = pmt::u8vector_elements(data, length);
+    std::vector<std::uint8_t> payload(bytes, bytes + length);
+    const auto timestamp = nowMs();
+    std::lock_guard<std::mutex> dispatchLock(dispatch_mutex_);
+
+    last_frame_ms_.store(timestamp, std::memory_order_relaxed);
     const auto count = frame_count_.fetch_add(1, std::memory_order_relaxed) + 1;
+    if (std::string(path) == "parallel")
+        parallel_frame_count_.fetch_add(1, std::memory_order_relaxed);
+    else
+        primary_frame_count_.fetch_add(1, std::memory_order_relaxed);
+    // Publish first. Hex formatting and UI/SatNOGS callbacks must never sit in
+    // front of the low-latency proxy path.
+    message_port_pub(pmt::intern("out"), message);
     if (callback_)
-        callback_("FEC frame #" + std::to_string(count) + "\n" + describePdu(message));
-    if (payload_callback_) {
-        pmt::pmt_t data = pmt::is_pair(message) ? pmt::cdr(message) : message;
-        if (pmt::is_u8vector(data)) {
-            std::size_t length = 0;
-            const auto* bytes = pmt::u8vector_elements(data, length);
-            payload_callback_(std::vector<std::uint8_t>(bytes, bytes + length));
-        }
-    }
+        callback_("FEC frame #" + std::to_string(count) + " [" + path + "]\n" +
+                  describePdu(message));
+    if (payload_callback_)
+        payload_callback_(payload);
 }
 
 std::uint64_t FrameMonitor::frameCount() const noexcept
 {
     return frame_count_.load(std::memory_order_relaxed);
+}
+
+std::uint64_t FrameMonitor::primaryFrameCount() const noexcept
+{
+    return primary_frame_count_.load(std::memory_order_relaxed);
+}
+
+std::uint64_t FrameMonitor::parallelFrameCount() const noexcept
+{
+    return parallel_frame_count_.load(std::memory_order_relaxed);
 }
 
 double FrameMonitor::secondsSinceFrame() const noexcept

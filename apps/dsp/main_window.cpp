@@ -535,6 +535,19 @@ void MainWindow::updateStatus()
         return;
     }
     try {
+        if (!iq_mismatch_warned_ && flowgraph_->stereoIqContentMismatch()) {
+            if (++iq_mismatch_ticks_ >= 5) {
+                iq_mismatch_warned_ = true;
+                QMessageBox::warning(
+                    this,
+                    QCoreApplication::translate("ASRTU", "I/Q 输入异常"),
+                    QCoreApplication::translate(
+                        "ASRTU",
+                        "检测到 I/Q 两路幅度严重不平衡，当前输入可能是单声道 USB/实数音频，因此频谱会出现镜像。\n请在启动器中改选“单声道实数域 12KHz 电台 IF 输入”。"));
+            }
+        } else if (!iq_mismatch_warned_) {
+            iq_mismatch_ticks_ = 0;
+        }
         if (!flowgraph_->inputActive(0.5)) {
             snr_plot_->addGap();
             snr_label_->setText(QStringLiteral("SNR: -- dB"));

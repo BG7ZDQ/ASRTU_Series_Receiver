@@ -7,6 +7,7 @@
 #include <chrono>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -19,6 +20,8 @@ public:
 
     static sptr make(Callback callback, PayloadCallback payloadCallback = {});
     std::uint64_t frameCount() const noexcept;
+    std::uint64_t primaryFrameCount() const noexcept;
+    std::uint64_t parallelFrameCount() const noexcept;
     double secondsSinceFrame() const noexcept;
     int general_work(int noutput_items,
                      gr_vector_int& ninput_items,
@@ -27,11 +30,17 @@ public:
 
 private:
     FrameMonitor(Callback callback, PayloadCallback payloadCallback);
-    void handle(const pmt::pmt_t& message);
+    void handle(const pmt::pmt_t& message, const char* path);
     static std::string describePdu(const pmt::pmt_t& message);
 
     Callback callback_;
     PayloadCallback payload_callback_;
+    // GNU Radio message handlers may be entered from different scheduler
+    // threads. Serialize complete frame dispatch without adding a reorder or
+    // de-duplication delay; the receiver server performs CRC de-duplication.
+    std::mutex dispatch_mutex_;
     std::atomic<std::uint64_t> frame_count_{0};
+    std::atomic<std::uint64_t> primary_frame_count_{0};
+    std::atomic<std::uint64_t> parallel_frame_count_{0};
     std::atomic<std::int64_t> last_frame_ms_{0};
 };

@@ -137,6 +137,76 @@ Type: dirifempty; Name: "{app}"
 [Code]
 var
   StationPage: TInputQueryWizardPage;
+  StationValuesLoaded: Boolean;
+  ParamNickname, ParamLongitude, ParamLatitude, ParamAltitude: String;
+
+function ConfigStringValue(const Text, Key, Fallback: String): String;
+var
+  Tail: String;
+  P, Q: Integer;
+begin
+  Result := Fallback;
+  P := Pos(Key, Text);
+  if P = 0 then
+    Exit;
+  Tail := Copy(Text, P + Length(Key), MaxInt);
+  P := Pos('"', Tail);
+  if P = 0 then
+    Exit;
+  Delete(Tail, 1, P);
+  Q := Pos('"', Tail);
+  if Q > 0 then
+    Result := Copy(Tail, 1, Q - 1);
+end;
+
+function ConfigNumberValue(const Text, Key, Fallback: String): String;
+var
+  Tail: String;
+  P, Q: Integer;
+begin
+  Result := Fallback;
+  P := Pos(Key, Text);
+  if P = 0 then
+    Exit;
+  Tail := Copy(Text, P + Length(Key), MaxInt);
+  P := Pos('=', Tail);
+  if P = 0 then
+    Exit;
+  Delete(Tail, 1, P);
+  Q := Pos(';', Tail);
+  if Q > 0 then
+    Result := Trim(Copy(Tail, 1, Q - 1));
+end;
+
+procedure LoadPreviousStationValues;
+var
+  ConfigText, ConfigFile: String;
+  ConfigRaw: AnsiString;
+begin
+  if StationValuesLoaded then
+    Exit;
+  StationValuesLoaded := True;
+
+  ConfigFile := ExpandConstant('{app}\proxy\config.cfg');
+  if LoadStringFromFile(ConfigFile, ConfigRaw) then
+  begin
+    ConfigText := String(ConfigRaw);
+    StationPage.Values[0] := ConfigStringValue(
+      ConfigText, 'proxy_nickname', StationPage.Values[0]);
+    StationPage.Values[1] := ConfigNumberValue(
+      ConfigText, 'proxy_long', StationPage.Values[1]);
+    StationPage.Values[2] := ConfigNumberValue(
+      ConfigText, 'proxy_lat', StationPage.Values[2]);
+    StationPage.Values[3] := ConfigNumberValue(
+      ConfigText, 'proxy_alt', StationPage.Values[3]);
+  end;
+
+  { Explicit unattended-install parameters override saved values. }
+  if ParamNickname <> '' then StationPage.Values[0] := ParamNickname;
+  if ParamLongitude <> '' then StationPage.Values[1] := ParamLongitude;
+  if ParamLatitude <> '' then StationPage.Values[2] := ParamLatitude;
+  if ParamAltitude <> '' then StationPage.Values[3] := ParamAltitude;
+end;
 
 function ParseNumber(ValueText: String; var Value: Extended): Boolean;
 var
@@ -166,6 +236,11 @@ end;
 
 procedure InitializeWizard;
 begin
+  StationValuesLoaded := False;
+  ParamNickname := ExpandConstant('{param:NICKNAME|}');
+  ParamLongitude := ExpandConstant('{param:LONGITUDE|}');
+  ParamLatitude := ExpandConstant('{param:LATITUDE|}');
+  ParamAltitude := ExpandConstant('{param:ALTITUDE|}');
   StationPage := CreateInputQueryPage(wpSelectDir,
     CustomMessage('StationTitle'), CustomMessage('StationSubtitle'),
     CustomMessage('StationDescription'));
@@ -173,10 +248,16 @@ begin
   StationPage.Add(CustomMessage('Longitude'), False);
   StationPage.Add(CustomMessage('Latitude'), False);
   StationPage.Add(CustomMessage('Altitude'), False);
-  StationPage.Values[0] := ExpandConstant('{param:NICKNAME|}');
-  StationPage.Values[1] := ExpandConstant('{param:LONGITUDE|0.000000}');
-  StationPage.Values[2] := ExpandConstant('{param:LATITUDE|0.000000}');
-  StationPage.Values[3] := ExpandConstant('{param:ALTITUDE|0.00}');
+  StationPage.Values[0] := ParamNickname;
+  StationPage.Values[1] := '0.000000';
+  StationPage.Values[2] := '0.000000';
+  StationPage.Values[3] := '0.00';
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if CurPageID = StationPage.ID then
+    LoadPreviousStationValues;
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;

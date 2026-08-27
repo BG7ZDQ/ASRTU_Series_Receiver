@@ -1,6 +1,7 @@
 #include "flowgraph.h"
 #include "shared_iq_source.h"
 
+#include <gnuradio/analog/agc2_cc.h>
 #include <gnuradio/analog/feedforward_agc_cc.h>
 #include <gnuradio/analog/sig_source.h>
 #include <gnuradio/blocks/complex_to_float.h>
@@ -13,6 +14,7 @@
 #include <gnuradio/blocks/null_sink.h>
 #include <gnuradio/blocks/probe_signal.h>
 #include <gnuradio/blocks/rms_cf.h>
+#include <gnuradio/blocks/rms_ff.h>
 #include <gnuradio/blocks/unpack_k_bits_bb.h>
 #include <gnuradio/blocks/wavfile_sink.h>
 #include <gnuradio/digital/adaptive_algorithm.h>
@@ -23,6 +25,8 @@
 #include <gnuradio/digital/mpsk_snr_est.h>
 #include <gnuradio/digital/pfb_clock_sync_ccf.h>
 #include <gnuradio/digital/probe_mpsk_snr_est_c.h>
+#include <gnuradio/digital/symbol_sync_cc.h>
+#include <gnuradio/digital/timing_error_detector_type.h>
 #include <gnuradio/fft/window.h>
 #include <gnuradio/filter/firdes.h>
 #include <gnuradio/filter/fir_filter_blk.h>
@@ -95,6 +99,7 @@ AsrtuFlowgraph::~AsrtuFlowgraph()
 
 void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
 {
+    expects_stereo_iq_ = !options.shared_iq_bridge && !options.real_if_12khz;
     tb_ = gr::make_top_block("Astro-series satellite C++/Qt demodulator", true);
 
     gr::basic_block_sptr source;
@@ -121,7 +126,15 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
     const auto lowpass = gr::filter::fir_filter_ccf::make(
         1, gr::filter::firdes::low_pass(1.0, kIfRate, 10000.0, 2000.0,
                                         gr::fft::window::WIN_HAMMING, 6.76));
-    const auto agc = gr::analog::feedforward_agc_cc::make(1024, 1.0f);
+    // Causal O(N) AGC: react quickly to overload, release slowly through
+    // fades, and never amplify silence/noise by more than 40 dB. Unlike the
+    // former 1024-sample feed-forward AGC this adds no 21.3 ms look-ahead.
+    gr::basic_block_sptr agc;
+    if (options.use_legacy_feedforward_agc)
+        agc = gr::analog::feedforward_agc_cc::make(1024, 1.0f);
+    else
+        agc = gr::analog::agc2_cc::make(
+            0.10f, 0.001f, 1.0f, 1.0f, 100.0f);
 
     fll_ = gr::digital::fll_band_edge_cc::make(kSps, kAlpha, 100, 0.01f);
     const auto rrc = gr::filter::firdes::root_raised_cosine(
@@ -146,11 +159,39 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
     const auto fec_a = gr::lilacsat::fec_decode_b::make(223, true, false, false);
     const auto fec_b = gr::lilacsat::fec_decode_b::make(223, true, false, false);
 
+    // Synchronizer diversity based on the useful topology of
+    // Lilacsat-soundmodem-CLI. Input conditioning is shared, so its expensive
+    // peak-scanning AGC, FFT/UI and network work are not duplicated.
+    const auto parallel_fll = gr::digital::fll_band_edge_cc::make(
+        kSps, kAlpha, 100, 0.068f);
+    const auto parallel_clock = gr::digital::symbol_sync_cc::make(
+        gr::digital::TED_GARDNER, kSps, 0.01f,
+        float(std::sqrt(2.0) / 2.0), 1.0f, 0.05f, 1);
+    const auto parallel_costas = gr::digital::costas_loop_cc::make(0.068f, 2, false);
+    const auto parallel_real = gr::blocks::complex_to_real::make(1);
+    const auto parallel_delay = gr::blocks::delay::make(sizeof(float), 1);
+    const auto parallel_viterbi_a = gr::lilacsat::vitfilt27_fb::make();
+    const auto parallel_viterbi_b = gr::lilacsat::vitfilt27_fb::make();
+    const auto parallel_unpack_a = gr::blocks::unpack_k_bits_bb::make(8);
+    const auto parallel_unpack_b = gr::blocks::unpack_k_bits_bb::make(8);
+    const auto parallel_fec_a = gr::lilacsat::fec_decode_b::make(223, true, false, false);
+    const auto parallel_fec_b = gr::lilacsat::fec_decode_b::make(223, true, false, false);
+
     snr_probe_ = gr::digital::probe_mpsk_snr_est_c::make(
         gr::digital::SNR_EST_SVR, 10000, 0.001);
     const auto rms = gr::blocks::rms_cf::make(0.0001);
     const auto db = gr::blocks::nlog10_ff::make(20.0f, 1, 0.0f);
     rssi_probe_ = gr::blocks::probe_signal_f::make();
+    if (expects_stereo_iq_) {
+        const auto iRms = gr::blocks::rms_ff::make(0.001f);
+        const auto qRms = gr::blocks::rms_ff::make(0.001f);
+        i_rms_probe_ = gr::blocks::probe_signal_f::make();
+        q_rms_probe_ = gr::blocks::probe_signal_f::make();
+        tb_->connect(source, 0, iRms, 0);
+        tb_->connect(source, 1, qRms, 0);
+        tb_->connect(iRms, 0, i_rms_probe_, 0);
+        tb_->connect(qRms, 0, q_rms_probe_, 0);
+    }
 
     if (options.enable_gui) {
         if (options.real_if_12khz) {
@@ -280,18 +321,34 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
     tb_->connect(unpack_a, 0, fec_a, 0);
     tb_->connect(unpack_b, 0, fec_b, 0);
 
+    if (options.enable_parallel_decoder) {
+        tb_->connect(agc, 0, parallel_fll, 0);
+        tb_->connect(parallel_fll, 0, parallel_clock, 0);
+        tb_->connect(parallel_clock, 0, parallel_costas, 0);
+        tb_->connect(parallel_costas, 0, parallel_real, 0);
+        tb_->connect(parallel_real, 0, parallel_viterbi_a, 0);
+        tb_->connect(parallel_real, 0, parallel_delay, 0);
+        tb_->connect(parallel_delay, 0, parallel_viterbi_b, 0);
+        tb_->connect(parallel_viterbi_a, 0, parallel_unpack_a, 0);
+        tb_->connect(parallel_viterbi_b, 0, parallel_unpack_b, 0);
+        tb_->connect(parallel_unpack_a, 0, parallel_fec_a, 0);
+        tb_->connect(parallel_unpack_b, 0, parallel_fec_b, 0);
+    }
+
     for (const auto& fec : { fec_a, fec_b })
-        tb_->msg_connect(fec, "out", frame_monitor_, "in");
+        tb_->msg_connect(fec, "out", frame_monitor_, "primary");
+    if (options.enable_parallel_decoder) {
+        for (const auto& fec : { parallel_fec_a, parallel_fec_b })
+            tb_->msg_connect(fec, "out", frame_monitor_, "parallel");
+    }
 
     if (options.enable_network) {
         const auto tcp = gr::network::socket_pdu::make(
             "TCP_SERVER", "127.0.0.1", "9985", 10000, false);
         char zmqAddress[] = "tcp://127.0.0.1:5555";
         const auto zmq = gr::zeromq::pub_msg_sink::make(zmqAddress, 1000, true);
-        for (const auto& fec : { fec_a, fec_b }) {
-            tb_->msg_connect(fec, "out", tcp, "pdus");
-            tb_->msg_connect(fec, "out", zmq, "in");
-        }
+        tb_->msg_connect(frame_monitor_, "out", tcp, "pdus");
+        tb_->msg_connect(frame_monitor_, "out", zmq, "in");
     }
 }
 
@@ -332,6 +389,19 @@ bool AsrtuFlowgraph::inputActive(double timeoutSeconds) const
     return shared_iq_source_->hasRecentSamples(timeout);
 }
 
+bool AsrtuFlowgraph::stereoIqContentMismatch() const
+{
+    if (!expects_stereo_iq_ || !i_rms_probe_ || !q_rms_probe_)
+        return false;
+    const double i = std::abs(double(i_rms_probe_->level()));
+    const double q = std::abs(double(q_rms_probe_->level()));
+    const double stronger = std::max(i, q);
+    const double weaker = std::min(i, q);
+    // Ignore silence. A sustained >30 dB channel imbalance is characteristic
+    // of mono/real audio being supplied to a complex RAW I/Q input.
+    return stronger > 1.0e-3 && weaker < stronger * 0.0316227766;
+}
+
 double AsrtuFlowgraph::loopFrequencyHz() const
 {
     const double fllHz = fll_->get_frequency() * kIfRate / (2.0 * M_PI);
@@ -346,6 +416,14 @@ bool AsrtuFlowgraph::synced(double timeoutSeconds) const
 }
 
 std::uint64_t AsrtuFlowgraph::frameCount() const { return frame_monitor_->frameCount(); }
+std::uint64_t AsrtuFlowgraph::primaryFrameCount() const
+{
+    return frame_monitor_->primaryFrameCount();
+}
+std::uint64_t AsrtuFlowgraph::parallelFrameCount() const
+{
+    return frame_monitor_->parallelFrameCount();
+}
 QWidget* AsrtuFlowgraph::inputSpectrumWidget() const
 {
     return input_spectrum_real_ ? input_spectrum_real_->qwidget()

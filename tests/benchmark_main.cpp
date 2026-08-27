@@ -30,8 +30,8 @@ double fileTimeSeconds(const FILETIME& time)
 int main(int argc, char* argv[])
 {
     QCoreApplication application(argc, argv);
-    if (application.arguments().size() < 3 || application.arguments().size() > 4) {
-        std::cerr << "Usage: ASRTU1_Benchmark <input.wav> <result.json> [if_hz]\n";
+    if (application.arguments().size() < 3 || application.arguments().size() > 6) {
+        std::cerr << "Usage: ASRTU1_Benchmark <input.wav> <result.json> [if_hz] [--real-if] [--no-parallel] [--legacy-agc]\n";
         return 2;
     }
 
@@ -44,8 +44,18 @@ int main(int argc, char* argv[])
 
     AsrtuFlowgraph::Options options;
     options.wav_path = wavPath.toStdString();
-    if (application.arguments().size() == 4)
-        options.input_frequency_hz = application.arguments().at(3).toDouble();
+    for (const auto& argument : application.arguments().mid(3)) {
+        if (argument == QStringLiteral("--no-parallel"))
+            options.enable_parallel_decoder = false;
+        else if (argument == QStringLiteral("--legacy-agc"))
+            options.use_legacy_feedforward_agc = true;
+        else if (argument == QStringLiteral("--real-if")) {
+            options.real_if_12khz = true;
+            options.input_frequency_hz = -12000.0;
+        }
+        else
+            options.input_frequency_hz = argument.toDouble();
+    }
     options.enable_gui = false;
     options.enable_network = false;
     options.payload_callback = [&](const std::vector<std::uint8_t>& payload) {
@@ -54,6 +64,9 @@ int main(int argc, char* argv[])
         const QByteArray hash = QCryptographicHash::hash(
             bytes, QCryptographicHash::Sha256).toHex();
         std::lock_guard<std::mutex> lock(frameMutex);
+        if (std::find(frameHashes.begin(), frameHashes.end(), hash) !=
+            frameHashes.end())
+            return;
         frameLengths.push_back(int(payload.size()));
         frameHashes.push_back(hash);
     };
@@ -95,13 +108,23 @@ int main(int argc, char* argv[])
         fileTimeSeconds(kernelAfter) + fileTimeSeconds(userAfter) -
         fileTimeSeconds(kernelBefore) - fileTimeSeconds(userBefore);
     QJsonObject result{
-        { QStringLiteral("implementation"), QStringLiteral("cqt") },
+        { QStringLiteral("implementation"),
+          options.use_legacy_feedforward_agc
+              ? QStringLiteral("cqt-legacy-feedforward-agc")
+              : QStringLiteral("cqt-causal-agc2") },
         { QStringLiteral("wav"), wavPath },
         { QStringLiteral("wall_seconds"), wallSeconds },
         { QStringLiteral("cpu_seconds"), cpuSeconds },
         { QStringLiteral("peak_working_set_bytes"),
           double(memory.PeakWorkingSetSize) },
         { QStringLiteral("frame_count"), hashes.size() },
+        { QStringLiteral("primary_frame_count"),
+          double(flowgraph.primaryFrameCount()) },
+        { QStringLiteral("parallel_frame_count"),
+          double(flowgraph.parallelFrameCount()) },
+        { QStringLiteral("stereo_iq_content_mismatch"),
+          flowgraph.stereoIqContentMismatch() },
+        { QStringLiteral("final_svr_snr_db"), flowgraph.snr() },
         { QStringLiteral("first_frame_log"), firstFrameLog },
         { QStringLiteral("complete_223_count"),
           std::count(frameLengths.begin(), frameLengths.end(), 223) },

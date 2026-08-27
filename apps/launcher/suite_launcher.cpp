@@ -560,8 +560,9 @@ public:
         auto* sdrSharp = new QPushButton(QCoreApplication::translate("ASRTU", "打开 SDR# 遥测预设"), this);
         auto* tracker = new QPushButton(QCoreApplication::translate("ASRTU", "卫星跟踪与自动多普勒"), this);
         auto* playback = new QPushButton(QCoreApplication::translate("ASRTU", "播放录音文件"), this);
+        auto* quickReplay = new QPushButton(QCoreApplication::translate("ASRTU", "快速重放录音"), this);
         auto* openRecords = new QPushButton(QCoreApplication::translate("ASRTU", "打开录音目录"), this);
-        for (auto* button : {sdrSharp, tracker, playback, openRecords}) {
+        for (auto* button : {sdrSharp, tracker, playback, quickReplay, openRecords}) {
             button->setObjectName(QStringLiteral("tool"));
             // Long translated captions must not increase the top-level
             // window's minimum width; the two equal grid columns provide
@@ -571,7 +572,8 @@ public:
         tools->addWidget(sdrSharp, 0, 0);
         tools->addWidget(tracker, 0, 1);
         tools->addWidget(playback, 1, 0);
-        tools->addWidget(openRecords, 1, 1);
+        tools->addWidget(quickReplay, 1, 1);
+        tools->addWidget(openRecords, 2, 0, 1, 2);
         toolsLayout->addLayout(tools);
         layout->addWidget(toolsCard);
         status_label_ = new QLabel(QCoreApplication::translate("ASRTU", "就绪"), this);
@@ -632,9 +634,11 @@ public:
                 QMessageBox::critical(this, QCoreApplication::translate("ASRTU", "无法打开目录"), directory);
             }
         });
-        connect(playback, &QPushButton::clicked, this, [this] {
+        auto playRecording = [this](const QString& initialDirectory,
+                                    const QString& dialogTitle,
+                                    const QString& errorTitle) {
             const QString wavPath = QFileDialog::getOpenFileName(
-                this, QCoreApplication::translate("ASRTU", "选择接收录音"), QString(),
+                this, dialogTitle, initialDirectory,
                 QCoreApplication::translate("ASRTU", "接收录音 (*.wav *.ogg *.oga *.opus *.flac *.mp3)"));
             if (wavPath.isEmpty())
                 return;
@@ -644,13 +648,24 @@ public:
             if (!startSuite(false, 0, wavPath, -1, false,
                             &sessionDirectory,
                             &proxyProcessId, &error)) {
-                QMessageBox::critical(this, QCoreApplication::translate("ASRTU", "播放失败"), error);
+                QMessageBox::critical(this, errorTitle, error);
                 return;
             }
             status_label_->setText(
                 QCoreApplication::translate("ASRTU", "正在播放：/%1；日志：%2")
                     .arg(QFileInfo(wavPath).fileName(),
                          compactSessionDirectory(sessionDirectory)));
+        };
+        connect(playback, &QPushButton::clicked, this, [this, playRecording] {
+            playRecording(QString(),
+                          QCoreApplication::translate("ASRTU", "选择接收录音"),
+                          QCoreApplication::translate("ASRTU", "播放失败"));
+        });
+        connect(quickReplay, &QPushButton::clicked, this, [this, playRecording] {
+            QDir().mkpath(recordsDirectory());
+            playRecording(recordsDirectory(),
+                          QCoreApplication::translate("ASRTU", "快速重放录音"),
+                          QCoreApplication::translate("ASRTU", "快速重放失败"));
         });
         connect(startProxyButton, &QPushButton::clicked, this, [this] {
             bool accepted = false;
@@ -719,6 +734,10 @@ public:
             settings.setValue(QStringLiteral("input_mode"), input_mode_->currentData());
             settings.setValue(QStringLiteral("recording_enabled"), recording_enabled_->isChecked());
             settings.setValue(QStringLiteral("audio_device_name"), audio_device_->currentText());
+            settings.setValue(QStringLiteral("nickname"), nickname_->text().trimmed());
+            settings.setValue(QStringLiteral("longitude"), longitude_->value());
+            settings.setValue(QStringLiteral("latitude"), latitude_->value());
+            settings.setValue(QStringLiteral("altitude"), altitude_->value());
             settings.sync();
             if (!nickname_->text().trimmed().isEmpty())
                 saveConfiguration(false);
@@ -899,6 +918,10 @@ private:
             QCoreApplication::translate("ASRTU", "系统默认输入设备")).toString();
         const int audioIndex = audio_device_->findText(savedAudio, Qt::MatchFixedString);
         audio_device_->setCurrentIndex(audioIndex >= 0 ? audioIndex : 0);
+        nickname_->setText(settings.value(QStringLiteral("nickname")).toString());
+        longitude_->setValue(settings.value(QStringLiteral("longitude"), 0.0).toDouble());
+        latitude_->setValue(settings.value(QStringLiteral("latitude"), 0.0).toDouble());
+        altitude_->setValue(settings.value(QStringLiteral("altitude"), 0.0).toDouble());
         updateAudioDeviceVisibility();
         QFile file(configPath());
         if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
@@ -919,13 +942,15 @@ private:
             const double value = match.captured(1).toDouble(&ok);
             return ok ? value : fallback;
         };
-        nickname_->setText(textValue(QStringLiteral("proxy_nickname")));
+        const QString configNickname = textValue(QStringLiteral("proxy_nickname"));
+        if (!configNickname.isEmpty())
+            nickname_->setText(configNickname);
         const QString satellite = textValue(QStringLiteral("sat_name"));
         if (!satellite.isEmpty())
             settings.setValue(QStringLiteral("satellite"), satellite);
-        longitude_->setValue(numberValue(QStringLiteral("proxy_long"), 0.0));
-        latitude_->setValue(numberValue(QStringLiteral("proxy_lat"), 0.0));
-        altitude_->setValue(numberValue(QStringLiteral("proxy_alt"), 0.0));
+        longitude_->setValue(numberValue(QStringLiteral("proxy_long"), longitude_->value()));
+        latitude_->setValue(numberValue(QStringLiteral("proxy_lat"), latitude_->value()));
+        altitude_->setValue(numberValue(QStringLiteral("proxy_alt"), altitude_->value()));
     }
 
     bool saveConfiguration(bool notify, QString satellite = {})
@@ -942,6 +967,11 @@ private:
         if (satellite.isEmpty())
             satellite = savedSatellite();
         settings.setValue(QStringLiteral("satellite"), satellite);
+        settings.setValue(QStringLiteral("nickname"), nickname);
+        settings.setValue(QStringLiteral("longitude"), longitude_->value());
+        settings.setValue(QStringLiteral("latitude"), latitude_->value());
+        settings.setValue(QStringLiteral("altitude"), altitude_->value());
+        settings.sync();
         QSaveFile file(configPath());
         if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
             QMessageBox::critical(this, QCoreApplication::translate("ASRTU", "保存失败"),
