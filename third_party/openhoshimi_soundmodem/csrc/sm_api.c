@@ -53,7 +53,10 @@ struct sm_decoder {
 	size_t q_count;
 };
 
-/* CCSDS sync hook: enqueue successfully RS-decoded frames. */
+/* CCSDS sync hook: enqueue both successful and failed RS candidates.  Failed
+ * candidates are exposed only on the decoder's local-only output so that
+ * SSDV can attempt its own packet-level recovery; they must never be sent as
+ * telemetry frames. */
 static void sm_frame_hook(uint8_t *buf, uint16_t len, int16_t byte_corr,
 			  void *obj_ptr)
 {
@@ -61,8 +64,6 @@ static void sm_frame_hook(uint8_t *buf, uint16_t len, int16_t byte_corr,
 	struct sm_frame *f;
 	size_t n;
 
-	if (byte_corr < 0)			/* RS failure */
-		return;
 	if (dec->q_count >= SM_FRAME_QUEUE)	/* queue full, drop */
 		return;
 

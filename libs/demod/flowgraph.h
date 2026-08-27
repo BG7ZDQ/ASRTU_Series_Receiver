@@ -38,12 +38,19 @@ public:
         int audio_device_id = -1;
         bool real_if_12khz = false;
         bool shared_iq_bridge = false;
+        bool fast_playback = false;
+        // Effective replay multiplier when fast_playback is enabled. The
+        // replay is capped here (instead of running at the ~60x raw WAV
+        // speed) so the waterfall has time to scroll and the decoded frames
+        // are spread over a visibly accelerated, but observable, duration.
+        double replay_rate = 10.0;
         bool enable_gui = true;
         bool enable_network = true;
         bool enable_parallel_decoder = true;
         bool enable_openhoshimi_decoder = true;
         bool use_legacy_feedforward_agc = false; // benchmark/regression only
         FrameMonitor::PayloadCallback payload_callback;
+        FrameMonitor::PayloadCallback local_candidate_callback;
     };
 
     explicit AsrtuFlowgraph(LogCallback callback, Options options = {});
@@ -63,6 +70,7 @@ public:
     std::uint64_t frameCount() const;
     std::uint64_t primaryFrameCount() const;
     std::uint64_t parallelFrameCount() const;
+    std::uint64_t suppressedDuplicateCount() const;
 
     QWidget* inputSpectrumWidget() const;
     QWidget* waterfallWidget() const;

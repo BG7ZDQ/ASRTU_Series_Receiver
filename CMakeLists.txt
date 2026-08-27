@@ -34,6 +34,15 @@ if(MSVC)
     target_compile_options(openhoshimi_soundmodem PRIVATE /w)
 endif()
 
+set(SSDV_DSLWP_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/third_party/ssdv_dslwp)
+add_library(ssdv_dslwp STATIC
+    ${SSDV_DSLWP_ROOT}/ssdv.c
+    ${SSDV_DSLWP_ROOT}/rs8.c)
+target_include_directories(ssdv_dslwp PUBLIC ${SSDV_DSLWP_ROOT})
+if(MSVC)
+    target_compile_options(ssdv_dslwp PRIVATE /w)
+endif()
+
 set(ASRTU_DEMOD_SOURCES
     apps/dsp/main.cpp
     apps/dsp/main_window.cpp
@@ -42,6 +51,8 @@ set(ASRTU_DEMOD_SOURCES
     apps/dsp/snr_plot.h
     apps/dsp/rssi_meter.cpp
     apps/dsp/rssi_meter.h
+    apps/dsp/ssdv_image_window.cpp
+    apps/dsp/ssdv_image_window.h
     libs/demod/shared_iq_source.cpp
     libs/demod/shared_iq_source.h
     libs/demod/flowgraph.cpp
@@ -50,6 +61,8 @@ set(ASRTU_DEMOD_SOURCES
     libs/demod/frame_monitor.h
     libs/demod/openhoshimi_decoder_sink.cpp
     libs/demod/openhoshimi_decoder_sink.h
+    libs/demod/ssdv_receiver.cpp
+    libs/demod/ssdv_receiver.h
     libs/common/translation.cpp
     libs/common/translation.h
     apps/dsp/application_icons.qrc
@@ -88,6 +101,7 @@ target_link_libraries(ASRTU1_Demod_CQt PRIVATE
     ${ASRTU_LILACSAT_LIBRARY}
     ${ASRTU_HYACINTHSAT_LIBRARY}
     openhoshimi_soundmodem
+    ssdv_dslwp
 )
 if(WIN32)
     target_link_libraries(ASRTU1_Demod_CQt PRIVATE Qt5::WinMain)
@@ -148,6 +162,7 @@ if(WIN32)
         apps/proxy-wrapper/proxy_wrapper.cpp
         apps/proxy-wrapper/proxy_wrapper.rc
     )
+    target_link_libraries(ASRTU_Proxy PRIVATE Shell32 Ole32 Propsys)
     target_compile_definitions(ASRTU_Proxy PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
     if(MSVC)
         target_compile_options(ASRTU_Proxy PRIVATE /W4 /permissive- /utf-8)
@@ -196,5 +211,16 @@ if(WIN32)
 endif()
 if(MSVC)
     target_compile_options(ASRTU1_Benchmark PRIVATE /W4 /permissive- /utf-8)
+endif()
+
+add_executable(ASRTU1_SsdvTest
+    tests/ssdv_receiver_test.cpp
+    libs/demod/ssdv_receiver.cpp
+    libs/demod/ssdv_receiver.h)
+target_include_directories(ASRTU1_SsdvTest PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/libs/demod)
+target_link_libraries(ASRTU1_SsdvTest PRIVATE Qt5::Core Qt5::Gui ssdv_dslwp)
+if(MSVC)
+    target_compile_options(ASRTU1_SsdvTest PRIVATE /W4 /permissive- /utf-8)
 endif()
 endif()

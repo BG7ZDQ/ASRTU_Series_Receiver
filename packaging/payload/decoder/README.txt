@@ -5,4 +5,6 @@ The application has no console window. Runtime and FEC messages are written to A
 TCP PDU output: 127.0.0.1:9985
 ZeroMQ PUB output: tcp://127.0.0.1:5555
 
-This package contains GNU Radio and GPL-licensed OOT modules. Distribute it under the applicable licenses.
+This package contains GNU Radio, GPL-licensed OOT modules, the OpenHoshimi ASRTU soundmodem core and the DSLWP-compatible SSDV decoder.
+OpenHoshimi decoder credits: BG6HNY / Hyacinth Satellite Team and the upstream HIT LilacSat soundmodem authors.
+Distribute these components under their applicable licenses.

@@ -6,6 +6,18 @@ ROOT = Path(__file__).resolve().parents[1]
 TS = ROOT / "assets" / "translations" / "asrtu_en.ts"
 
 TRANSLATIONS = {
+    "SSDV图像接收": "SSDV Image Reception",
+    "等待SSDV图像数据": "Waiting for SSDV image data",
+    "复制图像": "Copy Image",
+    "清除图像": "Clear Image",
+    "保存路径：—": "Saved to: —",
+    "保存路径：%1": "Saved to: %1",
+    "图像ID：%1　分辨率：%2×%3　质量：%4\n数据包：%5（%6–%7，区间缺失%8）　状态：%9": "Image ID: %1   Resolution: %2×%3   Quality: %4\nPackets: %5 (%6–%7, %8 missing in range)   Status: %9",
+    "完成": "Complete",
+    "接收中": "Receiving",
+    "声卡切换失败": "Audio Device Switch Failed",
+    "无法切换到所选声卡。请重新选择可用设备或重新启动接收。\n%1": "Unable to switch to the selected audio device. Select an available device or restart the receiver.\n%1",
+    "当前声卡不可用。请在启动器中选择另一输入设备。\n%1": "The current audio device is unavailable. Select another input device in the launcher.\n%1",
     "I/Q 输入异常": "I/Q Input Mismatch",
     "检测到 I/Q 两路幅度严重不平衡，当前输入可能是单声道 USB/实数音频，因此频谱会出现镜像。\n请在启动器中改选“单声道实数域 12KHz 电台 IF 输入”。": "The I and Q channel levels are severely imbalanced. The input may be mono USB/real audio, which produces a mirrored spectrum.\nSelect ‘Mono Real 12 kHz Radio IF Input’ in the launcher.",
     "无法创建录音和日志目录：\n%1": "Unable to create the recording and log directory:\n%1",

@@ -21,6 +21,7 @@
 #include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
+#include <QLocalSocket>
 #include <QMessageBox>
 #include <QProcess>
 #include <QProcessEnvironment>
@@ -30,6 +31,7 @@
 #include <QScrollArea>
 #include <QSettings>
 #include <QScreen>
+#include <QSignalBlocker>
 #include <QSizePolicy>
 #include <QStyle>
 #include <QTextStream>
@@ -50,6 +52,19 @@
 #endif
 
 namespace {
+void notifyRunningDspAudioDevice(int deviceId)
+{
+    QLocalSocket socket;
+    socket.connectToServer(QStringLiteral("ASRTU_DSP_CONTROL_V1"),
+                           QIODevice::WriteOnly);
+    if (!socket.waitForConnected(40))
+        return;
+    socket.write(QStringLiteral("audio-device:%1").arg(deviceId).toUtf8());
+    socket.flush();
+    socket.waitForBytesWritten(40);
+    socket.disconnectFromServer();
+}
+
 QString decoderDirectory()
 {
     return QCoreApplication::applicationDirPath();
@@ -325,6 +340,7 @@ bool startProxy(const QString& launchLog, qint64* processId, QString* error)
 }
 
 bool startSuite(bool enableProxy, int inputMode, const QString& wavPath,
+                bool fastPlayback,
                 int audioDeviceId, bool recordingEnabled,
                 QString* sessionDirectory,
                 qint64* proxyProcessId, QString* error)
@@ -380,6 +396,8 @@ bool startSuite(bool enableProxy, int inputMode, const QString& wavPath,
     };
     if (!playbackPath.isEmpty())
         decoderArguments << QStringLiteral("--wav") << playbackPath;
+    if (!playbackPath.isEmpty() && fastPlayback)
+        decoderArguments << QStringLiteral("--fast-playback");
     else if (!recordingEnabled)
         decoderArguments << QStringLiteral("--no-record");
     if (inputMode == 1)
@@ -635,6 +653,7 @@ public:
             }
         });
         auto playRecording = [this](const QString& initialDirectory,
+                                    bool fastPlayback,
                                     const QString& dialogTitle,
                                     const QString& errorTitle) {
             const QString wavPath = QFileDialog::getOpenFileName(
@@ -645,7 +664,7 @@ public:
             QString error;
             QString sessionDirectory;
             qint64 proxyProcessId = 0;
-            if (!startSuite(false, 0, wavPath, -1, false,
+            if (!startSuite(false, 0, wavPath, fastPlayback, -1, false,
                             &sessionDirectory,
                             &proxyProcessId, &error)) {
                 QMessageBox::critical(this, errorTitle, error);
@@ -657,13 +676,13 @@ public:
                          compactSessionDirectory(sessionDirectory)));
         };
         connect(playback, &QPushButton::clicked, this, [this, playRecording] {
-            playRecording(QString(),
+            playRecording(QString(), false,
                           QCoreApplication::translate("ASRTU", "选择接收录音"),
                           QCoreApplication::translate("ASRTU", "播放失败"));
         });
         connect(quickReplay, &QPushButton::clicked, this, [this, playRecording] {
             QDir().mkpath(recordsDirectory());
-            playRecording(recordsDirectory(),
+            playRecording(recordsDirectory(), true,
                           QCoreApplication::translate("ASRTU", "快速重放录音"),
                           QCoreApplication::translate("ASRTU", "快速重放失败"));
         });
@@ -713,7 +732,7 @@ public:
             QString error;
             QString sessionDirectory;
             qint64 proxyProcessId = 0;
-            if (!startSuite(false, inputMode, {},
+            if (!startSuite(false, inputMode, {}, false,
                             audio_device_->currentData().toInt(),
                             recording_enabled_->isChecked(),
                             &sessionDirectory, &proxyProcessId, &error)) {
@@ -746,7 +765,14 @@ public:
         connect(input_mode_, qOverload<int>(&QComboBox::currentIndexChanged),
                 this, [scheduleAutoSave](int) { scheduleAutoSave(); });
         connect(audio_device_, qOverload<int>(&QComboBox::currentIndexChanged),
-                this, [scheduleAutoSave](int) { scheduleAutoSave(); });
+                this, [this, scheduleAutoSave](int) {
+                    scheduleAutoSave();
+                    if (audio_device_->currentIndex() >= 0 &&
+                        input_mode_->currentData().toInt() != 2) {
+                        notifyRunningDspAudioDevice(
+                            audio_device_->currentData().toInt());
+                    }
+                });
         connect(nickname_, &QLineEdit::textChanged,
                 this, [scheduleAutoSave](const QString&) { scheduleAutoSave(); });
         connect(longitude_, qOverload<double>(&QDoubleSpinBox::valueChanged),
@@ -802,6 +828,9 @@ private:
     void refreshAudioDevices()
     {
         const QString previous = audio_device_ ? audio_device_->currentText() : QString();
+        const int previousId = audio_device_ && audio_device_->currentIndex() >= 0
+                                   ? audio_device_->currentData().toInt()
+                                   : -1;
         QList<AudioInputDevice> devices;
         int defaultChannels = 0;
 #ifdef Q_OS_WIN
@@ -838,6 +867,7 @@ private:
         if (unchanged)
             return;
 
+        QSignalBlocker blocker(audio_device_);
         audio_device_->clear();
         for (const auto& device : devices) {
             audio_device_->addItem(device.name, device.id);
@@ -851,6 +881,13 @@ private:
         }
         const int index = audio_device_->findText(wanted, Qt::MatchFixedString);
         audio_device_->setCurrentIndex(index >= 0 ? index : 0);
+        const int selectedId = audio_device_->currentData().toInt();
+        blocker.unblock();
+        if (selectedId != previousId && input_mode_->currentData().toInt() != 2) {
+            notifyRunningDspAudioDevice(selectedId);
+            if (autoSaveTimer_)
+                autoSaveTimer_->start();
+        }
     }
 
     QString savedSatellite() const
@@ -1042,7 +1079,7 @@ int main(int argc, char* argv[])
         QString error;
         QString sessionDirectory;
         qint64 proxyProcessId = 0;
-        if (!startSuite(true, 0, {}, -1, true,
+        if (!startSuite(true, 0, {}, false, -1, true,
                         &sessionDirectory, &proxyProcessId, &error)) {
             QMessageBox::critical(nullptr, QCoreApplication::translate("ASRTU", "阿斯图系列卫星启动失败"), error);
             return 1;

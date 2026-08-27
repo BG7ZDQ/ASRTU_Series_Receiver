@@ -96,6 +96,12 @@ New-Item -ItemType Directory -Force -Path $platformDir | Out-Null
 $qwindows = Join-Path $plugins 'platforms\qwindows.dll'
 Copy-Item -LiteralPath $qwindows -Destination (Join-Path $platformDir 'qwindows.dll') -Force
 $queue.Enqueue((Join-Path $platformDir 'qwindows.dll'))
+$imageFormatsDir = Join-Path $OutputDir 'imageformats'
+New-Item -ItemType Directory -Force -Path $imageFormatsDir | Out-Null
+$qjpeg = Join-Path $plugins 'imageformats\qjpeg.dll'
+if (-not (Test-Path -LiteralPath $qjpeg)) { throw "Qt JPEG plugin not found: $qjpeg" }
+Copy-Item -LiteralPath $qjpeg -Destination (Join-Path $imageFormatsDir 'qjpeg.dll') -Force
+$queue.Enqueue((Join-Path $imageFormatsDir 'qjpeg.dll'))
 while ($queue.Count -gt 0) {
     $binary = $queue.Dequeue()
     if (-not $processed.Add($binary)) { continue }
@@ -118,6 +124,11 @@ if (Test-Path -LiteralPath $sgp4License) {
     Copy-Item -LiteralPath $sgp4License `
         -Destination (Join-Path $OutputDir 'SGP4_LICENSE.txt') -Force
 }
+$ssdvLicense = Join-Path $PSScriptRoot '..\third_party\ssdv_dslwp\COPYING'
+if (Test-Path -LiteralPath $ssdvLicense) {
+    Copy-Item -LiteralPath $ssdvLicense `
+        -Destination (Join-Path $OutputDir 'SSDV_GPL-3.0.txt') -Force
+}
 
 Set-Content -LiteralPath (Join-Path $OutputDir 'README.txt') -Encoding UTF8 -Value @(
     'Astro-series Satellite Demodulator C++/Qt portable build',
@@ -127,7 +138,7 @@ Set-Content -LiteralPath (Join-Path $OutputDir 'README.txt') -Encoding UTF8 -Val
     'TCP PDU output: 127.0.0.1:9985',
     'ZeroMQ PUB output: tcp://127.0.0.1:5555',
     '',
-    'This package contains GNU Radio, GPL-licensed OOT modules and the OpenHoshimi ASRTU soundmodem core.',
+    'This package contains GNU Radio, GPL-licensed OOT modules, the OpenHoshimi ASRTU soundmodem core and the DSLWP-compatible SSDV decoder.',
     'OpenHoshimi decoder credits: BG6HNY / Hyacinth Satellite Team and the upstream HIT LilacSat soundmodem authors.',
     'Distribute these components under their applicable licenses.'
 )

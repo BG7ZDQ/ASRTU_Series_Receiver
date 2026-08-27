@@ -25,6 +25,7 @@ OpenHoshimiDecoderSink::OpenHoshimiDecoderSink()
     if (!decoder_)
         throw std::runtime_error("Unable to create OpenHoshimi decoder");
     message_port_register_out(pmt::intern("out"));
+    message_port_register_out(pmt::intern("failed"));
 }
 
 OpenHoshimiDecoderSink::~OpenHoshimiDecoderSink() = default;
@@ -69,6 +70,7 @@ void OpenHoshimiDecoderSink::publishQueuedFrames()
         metadata = pmt::dict_add(metadata, pmt::intern("rs_corrected"),
                                  pmt::from_long(corrected));
         const auto bytes = pmt::init_u8vector(frame.size(), frame.data());
-        message_port_pub(pmt::intern("out"), pmt::cons(metadata, bytes));
+        message_port_pub(pmt::intern(corrected < 0 ? "failed" : "out"),
+                         pmt::cons(metadata, bytes));
     }
 }

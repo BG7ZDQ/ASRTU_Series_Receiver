@@ -1,11 +1,14 @@
 #include "frame_monitor.h"
 
 #include <gnuradio/io_signature.h>
+#include <algorithm>
 #include <iomanip>
 #include <limits>
 #include <sstream>
 
 namespace {
+constexpr std::int64_t kDuplicateWindowMs = 2000;
+
 std::int64_t nowMs()
 {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -13,24 +16,44 @@ std::int64_t nowMs()
 }
 }
 
-FrameMonitor::sptr FrameMonitor::make(Callback callback, PayloadCallback payloadCallback)
+FrameMonitor::sptr FrameMonitor::make(Callback callback,
+                                      PayloadCallback payloadCallback,
+                                      PayloadCallback localCandidateCallback)
 {
     return std::shared_ptr<FrameMonitor>(
-        new FrameMonitor(std::move(callback), std::move(payloadCallback)));
+        new FrameMonitor(std::move(callback), std::move(payloadCallback),
+                         std::move(localCandidateCallback)));
 }
 
-FrameMonitor::FrameMonitor(Callback callback, PayloadCallback payloadCallback)
+FrameMonitor::FrameMonitor(Callback callback, PayloadCallback payloadCallback,
+                           PayloadCallback localCandidateCallback)
     : gr::block("frame_monitor", gr::io_signature::make(0, 0, 0),
                 gr::io_signature::make(0, 0, 0)),
       callback_(std::move(callback)),
-      payload_callback_(std::move(payloadCallback))
+      payload_callback_(std::move(payloadCallback)),
+      local_candidate_callback_(std::move(localCandidateCallback))
 {
     for (const char* name : { "primary", "parallel" }) {
         const auto port = pmt::intern(name);
         message_port_register_in(port);
         set_msg_handler(port, [this, name](pmt::pmt_t msg) { handle(msg, name); });
     }
+    const auto local = pmt::intern("local");
+    message_port_register_in(local);
+    set_msg_handler(local, [this](pmt::pmt_t msg) { handleLocalCandidate(msg); });
     message_port_register_out(pmt::intern("out"));
+}
+
+void FrameMonitor::handleLocalCandidate(const pmt::pmt_t& message)
+{
+    if (!local_candidate_callback_)
+        return;
+    pmt::pmt_t data = pmt::is_pair(message) ? pmt::cdr(message) : message;
+    if (!pmt::is_u8vector(data))
+        return;
+    std::size_t length = 0;
+    const auto* bytes = pmt::u8vector_elements(data, length);
+    local_candidate_callback_(std::vector<std::uint8_t>(bytes, bytes + length));
 }
 
 void FrameMonitor::handle(const pmt::pmt_t& message, const char* path)
@@ -51,14 +74,28 @@ void FrameMonitor::handle(const pmt::pmt_t& message, const char* path)
         parallel_frame_count_.fetch_add(1, std::memory_order_relaxed);
     else
         primary_frame_count_.fetch_add(1, std::memory_order_relaxed);
-    // Publish first. Hex formatting and UI/SatNOGS callbacks must never sit in
-    // front of the low-latency proxy path.
-    message_port_pub(pmt::intern("out"), message);
+
+    while (!recently_sent_.empty() &&
+           timestamp - recently_sent_.front().sent_ms > kDuplicateWindowMs) {
+        recently_sent_.pop_front();
+    }
+    const bool duplicate = std::any_of(
+        recently_sent_.begin(), recently_sent_.end(),
+        [&payload](const RecentFrame& frame) { return frame.payload == payload; });
+    if (!duplicate) {
+        recently_sent_.push_back({timestamp, payload});
+        // Publish before formatting/logging: the first decoder branch to
+        // complete a frame remains the minimum-latency proxy path.
+        message_port_pub(pmt::intern("out"), message);
+        if (payload_callback_)
+            payload_callback_(payload);
+    } else {
+        suppressed_duplicate_count_.fetch_add(1, std::memory_order_relaxed);
+    }
     if (callback_)
-        callback_("FEC frame #" + std::to_string(count) + " [" + path + "]\n" +
+        callback_("FEC frame #" + std::to_string(count) + " [" + path +
+                  (duplicate ? ", duplicate suppressed]\n" : "]\n") +
                   describePdu(message));
-    if (payload_callback_)
-        payload_callback_(payload);
 }
 
 std::uint64_t FrameMonitor::frameCount() const noexcept
@@ -74,6 +111,11 @@ std::uint64_t FrameMonitor::primaryFrameCount() const noexcept
 std::uint64_t FrameMonitor::parallelFrameCount() const noexcept
 {
     return parallel_frame_count_.load(std::memory_order_relaxed);
+}
+
+std::uint64_t FrameMonitor::suppressedDuplicateCount() const noexcept
+{
+    return suppressed_duplicate_count_.load(std::memory_order_relaxed);
 }
 
 double FrameMonitor::secondsSinceFrame() const noexcept

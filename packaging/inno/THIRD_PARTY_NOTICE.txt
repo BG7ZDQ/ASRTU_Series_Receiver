@@ -17,4 +17,7 @@ DSP 的并行 ASRTU 解码链包含来自 OpenHoshimi 的 soundmodem 核心，�
 包括 BG6HNY / Hyacinth Satellite Team 及源文件中列明的 HIT LilacSat
 soundmodem 作者；该组件及其源文件按相应 GPL 条款提供。
 
+SSDV 图像解码使用 Daniel Estevez 的 DSLWP 兼容 SSDV 分支，该分支基于
+Philip Heron 的 SSDV 实现；相关组件按 GPL-3.0-or-later 提供。
+
 阿斯图系列卫星接收与上传套件 / By BG7ZDQ

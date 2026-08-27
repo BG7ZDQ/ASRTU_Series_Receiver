@@ -124,6 +124,8 @@ int main(int argc, char* argv[])
           double(flowgraph.primaryFrameCount()) },
         { QStringLiteral("parallel_frame_count"),
           double(flowgraph.parallelFrameCount()) },
+        { QStringLiteral("suppressed_duplicate_count"),
+          double(flowgraph.suppressedDuplicateCount()) },
         { QStringLiteral("stereo_iq_content_mismatch"),
           flowgraph.stereoIqContentMismatch() },
         { QStringLiteral("final_svr_snr_db"), flowgraph.snr() },

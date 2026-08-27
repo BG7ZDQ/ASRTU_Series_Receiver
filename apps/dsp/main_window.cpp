@@ -3,6 +3,8 @@
 #include "flowgraph.h"
 #include "rssi_meter.h"
 #include "snr_plot.h"
+#include "ssdv_image_window.h"
+#include "ssdv_receiver.h"
 
 #include <QApplication>
 #include <QCloseEvent>
@@ -14,6 +16,8 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLocalServer>
+#include <QLocalSocket>
 #include <QMessageBox>
 #include <QMetaObject>
 #include <QMouseEvent>
@@ -248,6 +252,21 @@ QString requestedWavPath()
     return {};
 }
 
+bool requestedFastPlayback()
+{
+    return QCoreApplication::arguments().contains(
+        QStringLiteral("--fast-playback"));
+}
+
+double requestedReplayRate()
+{
+    const QStringList arguments = QCoreApplication::arguments();
+    const int option = arguments.indexOf(QStringLiteral("--replay-rate"));
+    if (option >= 0 && option + 1 < arguments.size())
+        return std::clamp(arguments.at(option + 1).toDouble(), 2.0, 100.0);
+    return 10.0;
+}
+
 QString requestedOption(const QString& name)
 {
     const QStringList arguments = QCoreApplication::arguments();
@@ -277,10 +296,15 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     }
 
     session_directory_ = createSessionDirectory();
-    const QString playbackPath = requestedWavPath();
+    playback_path_ = requestedWavPath();
+    fast_playback_ = !playback_path_.isEmpty() && requestedFastPlayback();
+    real_if_12khz_ = requestedRealIf12k();
+    shared_iq_bridge_ = requestedSharedIqBridge();
+    audio_device_id_ = requestedAudioDevice();
+    recording_enabled_ = playback_path_.isEmpty() && requestedRecordingEnabled();
     const QString logPath = QDir(session_directory_).filePath(
         QStringLiteral("decoder.log"));
-    if (playbackPath.isEmpty() && requestedRecordingEnabled())
+    if (recording_enabled_)
         recording_path_ = QDir(session_directory_).filePath(
             QStringLiteral("recording.wav"));
 
@@ -305,56 +329,49 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
                 .arg(logPath).toUtf8().constData());
 
     try {
-        AsrtuFlowgraph::Options options;
-        if (!playbackPath.isEmpty())
-            options.wav_path = QFile::encodeName(playbackPath).constData();
-        if (!recording_path_.isEmpty())
-            options.record_wav_path = QFile::encodeName(recording_path_).constData();
-        options.real_if_12khz = requestedRealIf12k();
-        options.shared_iq_bridge = requestedSharedIqBridge();
-        options.audio_device_id = requestedAudioDevice();
-        if (playbackPath.isEmpty()) {
-            options.payload_callback = [this](const std::vector<std::uint8_t>& payload) {
-                const QByteArray frame(reinterpret_cast<const char*>(payload.data()),
-                                       int(payload.size()));
-                QMetaObject::invokeMethod(
-                    this, [this, frame] { submitSatnogsFrame(frame); },
-                    Qt::QueuedConnection);
-            };
-        }
-        if (options.real_if_12khz)
-            options.input_frequency_hz = -12000.0;
-        flowgraph_ = std::make_unique<AsrtuFlowgraph>([this](const std::string& line) {
-            const QString text = QString::fromStdString(line);
-            QMetaObject::invokeMethod(this, [this, text] { appendLog(text); },
-                                      Qt::QueuedConnection);
-        }, options);
+        flowgraph_ = createFlowgraph(audio_device_id_, recording_path_);
         buildUi();
+        ssdv_window_ = new SsdvImageWindow(this);
+        ssdv_receiver_ = std::make_unique<SsdvReceiver>(
+            session_directory_,
+            [this](const SsdvImageUpdate& update) {
+                if (ssdv_window_)
+                    ssdv_window_->updateImage(update);
+            },
+            [this](const QString& line) { appendLog(line); });
+        ssdv_window_->setClearCallback([this] {
+            if (ssdv_receiver_)
+                ssdv_receiver_->clear();
+            appendLog(QStringLiteral("SSDV image display cleared"));
+        });
         appendLog(QStringLiteral("C++/Qt demodulator initialized"));
         appendLog(QStringLiteral("TCP PDU: 127.0.0.1:9985; ZMQ PUB: 127.0.0.1:5555"));
         appendLog(QStringLiteral("Log file: %1")
                       .arg(compactSessionPath(session_directory_, logPath)));
-        if (!playbackPath.isEmpty()) {
+        if (!playback_path_.isEmpty()) {
             appendLog(QStringLiteral("Playback file: /%1")
-                          .arg(QFileInfo(playbackPath).fileName()));
+                          .arg(QFileInfo(playback_path_).fileName()));
+            appendLog(fast_playback_
+                          ? QStringLiteral("Playback speed: %1x (fast replay)").arg(requestedReplayRate(), 0, 'f', 1)
+                          : QStringLiteral("Playback speed: real-time (1x)"));
         } else if (!recording_path_.isEmpty()) {
             appendLog(QStringLiteral("Automatic WAV recording: %1")
                           .arg(compactSessionPath(session_directory_, recording_path_)));
         } else {
             appendLog(QStringLiteral("Automatic WAV recording: disabled"));
         }
-        appendLog(!playbackPath.isEmpty()
-                      ? (options.real_if_12khz
+        appendLog(!playback_path_.isEmpty()
+                      ? (real_if_12khz_
                              ? QStringLiteral("Input mode: WAV mono real IF centered at +12 kHz")
                              : QStringLiteral("Input mode: WAV stereo zero-IF I/Q"))
-                      : options.shared_iq_bridge
+                      : shared_iq_bridge_
                       ? QStringLiteral("Input mode: SDRSharp local RAW I/Q bridge")
-                      : options.real_if_12khz
+                      : real_if_12khz_
                             ? QStringLiteral("Input mode: real mono IF centered at +12 kHz")
                             : QStringLiteral("Input mode: stereo zero-IF I/Q"));
-        if (playbackPath.isEmpty() && !options.shared_iq_bridge)
+        if (playback_path_.isEmpty() && !shared_iq_bridge_)
             appendLog(QStringLiteral("Audio input device ID: %1")
-                          .arg(options.audio_device_id));
+                          .arg(audio_device_id_));
         flowgraph_->start();
         appendLog(QStringLiteral("Flowgraph started"));
     } catch (const std::exception& e) {
@@ -368,6 +385,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     status_timer_->start(200);
     snr_log_timer_.start();
     updateStatus();
+    setupControlServer();
 
     QSettings settings(QStringLiteral("ASRTU"), QStringLiteral("ASRTU1_Demod_CQt_v3"));
     const auto geometry = settings.value(QStringLiteral("geometry")).toByteArray();
@@ -608,6 +626,172 @@ void MainWindow::appendLog(const QString& text)
         stream << line << '\n';
         stream.flush();
     }
+}
+
+std::unique_ptr<AsrtuFlowgraph> MainWindow::createFlowgraph(
+    int deviceId, const QString& recordingPath)
+{
+    AsrtuFlowgraph::Options options;
+    if (!playback_path_.isEmpty())
+        options.wav_path = QFile::encodeName(playback_path_).constData();
+    if (!recordingPath.isEmpty())
+        options.record_wav_path = QFile::encodeName(recordingPath).constData();
+    options.real_if_12khz = real_if_12khz_;
+    options.shared_iq_bridge = shared_iq_bridge_;
+    options.fast_playback = fast_playback_;
+    options.replay_rate = requestedReplayRate();
+    options.audio_device_id = deviceId;
+    options.payload_callback = [this](const std::vector<std::uint8_t>& payload) {
+        const QByteArray frame(reinterpret_cast<const char*>(payload.data()),
+                               int(payload.size()));
+        QMetaObject::invokeMethod(
+            this, [this, frame] { handleDecodedFrame(frame); },
+            Qt::QueuedConnection);
+    };
+    options.local_candidate_callback = [this](const std::vector<std::uint8_t>& payload) {
+        const QByteArray frame(reinterpret_cast<const char*>(payload.data()),
+                               int(payload.size()));
+        QMetaObject::invokeMethod(this, [this, frame] {
+            if (ssdv_receiver_)
+                ssdv_receiver_->ingestFrame(frame);
+        }, Qt::QueuedConnection);
+    };
+    if (options.real_if_12khz)
+        options.input_frequency_hz = -12000.0;
+    return std::make_unique<AsrtuFlowgraph>([this](const std::string& line) {
+        const QString text = QString::fromStdString(line);
+        QMetaObject::invokeMethod(this, [this, text] { appendLog(text); },
+                                  Qt::QueuedConnection);
+    }, options);
+}
+
+void MainWindow::handleDecodedFrame(const QByteArray& frame)
+{
+    if (ssdv_receiver_)
+        ssdv_receiver_->ingestFrame(frame);
+    // Replayed recordings may be decoded locally, but must never be uploaded
+    // again because telemetry frames do not contain a trustworthy timestamp.
+    if (playback_path_.isEmpty())
+        submitSatnogsFrame(frame);
+}
+
+void MainWindow::setupControlServer()
+{
+    control_server_ = new QLocalServer(this);
+    const QString name = QStringLiteral("ASRTU_DSP_CONTROL_V1");
+    if (!control_server_->listen(name)) {
+#ifdef Q_OS_UNIX
+        QLocalServer::removeServer(name);
+        if (!control_server_->listen(name)) {
+            appendLog(QStringLiteral("DSP control channel unavailable: %1")
+                          .arg(control_server_->errorString()));
+            return;
+        }
+#else
+        appendLog(QStringLiteral("DSP control channel unavailable: %1")
+                      .arg(control_server_->errorString()));
+        return;
+#endif
+    }
+    connect(control_server_, &QLocalServer::newConnection, this, [this] {
+        while (control_server_->hasPendingConnections()) {
+            QLocalSocket* socket = control_server_->nextPendingConnection();
+            connect(socket, &QLocalSocket::readyRead, this,
+                    [this, socket] { handleControlSocket(socket); });
+            connect(socket, &QLocalSocket::disconnected,
+                    socket, &QObject::deleteLater);
+            if (socket->bytesAvailable() > 0)
+                handleControlSocket(socket);
+        }
+    });
+}
+
+void MainWindow::handleControlSocket(QLocalSocket* socket)
+{
+    const QByteArray command = socket->readAll().trimmed();
+    constexpr char prefix[] = "audio-device:";
+    if (!command.startsWith(prefix))
+        return;
+    bool valid = false;
+    const int deviceId = command.mid(int(sizeof(prefix) - 1)).toInt(&valid);
+    if (valid)
+        switchAudioDevice(deviceId);
+}
+
+void MainWindow::switchAudioDevice(int deviceId)
+{
+    if (!playback_path_.isEmpty() || shared_iq_bridge_ ||
+        (deviceId == audio_device_id_ && flowgraph_))
+        return;
+
+    appendLog(QStringLiteral("Switching audio input device: %1 -> %2")
+                  .arg(audio_device_id_).arg(deviceId));
+    status_timer_->stop();
+    QWidget* oldCentral = takeCentralWidget();
+    const int oldDeviceId = audio_device_id_;
+    const QString oldRecordingPath = recording_path_;
+    try {
+        if (flowgraph_)
+            flowgraph_->stop();
+        flowgraph_.reset();
+        delete oldCentral;
+        oldCentral = nullptr;
+
+        if (recording_enabled_) {
+            ++recording_segment_;
+            recording_path_ = QDir(session_directory_).filePath(
+                QStringLiteral("recording_part%1.wav")
+                    .arg(recording_segment_, 2, 10, QLatin1Char('0')));
+        }
+        flowgraph_ = createFlowgraph(deviceId, recording_path_);
+        audio_device_id_ = deviceId;
+        buildUi();
+        flowgraph_->start();
+        appendLog(QStringLiteral("Audio input device switched to ID %1")
+                      .arg(deviceId));
+        if (recording_enabled_)
+            appendLog(QStringLiteral("Automatic WAV recording continued: %1")
+                          .arg(compactSessionPath(session_directory_, recording_path_)));
+    } catch (const std::exception& error) {
+        delete oldCentral;
+        flowgraph_.reset();
+        recording_path_ = oldRecordingPath;
+        audio_device_id_ = oldDeviceId;
+        appendLog(QStringLiteral("Audio device switch failed: %1")
+                      .arg(QString::fromUtf8(error.what())));
+        QMessageBox::warning(
+            this, QCoreApplication::translate("ASRTU", "声卡切换失败"),
+            QCoreApplication::translate(
+                "ASRTU", "无法切换到所选声卡。请重新选择可用设备或重新启动接收。\n%1")
+                .arg(QString::fromUtf8(error.what())));
+        try {
+            flowgraph_ = createFlowgraph(oldDeviceId, recording_path_);
+            buildUi();
+            flowgraph_->start();
+            appendLog(QStringLiteral("Previous audio input restored"));
+        } catch (const std::exception& restoreError) {
+            flowgraph_.reset();
+            auto* unavailable = new QWidget(this);
+            auto* layout = new QVBoxLayout(unavailable);
+            auto* message = new QLabel(
+                QCoreApplication::translate(
+                    "ASRTU",
+                    "当前声卡不可用。请在启动器中选择另一输入设备。\n%1")
+                    .arg(QString::fromUtf8(restoreError.what())),
+                unavailable);
+            message->setAlignment(Qt::AlignCenter);
+            message->setWordWrap(true);
+            layout->addWidget(message);
+            setCentralWidget(unavailable);
+            appendLog(QStringLiteral("Previous audio input could not be restored: %1")
+                          .arg(QString::fromUtf8(restoreError.what())));
+        }
+    }
+    rssi_range_ready_ = false;
+    iq_mismatch_ticks_ = 0;
+    iq_mismatch_warned_ = false;
+    status_timer_->start(200);
+    updateStatus();
 }
 
 void MainWindow::submitSatnogsFrame(const QByteArray& frame)

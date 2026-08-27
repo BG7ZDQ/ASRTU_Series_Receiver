@@ -434,5 +434,73 @@
             <translation>I/Qチャンネルのレベルに大きな偏りがあります。モノラルUSB/実数音声が入力され、スペクトルが鏡像になっている可能性があります。
 ランチャーで「モノラル実数12 kHz無線機IF入力」を選択してください。</translation>
         </message>
+        <message>
+            <source>声卡切换失败</source>
+            <translation>サウンドカードの切り替えに失敗しました</translation>
+        </message>
+        <message>
+            <source>无法切换到所选声卡。请重新选择可用设备或重新启动接收。
+%1</source>
+            <translation>選択したサウンドカードに切り替えられません。使用可能なデバイスを選択するか、受信機を再起動してください。
+%1</translation>
+        </message>
+        <message>
+            <source>当前声卡不可用。请在启动器中选择另一输入设备。
+%1</source>
+            <translation>現在のサウンドカードは使用できません。ランチャーで別の入力デバイスを選択してください。
+%1</translation>
+        </message>
+        <message>
+            <source>SSDV图像接收</source>
+            <translation>SSDV画像受信</translation>
+        </message>
+        <message>
+            <source>等待SSDV图像数据</source>
+            <translation>SSDV画像データを待機中</translation>
+        </message>
+        <message>
+            <source>复制图像</source>
+            <translation>画像をコピー</translation>
+        </message>
+        <message>
+            <source>打开目录</source>
+            <translation>フォルダーを開く</translation>
+        </message>
+        <message>
+            <source>上一张图像</source>
+            <translation>前の画像</translation>
+        </message>
+        <message>
+            <source>下一张图像</source>
+            <translation>次の画像</translation>
+        </message>
+        <message>
+            <source>清除图像</source>
+            <translation>画像をクリア</translation>
+        </message>
+        <message>
+            <source>保存路径：—</source>
+            <translation>保存先：—</translation>
+        </message>
+        <message>
+            <source>来源卫星：%1　图像ID：%2
+分辨率：%3×%4　质量：%5
+数据包：%6（%7–%8，区间缺失%9）　状态：%10</source>
+            <translation>送信衛星：%1　画像ID：%2
+解像度：%3×%4　品質：%5
+パケット：%6（%7–%8、範囲内欠落%9）　状態：%10</translation>
+        </message>
+        <message>
+            <source>完成</source>
+            <translation>完了</translation>
+        </message>
+        <message>
+            <source>接收中</source>
+            <translation>受信中</translation>
+        </message>
+        <message>
+            <source>保存路径：%1</source>
+            <translation>保存先：%1</translation>
+        </message>
     </context>
 </TS>

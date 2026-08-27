@@ -16,6 +16,7 @@
 #include <gnuradio/blocks/rms_cf.h>
 #include <gnuradio/blocks/rms_ff.h>
 #include <gnuradio/blocks/sub.h>
+#include <gnuradio/blocks/throttle.h>
 #include <gnuradio/blocks/unpack_k_bits_bb.h>
 #include <gnuradio/blocks/wavfile_sink.h>
 #include <gnuradio/digital/adaptive_algorithm.h>
@@ -245,6 +246,11 @@ AsrtuFlowgraph::~AsrtuFlowgraph()
 
 void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
 {
+    // QtGUI waterfall sinks normally advance from a wall-clock gate. During
+    // unthrottled replay that makes an already-decoded file appear to crawl at
+    // 1x. Use a much shorter gate so the history and its time axis advance at
+    // the visibly accelerated replay rate.
+    const double waterfallUpdateSeconds = options.fast_playback ? 0.01 : 0.10;
     expects_stereo_iq_ = !options.shared_iq_bridge && !options.real_if_12khz;
     tb_ = gr::make_top_block("Astro-series satellite C++/Qt demodulator", true);
 
@@ -260,7 +266,8 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
             48000, options.audio_device_id, false);
     } else {
         source = gr::hyacinthsat::wav_iq_source::make(
-            options.wav_path, 48000, false, options.enable_gui);
+            options.wav_path, 48000, false,
+            options.enable_gui && !options.fast_playback);
     }
     if (!complexSource)
         complexSource = to_complex;
@@ -362,7 +369,7 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
                 kRealIfDisplayCenterHz, kIfRate,
                 "Real IF input waterfall", 1, nullptr);
             waterfall_real_->set_plot_pos_half(true);
-            waterfall_real_->set_update_time(0.10);
+            waterfall_real_->set_update_time(waterfallUpdateSeconds);
             waterfall_real_->set_intensity_range(-100, 0);
             waterfall_real_->disable_legend();
         } else {
@@ -376,7 +383,7 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
             waterfall_ = gr::qtgui::waterfall_sink_c::make(
                 1024, gr::fft::window::WIN_BLACKMAN_hARRIS, 0.0, kIfRate,
                 "Input waterfall", 1, nullptr);
-            waterfall_->set_update_time(0.10);
+            waterfall_->set_update_time(waterfallUpdateSeconds);
             waterfall_->set_intensity_range(-100, 0);
             waterfall_->disable_legend();
         }
@@ -401,7 +408,8 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
     }
 
     frame_monitor_ = FrameMonitor::make(
-        std::move(callback), options.payload_callback);
+        std::move(callback), options.payload_callback,
+        options.local_candidate_callback);
     const auto openHoshimiDecoder = options.enable_openhoshimi_decoder
                                         ? OpenHoshimiDecoderSink::make()
                                         : OpenHoshimiDecoderSink::sptr{};
@@ -443,7 +451,20 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
                 tb_->connect(source, 1, recorder, 1);
         }
     }
-    tb_->connect(complexSource, 0, mixer, 0);
+    if (options.fast_playback) {
+        // The raw WAV source can run at ~60x. Replay that fast finishes the
+        // file in under a second, so the waterfall never gets to scroll and
+        // the window looks frozen at 1x. Throttle the demodulator chain to a
+        // visibly accelerated rate (default 10x); the spectrum/waterfall
+        // sinks sample the raw stream ahead of this gate and still flash at
+        // the accelerated data rate.
+        const auto replayThrottle = gr::blocks::throttle::make(
+            sizeof(gr_complex), kIfRate * options.replay_rate);
+        tb_->connect(complexSource, 0, replayThrottle, 0);
+        tb_->connect(replayThrottle, 0, mixer, 0);
+    } else {
+        tb_->connect(complexSource, 0, mixer, 0);
+    }
     tb_->connect(oscillator, 0, mixer, 1);
     if (options.enable_gui) {
         if (!options.real_if_12khz) {
@@ -496,8 +517,10 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
         tb_->connect(parallel_unpack_a, 0, parallel_fec_a, 0);
         tb_->connect(parallel_unpack_b, 0, parallel_fec_b, 0);
     }
-    if (openHoshimiDecoder)
+    if (openHoshimiDecoder) {
         tb_->msg_connect(openHoshimiDecoder, "out", frame_monitor_, "parallel");
+        tb_->msg_connect(openHoshimiDecoder, "failed", frame_monitor_, "local");
+    }
 
     for (const auto& fec : { fec_a, fec_b })
         tb_->msg_connect(fec, "out", frame_monitor_, "primary");
@@ -597,6 +620,10 @@ std::uint64_t AsrtuFlowgraph::primaryFrameCount() const
 std::uint64_t AsrtuFlowgraph::parallelFrameCount() const
 {
     return frame_monitor_->parallelFrameCount();
+}
+std::uint64_t AsrtuFlowgraph::suppressedDuplicateCount() const
+{
+    return frame_monitor_->suppressedDuplicateCount();
 }
 QWidget* AsrtuFlowgraph::inputSpectrumWidget() const
 {

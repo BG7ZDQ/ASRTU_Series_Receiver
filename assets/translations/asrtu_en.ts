@@ -434,5 +434,73 @@ For a radio 12 kHz IF or SDR# USB audio, select ‘Mono Real 12 kHz Radio IF Inp
             <translation>The I and Q channel levels are severely imbalanced. The input may be mono USB/real audio, which produces a mirrored spectrum.
 Select ‘Mono Real 12 kHz Radio IF Input’ in the launcher.</translation>
         </message>
+        <message>
+            <source>声卡切换失败</source>
+            <translation>Audio Device Switch Failed</translation>
+        </message>
+        <message>
+            <source>无法切换到所选声卡。请重新选择可用设备或重新启动接收。
+%1</source>
+            <translation>Unable to switch to the selected audio device. Select an available device or restart the receiver.
+%1</translation>
+        </message>
+        <message>
+            <source>当前声卡不可用。请在启动器中选择另一输入设备。
+%1</source>
+            <translation>The current audio device is unavailable. Select another input device in the launcher.
+%1</translation>
+        </message>
+        <message>
+            <source>SSDV图像接收</source>
+            <translation>SSDV Image Reception</translation>
+        </message>
+        <message>
+            <source>等待SSDV图像数据</source>
+            <translation>Waiting for SSDV image data</translation>
+        </message>
+        <message>
+            <source>复制图像</source>
+            <translation>Copy Image</translation>
+        </message>
+        <message>
+            <source>打开目录</source>
+            <translation>Open Folder</translation>
+        </message>
+        <message>
+            <source>上一张图像</source>
+            <translation>Previous Image</translation>
+        </message>
+        <message>
+            <source>下一张图像</source>
+            <translation>Next Image</translation>
+        </message>
+        <message>
+            <source>清除图像</source>
+            <translation>Clear Image</translation>
+        </message>
+        <message>
+            <source>保存路径：—</source>
+            <translation>Saved to: —</translation>
+        </message>
+        <message>
+            <source>来源卫星：%1　图像ID：%2
+分辨率：%3×%4　质量：%5
+数据包：%6（%7–%8，区间缺失%9）　状态：%10</source>
+            <translation>Source satellite: %1   Image ID: %2
+Resolution: %3×%4   Quality: %5
+Packets: %6 (%7–%8, %9 missing in range)   Status: %10</translation>
+        </message>
+        <message>
+            <source>完成</source>
+            <translation>Complete</translation>
+        </message>
+        <message>
+            <source>接收中</source>
+            <translation>Receiving</translation>
+        </message>
+        <message>
+            <source>保存路径：%1</source>
+            <translation>Saved to: %1</translation>
+        </message>
     </context>
 </TS>
