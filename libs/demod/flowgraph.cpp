@@ -2,7 +2,6 @@
 #include "openhoshimi_decoder_sink.h"
 #include "shared_iq_source.h"
 
-#include <gnuradio/analog/agc2_cc.h>
 #include <gnuradio/analog/feedforward_agc_cc.h>
 #include <gnuradio/analog/sig_source.h>
 #include <gnuradio/blocks/complex_to_float.h>
@@ -35,6 +34,8 @@
 #include <gnuradio/lilacsat/fec_decode_b.h>
 #include <gnuradio/lilacsat/vitfilt27_fb.h>
 #include <gnuradio/network/socket_pdu.h>
+#include <gnuradio/io_signature.h>
+#include <gnuradio/sync_block.h>
 #include <gnuradio/qtgui/const_sink_c.h>
 #include <gnuradio/qtgui/freq_sink_c.h>
 #include <gnuradio/qtgui/freq_sink_f.h>
@@ -58,6 +59,76 @@ constexpr double kRealIfCenterHz = 12000.0;
 constexpr double kRealIfDisplayCenterHz = -kRealIfCenterHz;
 constexpr double kSps = 5.0;
 constexpr float kAlpha = 0.35f;
+
+class CausalAgcCc final : public gr::sync_block
+{
+public:
+    using sptr = std::shared_ptr<CausalAgcCc>;
+
+    static sptr make(float attack, float decay, float reference,
+                     float initialGain, float maximumGain)
+    {
+        return gnuradio::make_block_sptr<CausalAgcCc>(
+            attack, decay, reference, initialGain, maximumGain);
+    }
+
+    CausalAgcCc(float attack, float decay, float reference,
+                float initialGain, float maximumGain)
+        : gr::sync_block("asrtu_causal_agc_cc",
+                         gr::io_signature::make(1, 1, sizeof(gr_complex)),
+                         gr::io_signature::make(1, 1, sizeof(gr_complex))),
+          attack_(attack), decay_(decay), reference_(reference),
+          gain_(initialGain), maximum_gain_(maximumGain)
+    {
+    }
+
+    int work(int noutputItems, gr_vector_const_void_star& inputItems,
+             gr_vector_void_star& outputItems) override
+    {
+        const auto* input = static_cast<const gr_complex*>(inputItems[0]);
+        auto* output = static_cast<gr_complex*>(outputItems[0]);
+        for (int i = 0; i < noutputItems; ++i) {
+            const float inputPower = input[i].real() * input[i].real() +
+                                     input[i].imag() * input[i].imag();
+            // FIR tails around exact silence can become subnormal. GNU
+            // Radio's generic AGC2 takes an extremely slow floating-point
+            // path on those values and may appear permanently hung. Treat
+            // them as silence while continuing the bounded release.
+            if (!std::isfinite(inputPower) || inputPower < 1.0e-24f) {
+                output[i] = gr_complex{};
+                // Freeze gain during digital silence. Releasing toward the
+                // 100x ceiling creates a full-scale transient when audio
+                // returns; that transient can drive the timing synchronizer
+                // into a pathological high-CPU state.
+                continue;
+            }
+
+            const gr_complex adjusted = input[i] * gain_;
+            const float magnitude = std::sqrt(
+                adjusted.real() * adjusted.real() +
+                adjusted.imag() * adjusted.imag());
+            const float error = magnitude - reference_;
+            // Preserve GNU Radio agc2_cc's original loop law exactly. Its
+            // attack rate is selected only for an overload larger than the
+            // current gain, not for every sample above the reference.
+            const float rate = error > gain_ ? attack_ : decay_;
+            gain_ -= error * rate;
+            if (gain_ < 0.0f)
+                gain_ = 1.0e-4f;
+            if (gain_ > maximum_gain_)
+                gain_ = maximum_gain_;
+            output[i] = adjusted;
+        }
+        return noutputItems;
+    }
+
+private:
+    float attack_;
+    float decay_;
+    float reference_;
+    float gain_;
+    float maximum_gain_;
+};
 
 class AdjustableLmsAlgorithm final : public gr::digital::adaptive_algorithm
 {
@@ -135,7 +206,7 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
     if (options.use_legacy_feedforward_agc)
         agc = gr::analog::feedforward_agc_cc::make(1024, 1.0f);
     else
-        agc = gr::analog::agc2_cc::make(
+        agc = CausalAgcCc::make(
             0.10f, 0.001f, 1.0f, 1.0f, 100.0f);
 
     fll_ = gr::digital::fll_band_edge_cc::make(kSps, kAlpha, 100, 0.01f);
