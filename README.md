@@ -1,4 +1,4 @@
-# ASRTU Series Satellite Receiver 1.5
+# ASRTU Series Satellite Receiver
 
 ASRTU 系列卫星接收、解调、遥测转发与自动多普勒工具。项目包含 C++/Qt 接收解码器、桌面启动器、遥测代理启动包装器，以及 SDR# 本地 RAW I/Q 桥接插件。
 
@@ -14,12 +14,7 @@ Languages: **中文** · [English](README_EN.md) · [日本語](README_JA.md)
 - 可选 WAV 自动录制，完整帧、SVR 和运行日志按会话保存
 - 多 TLE 源下载、卫星选择、频率预设、SGP4 跟踪和 SDR# 自动多普勒控制
 - 遥测上传代理及地面站呼号、经纬度配置
-- 根据系统语言自动切换：中文系统使用中文、日文系统使用日文，其他系统使用英语
 - 可选将实时解码的 FEC 帧直接上传至 SatNOGS（录音回放不会上传）
-
-## Quick overview (English)
-
-ASRTU Series Satellite Receiver is a C++/Qt desktop suite for receiving, demodulating and forwarding ASRTU-family satellite telemetry. It supports shared-memory SDR# RAW I/Q, stereo zero-IF audio, mono 12 kHz real IF, recorded-file playback, and optional live-frame submission to SatNOGS. The UI automatically uses Chinese, Japanese or English according to the operating-system language.
 
 ## 使用教程
 
