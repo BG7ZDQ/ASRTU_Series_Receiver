@@ -96,10 +96,17 @@ public:
             // them as silence while continuing the bounded release.
             if (!std::isfinite(inputPower) || inputPower < 1.0e-24f) {
                 output[i] = gr_complex{};
-                // Freeze gain during digital silence. Releasing toward the
-                // 100x ceiling creates a full-scale transient when audio
-                // returns; that transient can drive the timing synchronizer
-                // into a pathological high-CPU state.
+                // Do not freeze the gain near its 100x ceiling. When a
+                // strong signal suddenly appears, that gain would create a
+                // long full-scale overload (the original attack-rate rule
+                // only engaged when the error exceeded the gain, so recovery
+                // took ~1.9 s) and the overload blew up the timing
+                // synchronizer and the LMS equalizer. Drift back toward a
+                // conservative unity instead, so the next signal starts
+                // clean and its first samples are always in range.
+                gain_ += (kConservativeGain - gain_) * kSilenceSlew;
+                if (gain_ > maximum_gain_)
+                    gain_ = maximum_gain_;
                 continue;
             }
 
@@ -108,21 +115,41 @@ public:
                 adjusted.real() * adjusted.real() +
                 adjusted.imag() * adjusted.imag());
             const float error = magnitude - reference_;
-            // Preserve GNU Radio agc2_cc's original loop law exactly. Its
-            // attack rate is selected only for an overload larger than the
-            // current gain, not for every sample above the reference.
-            const float rate = error > gain_ ? attack_ : decay_;
+            // Attack on any overload (magnitude above the reference), not
+            // only when the error exceeds the current gain. The old agc2_cc
+            // rule left a 100x gain stuck near its ceiling for seconds after
+            // a strong signal appeared. A small hysteresis keeps
+            // near-reference ripple from toggling the rate every sample.
+            const float rate = error > reference_ * 0.05f ? attack_ : decay_;
             gain_ -= error * rate;
             if (gain_ < 0.0f)
                 gain_ = 1.0e-4f;
             if (gain_ > maximum_gain_)
                 gain_ = maximum_gain_;
-            output[i] = adjusted;
+            // Hard output limit: even the very first sample of a transient
+            // (gain still elevated, signal suddenly full scale) must never
+            // reach the synchronizer or the LMS equalizer overdriven.
+            if (magnitude > kOutputLimit && magnitude > 1.0e-9f) {
+                const float scale = kOutputLimit / magnitude;
+                output[i] = gr_complex(adjusted.real() * scale,
+                                       adjusted.imag() * scale);
+            } else {
+                output[i] = adjusted;
+            }
         }
         return noutputItems;
     }
 
 private:
+    // Conservative gain target while the input is digital silence, so a
+    // later strong signal cannot start from a huge gain.
+    static constexpr float kConservativeGain = 1.0f;
+    // Per-sample fraction of the gain gap closed while in silence.
+    static constexpr float kSilenceSlew = 1.0e-3f;
+    // Hard clamp on the output magnitude; downstream Gardner/LMS must never
+    // see an overdriven symbol.
+    static constexpr float kOutputLimit = 2.0f;
+
     float attack_;
     float decay_;
     float reference_;
@@ -146,6 +173,15 @@ public:
                           const gr_complex error,
                           const gr_complex /*decision*/) override
     {
+        // Guard the LMS loop against NaN/Inf pollution and runaway
+        // adaptation. A transient must never be able to blow the taps up to
+        // infinity: once NaN enters the stream it poisons the Viterbi/FEC
+        // path, the SNR estimator and every Qt plot that displays it.
+        if (!std::isfinite(tap.real()) || !std::isfinite(tap.imag()) ||
+            !std::isfinite(input.real()) || !std::isfinite(input.imag()) ||
+            !std::isfinite(error.real()) || !std::isfinite(error.imag()))
+            return gr_complex{};
+
         return std::conj(std::conj(tap) + gain_->load(std::memory_order_relaxed) *
                                           input * std::conj(error));
     }
@@ -157,6 +193,43 @@ public:
 
 private:
     std::shared_ptr<std::atomic<float>> gain_;
+};
+
+// Last line of defence between the DSP chain and the decoders/UI: replace
+// any non-finite or implausibly large symbol with zero before it can reach
+// the Viterbi/FEC path, the SNR estimator or the Qt GUI plots (Qwt has slow
+// or undefined rendering paths for NaN/Inf data).
+class SanitizeCc final : public gr::sync_block
+{
+public:
+    using sptr = std::shared_ptr<SanitizeCc>;
+
+    static sptr make() { return gnuradio::make_block_sptr<SanitizeCc>(); }
+
+    SanitizeCc()
+        : gr::sync_block("asrtu_sanitize_cc",
+                         gr::io_signature::make(1, 1, sizeof(gr_complex)),
+                         gr::io_signature::make(1, 1, sizeof(gr_complex)))
+    {
+    }
+
+    int work(int noutputItems, gr_vector_const_void_star& inputItems,
+             gr_vector_void_star& outputItems) override
+    {
+        const auto* input = static_cast<const gr_complex*>(inputItems[0]);
+        auto* output = static_cast<gr_complex*>(outputItems[0]);
+        for (int i = 0; i < noutputItems; ++i) {
+            if (std::isfinite(input[i].real()) && std::isfinite(input[i].imag()) &&
+                std::abs(input[i]) < kMaxAbs)
+                output[i] = input[i];
+            else
+                output[i] = gr_complex{};
+        }
+        return noutputItems;
+    }
+
+private:
+    static constexpr float kMaxAbs = 64.0f;
 };
 }
 
@@ -395,11 +468,13 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
         tb_->connect(fll_, 0, loop_spectrum_, 1);
     tb_->connect(fll_, 0, clock_sync_, 0);
     tb_->connect(clock_sync_, 0, costas_, 0);
+    const auto sanitize = SanitizeCc::make();
     tb_->connect(costas_, 0, equalizer, 0);
-    tb_->connect(equalizer, 0, to_real, 0);
-    tb_->connect(equalizer, 0, snr_probe_, 0);
+    tb_->connect(equalizer, 0, sanitize, 0);
+    tb_->connect(sanitize, 0, to_real, 0);
+    tb_->connect(sanitize, 0, snr_probe_, 0);
     if (options.enable_gui)
-        tb_->connect(equalizer, 0, constellation_sink_, 0);
+        tb_->connect(sanitize, 0, constellation_sink_, 0);
     tb_->connect(to_real, 0, viterbi_a, 0);
     tb_->connect(to_real, 0, delay, 0);
     tb_->connect(delay, 0, viterbi_b, 0);
