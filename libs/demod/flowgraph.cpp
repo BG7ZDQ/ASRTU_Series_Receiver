@@ -16,6 +16,7 @@
 #include <gnuradio/blocks/rms_cf.h>
 #include <gnuradio/blocks/rms_ff.h>
 #include <gnuradio/blocks/sub.h>
+#include <gnuradio/blocks/keep_one_in_n.h>
 #include <gnuradio/blocks/throttle.h>
 #include <gnuradio/blocks/unpack_k_bits_bb.h>
 #include <gnuradio/blocks/wavfile_sink.h>
@@ -360,6 +361,9 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
                 kRealIfDisplayCenterHz, kIfRate,
                 "Real IF input spectrum", 1, nullptr);
             input_spectrum_real_->set_plot_pos_half(true);
+            if (options.fast_playback)
+                input_spectrum_real_->set_frequency_range(
+                    kRealIfDisplayCenterHz, kIfRate / 2);
             input_spectrum_real_->set_update_time(0.10);
             input_spectrum_real_->set_y_axis(-140, 10);
             input_spectrum_real_->disable_legend();
@@ -377,6 +381,8 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
                 1024, gr::fft::window::WIN_BLACKMAN_hARRIS, 0.0, kIfRate,
                 "Input spectrum", 1, nullptr);
             input_spectrum_->set_update_time(0.10);
+            if (options.fast_playback)
+                input_spectrum_->set_frequency_range(0.0, kIfRate / 2);
             input_spectrum_->set_y_axis(-140, 10);
             input_spectrum_->disable_legend();
 
@@ -392,6 +398,8 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
             1024, gr::fft::window::WIN_BLACKMAN_hARRIS, 0.0, kIfRate,
             "Loop spectrum", 2, nullptr);
         loop_spectrum_->set_update_time(0.10);
+        if (options.fast_playback)
+            loop_spectrum_->set_frequency_range(0.0, kIfRate / 2);
         loop_spectrum_->set_y_axis(-100, 0);
         loop_spectrum_->set_line_color(0, "blue");
         loop_spectrum_->set_line_color(1, "red");
@@ -417,7 +425,17 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
     if (options.enable_gui && options.real_if_12khz) {
         // Raw mono float samples feed both GUI sinks before any I+j0
         // construction or frequency translation.
-        tb_->connect(source, 0, input_spectrum_real_, 0);
+        if (options.fast_playback) {
+            // Decimate the spectrum sink input during fast replay so its FFT
+            // work cannot slow the accelerated playback; the waterfall keeps
+            // the full-rate stream and its 10 ms gate.
+            const auto spectrumDecim =
+                gr::blocks::keep_one_in_n::make(sizeof(float), 2);
+            tb_->connect(source, 0, spectrumDecim, 0);
+            tb_->connect(spectrumDecim, 0, input_spectrum_real_, 0);
+        } else {
+            tb_->connect(source, 0, input_spectrum_real_, 0);
+        }
         tb_->connect(source, 0, waterfall_real_, 0);
     }
     if (!options.shared_iq_bridge)
@@ -468,7 +486,14 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
     tb_->connect(oscillator, 0, mixer, 1);
     if (options.enable_gui) {
         if (!options.real_if_12khz) {
-            tb_->connect(complexSource, 0, input_spectrum_, 0);
+            if (options.fast_playback) {
+                const auto spectrumDecim =
+                    gr::blocks::keep_one_in_n::make(sizeof(gr_complex), 2);
+                tb_->connect(complexSource, 0, spectrumDecim, 0);
+                tb_->connect(spectrumDecim, 0, input_spectrum_, 0);
+            } else {
+                tb_->connect(complexSource, 0, input_spectrum_, 0);
+            }
             tb_->connect(complexSource, 0, waterfall_, 0);
         }
     }
@@ -478,15 +503,31 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
     if (openHoshimiDecoder)
         tb_->connect(gain, 0, openHoshimiDecoder, 0);
     tb_->connect(gain, 0, lowpass, 0);
-    if (options.enable_gui)
-        tb_->connect(gain, 0, loop_spectrum_, 0);
+    if (options.enable_gui) {
+        if (options.fast_playback) {
+            const auto loopDecim0 =
+                gr::blocks::keep_one_in_n::make(sizeof(gr_complex), 2);
+            tb_->connect(gain, 0, loopDecim0, 0);
+            tb_->connect(loopDecim0, 0, loop_spectrum_, 0);
+        } else {
+            tb_->connect(gain, 0, loop_spectrum_, 0);
+        }
+    }
     tb_->connect(lowpass, 0, agc, 0);
     tb_->connect(lowpass, 0, rms, 0);
     tb_->connect(rms, 0, db, 0);
     tb_->connect(db, 0, rssi_probe_, 0);
     tb_->connect(agc, 0, fll_, 0);
-    if (options.enable_gui)
-        tb_->connect(fll_, 0, loop_spectrum_, 1);
+    if (options.enable_gui) {
+        if (options.fast_playback) {
+            const auto loopDecim1 =
+                gr::blocks::keep_one_in_n::make(sizeof(gr_complex), 2);
+            tb_->connect(fll_, 0, loopDecim1, 0);
+            tb_->connect(loopDecim1, 0, loop_spectrum_, 1);
+        } else {
+            tb_->connect(fll_, 0, loop_spectrum_, 1);
+        }
+    }
     tb_->connect(fll_, 0, clock_sync_, 0);
     tb_->connect(clock_sync_, 0, costas_, 0);
     const auto sanitize = SanitizeCc::make();

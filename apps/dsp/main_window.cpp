@@ -264,7 +264,7 @@ double requestedReplayRate()
     const int option = arguments.indexOf(QStringLiteral("--replay-rate"));
     if (option >= 0 && option + 1 < arguments.size())
         return std::clamp(arguments.at(option + 1).toDouble(), 2.0, 100.0);
-    return 10.0;
+    return 30.0;
 }
 
 QString requestedOption(const QString& name)

@@ -43,7 +43,7 @@ public:
         // replay is capped here (instead of running at the ~60x raw WAV
         // speed) so the waterfall has time to scroll and the decoded frames
         // are spread over a visibly accelerated, but observable, duration.
-        double replay_rate = 10.0;
+        double replay_rate = 30.0;
         bool enable_gui = true;
         bool enable_network = true;
         bool enable_parallel_decoder = true;
