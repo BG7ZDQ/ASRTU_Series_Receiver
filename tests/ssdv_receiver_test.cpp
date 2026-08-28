@@ -10,6 +10,7 @@
 #include <condition_variable>
 #include <iostream>
 #include <mutex>
+#include <thread>
 
 int main(int argc, char* argv[])
 {
@@ -67,10 +68,50 @@ int main(int argc, char* argv[])
         result.satellite != QStringLiteral("ASRTU-1") ||
         result.spacecraft_header != 0x0322 || result.width != 320 ||
         result.height != 240 || result.received_packets < 20 ||
+        !result.complete ||
         !QFileInfo::exists(result.path) ||
         !QFileInfo(result.path).fileName().contains(QStringLiteral("ID43"))) {
         std::cerr << "SSDV reconstruction did not produce the expected image\n";
         return 5;
+    }
+
+    int updatesBeforeRepeat;
+    {
+        std::lock_guard<std::mutex> lock(resultMutex);
+        updatesBeforeRepeat = updates;
+    }
+    for (int repeat = 0; repeat < 8; ++repeat) {
+        for (int offset = 0; offset < data.size(); offset += 223)
+            receiver.ingestFrame(data.mid(offset, 223));
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    {
+        std::lock_guard<std::mutex> lock(resultMutex);
+        if (updates != updatesBeforeRepeat ||
+            last.received_packets != result.received_packets ||
+            last.path != result.path) {
+            std::cerr << "SSDV repeated pass changed a completed image\n";
+            return 6;
+        }
+    }
+
+    for (int repeat = 0; repeat < 64; ++repeat) {
+        for (int offset = 0; offset < data.size(); offset += 223)
+            receiver.ingestFrame(data.mid(offset, 223));
+    }
+    receiver.clear();
+    for (int offset = 0; offset < data.size(); offset += 223)
+        receiver.ingestFrame(data.mid(offset, 223));
+    {
+        std::unique_lock<std::mutex> lock(resultMutex);
+        if (!resultReady.wait_for(lock, std::chrono::seconds(3), [&] {
+                return last.generation == 1 && !last.image.isNull() &&
+                       last.received_packets == result.received_packets &&
+                       last.path != result.path;
+            })) {
+            std::cerr << "SSDV clear did not discard the previous session\n";
+            return 7;
+        }
     }
 
     QByteArray second = data;
@@ -87,7 +128,7 @@ int main(int argc, char* argv[])
                        last.satellite == QStringLiteral("BY-04");
             })) {
             std::cerr << "SSDV session identity did not change\n";
-            return 6;
+            return 8;
         }
     }
     std::cout << "SSDV OK: " << result.path.toLocal8Bit().constData() << '\n';
