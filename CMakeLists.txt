@@ -9,6 +9,19 @@ set(CMAKE_AUTOMOC OFF)
 set(CMAKE_AUTOUIC OFF)
 set(CMAKE_AUTORCC ON)
 
+option(ASRTU_STRICT_WARNINGS "Treat project compiler warnings as errors" OFF)
+
+function(asrtu_enable_strict_warnings target)
+    if(NOT ASRTU_STRICT_WARNINGS)
+        return()
+    endif()
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W4 /WX /permissive- /utf-8)
+    else()
+        target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    endif()
+endfunction()
+
 find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets Network)
 find_package(Gnuradio REQUIRED COMPONENTS
     runtime analog blocks digital fft filter network qtgui zeromq)
@@ -114,8 +127,20 @@ endif()
 if(MSVC)
     target_compile_options(ASRTU1_Demod_CQt PRIVATE /W4 /permissive- /utf-8)
 endif()
+asrtu_enable_strict_warnings(ASRTU1_Demod_CQt)
 
-install(TARGETS ASRTU1_Demod_CQt RUNTIME DESTINATION .)
+include(GNUInstallDirs)
+
+install(TARGETS ASRTU1_Demod_CQt RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES LICENSE THIRD_PARTY.md
+    DESTINATION ${CMAKE_INSTALL_DOCDIR})
+if(UNIX AND NOT APPLE)
+    install(FILES packaging/linux/asrtu-series-receiver.desktop
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+    install(FILES packaging/linux/asrtu-series-receiver.png
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/512x512/apps
+        RENAME asrtu-series-receiver.png)
+endif()
 
 if(WIN32)
     add_executable(ASRTU1_Launcher WIN32
@@ -137,6 +162,7 @@ if(WIN32)
     if(MSVC)
         target_compile_options(ASRTU1_Launcher PRIVATE /W4 /permissive- /utf-8)
     endif()
+    asrtu_enable_strict_warnings(ASRTU1_Launcher)
 
     add_executable(ASRTU_Doppler WIN32
         apps/doppler/main.cpp
@@ -161,6 +187,7 @@ if(WIN32)
     if(MSVC)
         target_compile_options(ASRTU_Doppler PRIVATE /W4 /permissive- /utf-8)
     endif()
+    asrtu_enable_strict_warnings(ASRTU_Doppler)
 
     add_executable(ASRTU_Proxy
         apps/proxy-wrapper/proxy_wrapper.cpp
@@ -171,6 +198,7 @@ if(WIN32)
     if(MSVC)
         target_compile_options(ASRTU_Proxy PRIVATE /W4 /permissive- /utf-8)
     endif()
+    asrtu_enable_strict_warnings(ASRTU_Proxy)
 endif()
 
 option(ASRTU_BUILD_BENCHMARK "Build the Windows benchmark helper" ${WIN32})
@@ -218,6 +246,7 @@ endif()
 if(MSVC)
     target_compile_options(ASRTU1_Benchmark PRIVATE /W4 /permissive- /utf-8)
 endif()
+asrtu_enable_strict_warnings(ASRTU1_Benchmark)
 
 endif()
 
@@ -248,8 +277,25 @@ if(BUILD_TESTING)
         target_compile_options(ASRTU1_SsdvTest PRIVATE
             /W4 /permissive- /utf-8)
     endif()
+    asrtu_enable_strict_warnings(ASRTU1_FrameMonitorTest)
+    asrtu_enable_strict_warnings(ASRTU1_SsdvTest)
     add_test(NAME frame_monitor COMMAND ASRTU1_FrameMonitorTest)
     add_test(NAME ssdv_receiver COMMAND ASRTU1_SsdvTest)
     set_tests_properties(ssdv_receiver PROPERTIES ENVIRONMENT_MODIFICATION
         "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt5::Core>;QT_PLUGIN_PATH=set:$<TARGET_FILE_DIR:Qt5::Core>/../plugins")
 endif()
+
+set(CPACK_PACKAGE_NAME "asrtu-series-receiver")
+set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+set(CPACK_PACKAGE_VENDOR "ASRTU Satellite Team")
+set(CPACK_PACKAGE_CONTACT "BG7ZDQ")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
+    "ASRTU series satellite receiver and decoder")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "ASRTU Series Receiver")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "gnuradio (>= 3.10), libqwt-qt5-6")
+set(CPACK_DEBIAN_PACKAGE_SECTION "hamradio")
+set(CPACK_RPM_PACKAGE_REQUIRES "gnuradio >= 3.10, qwt-qt5")
+set(CPACK_RPM_PACKAGE_LICENSE "MIT and GPL-3.0-or-later")
+set(CPACK_RPM_PACKAGE_GROUP "Applications/Communications")
+include(CPack)
