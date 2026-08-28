@@ -175,7 +175,12 @@ void FrameMonitor::handle(const pmt::pmt_t& message, const char* path)
     else
         primary_frame_count_.fetch_add(1, std::memory_order_relaxed);
 
-    message_port_pub(pmt::intern("network"), message);
+    // The uploader (packaging/payload/proxy/proxy_mmt_gui.exe) reads the frame
+    // from a hard-coded 10-byte offset into the serialized PMT and validates
+    // nothing.  That offset holds only for cons(PMT_NIL, u8vector), so a
+    // metadata car of any size corrupts every upload.  This is the port the
+    // TCP/ZMQ sinks are connected to, so the envelope must be normalised here.
+    message_port_pub(pmt::intern("network"), pmt::cons(pmt::PMT_NIL, data));
 
     while (!recently_sent_.empty() &&
            timestamp - recently_sent_.front().sent_ms > kDuplicateWindowMs) {
@@ -188,12 +193,8 @@ void FrameMonitor::handle(const pmt::pmt_t& message, const char* path)
         recently_sent_.push_back({timestamp, payload});
         // Publish before formatting/logging: the first decoder branch to
         // complete a frame remains the minimum-latency proxy path.
-        // The uploader (packaging/payload/proxy/proxy_mmt_gui.exe) reads the
-        // frame from a hard-coded 10-byte offset into the serialized PMT and
-        // validates nothing.  That offset holds only for
-        // cons(PMT_NIL, u8vector), so a metadata car of any size corrupts
-        // every upload.  Normalise the envelope here, once, for every
-        // producer.
+        // Normalised for the same reason as the "network" port above, so that
+        // re-pointing a transport at this port cannot reintroduce the bug.
         message_port_pub(pmt::intern("out"), pmt::cons(pmt::PMT_NIL, data));
         if (payload_callback_)
             payload_callback_(payload);
