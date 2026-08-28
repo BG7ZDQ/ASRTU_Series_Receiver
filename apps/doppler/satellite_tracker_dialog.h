@@ -34,7 +34,7 @@ private:
     void updateTle();
     void downloadNextSource();
     void finishDownloads();
-    bool installTle(const QByteArray& data, const QString& source);
+    bool installTle(const QByteArray& tleData, const QString& source);
     void refreshFrequencyPresets(bool chooseDefault);
     void updateTracking();
     void selectPreferredSatellite();

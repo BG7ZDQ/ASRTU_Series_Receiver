@@ -143,6 +143,15 @@ if(UNIX AND NOT APPLE)
 endif()
 
 if(WIN32)
+    add_library(asrtu_sgp4 STATIC
+        third_party/sgp4/sgp4.c
+    )
+    target_include_directories(asrtu_sgp4 PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/sgp4)
+    if(MSVC)
+        target_compile_options(asrtu_sgp4 PRIVATE /w)
+    endif()
+
     add_executable(ASRTU1_Launcher WIN32
         apps/launcher/suite_launcher.cpp
         libs/common/translation.cpp
@@ -170,7 +179,6 @@ if(WIN32)
         apps/doppler/satellite_tracker_dialog.h
         libs/common/translation.cpp
         libs/common/translation.h
-        third_party/sgp4/sgp4.c
         third_party/sgp4/sgp4.h
         apps/launcher/launcher_resources.qrc
         apps/dsp/application_icons.qrc
@@ -181,6 +189,7 @@ if(WIN32)
         ${CMAKE_CURRENT_SOURCE_DIR}/apps/doppler
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/sgp4)
     target_link_libraries(ASRTU_Doppler PRIVATE
+        asrtu_sgp4
         Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network Qt5::WinMain)
     target_compile_definitions(ASRTU_Doppler PRIVATE
         NOMINMAX WIN32_LEAN_AND_MEAN)
