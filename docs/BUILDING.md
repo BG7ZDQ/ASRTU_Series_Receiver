@@ -8,7 +8,7 @@
 - Visual Studio 2022 Build Tools（MSVC）
 - CMake 3.20+
 - Qt 5、Qwt、GNU Radio 3.10
-- `gr-lilacsat`、`gr-hyacinthsat`
+- `gr-lilacsat`、`gr-hyacinth`（兼容 ABI 名称仍为 `hyacinthsat`）
 - radioconda（默认路径为 `C:\ProgramData\radioconda`）
 
 ```powershell
@@ -52,7 +52,7 @@ sudo apt install build-essential cmake ninja-build pkg-config \
 ```
 
 此外必须先从源码安装与 GNU Radio 3.10 兼容的 `gr-lilacsat` 和
-`gr-hyacinthsat`。若它们安装在非系统前缀，请把该前缀加入
+`gr-hyacinth`。若它们安装在非系统前缀，请把该前缀加入
 `CMAKE_PREFIX_PATH`、`CMAKE_INCLUDE_PATH` 和 `CMAKE_LIBRARY_PATH`。
 
 ```bash
@@ -73,7 +73,7 @@ cmake --build build-linux --parallel
 Linux 当前范围与限制：
 
 - 录音文件、GNU Radio DSP、FEC、Qt图形、TCP/ZMQ输出可作为主要移植路径。
-- 实时声卡能否工作取决于本机 GNU Radio 音频后端和 `gr-hyacinthsat` 的
+- 实时声卡能否工作取决于本机 GNU Radio 音频后端和 `gr-hyacinth` 的
   `stereo_iq_source` 实现，需要在目标发行版实测。
 - SDR# 本地共享内存桥使用 Windows named mapping；Linux 构建中该输入不会
   产生样本，需要改用声卡/录音，或另行实现跨平台共享传输。

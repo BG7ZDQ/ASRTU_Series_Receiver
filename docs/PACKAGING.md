@@ -20,7 +20,7 @@
 .\packaging\inno\build_installer.ps1 -RebuildDsp
 ```
 
-此路径另外要求安装 radioconda/GNU Radio、Qt、Qwt、`gr-lilacsat` 和 `gr-hyacinthsat` 开发环境。
+此路径另外要求安装 radioconda/GNU Radio、Qt、Qwt、`gr-lilacsat` 和 `gr-hyacinth` 开发环境。
 
 ## 第三方再分发
 

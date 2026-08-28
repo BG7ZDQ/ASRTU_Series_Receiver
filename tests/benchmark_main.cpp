@@ -31,7 +31,7 @@ int main(int argc, char* argv[])
 {
     QCoreApplication application(argc, argv);
     if (application.arguments().size() < 3 || application.arguments().size() > 7) {
-        std::cerr << "Usage: ASRTU1_Benchmark <input.wav> <result.json> [if_hz] [--real-if] [--no-parallel] [--no-openhoshimi] [--legacy-agc]\n";
+        std::cerr << "Usage: ASRTU1_Benchmark <input.wav> <result.json> [if_hz] [--real-if] [--no-openhoshimi] [--legacy-agc]\n";
         return 2;
     }
 
@@ -45,9 +45,7 @@ int main(int argc, char* argv[])
     AsrtuFlowgraph::Options options;
     options.wav_path = wavPath.toStdString();
     for (const auto& argument : application.arguments().mid(3)) {
-        if (argument == QStringLiteral("--no-parallel"))
-            options.enable_parallel_decoder = false;
-        else if (argument == QStringLiteral("--no-openhoshimi"))
+        if (argument == QStringLiteral("--no-openhoshimi"))
             options.enable_openhoshimi_decoder = false;
         else if (argument == QStringLiteral("--legacy-agc"))
             options.use_legacy_feedforward_agc = true;
@@ -122,8 +120,8 @@ int main(int argc, char* argv[])
         { QStringLiteral("frame_count"), hashes.size() },
         { QStringLiteral("primary_frame_count"),
           double(flowgraph.primaryFrameCount()) },
-        { QStringLiteral("parallel_frame_count"),
-          double(flowgraph.parallelFrameCount()) },
+        { QStringLiteral("openhoshimi_frame_count"),
+          double(flowgraph.openHoshimiFrameCount()) },
         { QStringLiteral("suppressed_duplicate_count"),
           double(flowgraph.suppressedDuplicateCount()) },
         { QStringLiteral("stereo_iq_content_mismatch"),

@@ -46,7 +46,6 @@ public:
         double replay_rate = 30.0;
         bool enable_gui = true;
         bool enable_network = true;
-        bool enable_parallel_decoder = true;
         bool enable_openhoshimi_decoder = true;
         bool use_legacy_feedforward_agc = false; // benchmark/regression only
         FrameMonitor::PayloadCallback payload_callback;
@@ -69,7 +68,7 @@ public:
     bool synced(double timeoutSeconds = 1.5) const;
     std::uint64_t frameCount() const;
     std::uint64_t primaryFrameCount() const;
-    std::uint64_t parallelFrameCount() const;
+    std::uint64_t openHoshimiFrameCount() const;
     std::uint64_t suppressedDuplicateCount() const;
 
     QWidget* inputSpectrumWidget() const;

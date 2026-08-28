@@ -1,18 +1,16 @@
-# Parallel decoder path
+# Decoder paths
 
-The DSP runs two synchronizer paths from the same filtered and normalized
-complex sample stream. The original path uses the existing PFB clock recovery,
-Costas loop and equalizer. The diversity path uses a wider band-edge FLL,
-Gardner timing recovery and a separate Costas loop. Each path keeps the two
-one-bit convolutional phase hypotheses required by the ASRTU framing chain.
+The DSP runs the native GNU Radio receiver and the complete OpenHoshimi
+soundmodem core in parallel. The native path uses PFB clock recovery, a Costas
+loop, an equalizer and two convolutional phase hypotheses. OpenHoshimi keeps
+its own input conditioning, synchronization and CCSDS decoder.
 
-All successful 223-byte FEC frames enter `FrameMonitor` and are published
-immediately. A short mutex serializes each complete log/callback/message
-dispatch, but there is no client-side holding window or de-duplication. This
-preserves the lowest possible latency; the receiving server performs CRC
-de-duplication.
+All successful 223-byte FEC frames enter `FrameMonitor`. The first copy is
+published immediately through a metadata-free PMT envelope; identical copies
+from the other decoder are suppressed for two seconds. There is no arbitration
+holding window on valid FEC frames, so this preserves minimum upload latency.
 
-## Soundmodem CLI review
+## Retired GNU diversity experiment
 
 The diversity topology was evaluated against
 `CLA-179/Lilacsat-soundmodem-CLi`. No source code from that repository is
@@ -38,9 +36,12 @@ The following CLI implementation details were intentionally not carried over:
 - Several stream adapters use `std::deque` one sample at a time instead of a
   fixed ring buffer or scheduler-owned buffers.
 
-The ASRTU implementation therefore shares DDC, low-pass filtering and the
-existing feed-forward AGC. Only carrier/timing synchronization and downstream
-Viterbi/FEC work are duplicated.
+An earlier build retained a second GNU Radio synchronizer inspired by that
+topology. It shared the native DDC/AGC and duplicated FLL, Gardner timing,
+Costas, Viterbi and FEC blocks. Once the complete OpenHoshimi core was added,
+an 11-recording A/B test found no frame hash unique to this experimental path.
+Removing it reduced benchmark CPU time by approximately 35--49% without
+changing any final unique-frame set, so it was retired.
 
 The former GNU Radio `feedforward_agc_cc(1024)` was non-causal and scanned the
 full window per output sample. At 48 kHz it added about 21.3 ms look-ahead and
@@ -65,8 +66,9 @@ integration test.
 The tested set gained two frames in total and had no frame-count regression.
 CPU time increased by roughly 10–30% on these short offline runs; wall time was
 essentially unchanged because WAV playback and GNU Radio scheduling overlap.
-Use `ASRTU1_Benchmark ... --no-parallel` to reproduce the original-only result,
-and `--real-if` for mono 12 kHz IF recordings.
+These figures describe the historical GNU diversity experiment. Current builds
+use the native receiver plus OpenHoshimi; use `--no-openhoshimi` to benchmark
+the native path alone, and `--real-if` for mono 12 kHz IF recordings.
 
 After replacing the 1024-sample feed-forward AGC with the bounded causal AGC,
 the same four recordings each produced 73 unique frames. The former parallel

@@ -24,6 +24,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QPointer>
 #include <QResizeEvent>
 #include <QSettings>
 #include <QScreen>
@@ -41,6 +42,7 @@
 #include <cmath>
 #include <functional>
 #include <stdexcept>
+#include <thread>
 
 namespace {
 class RightClickResetFilter final : public QObject
@@ -731,18 +733,69 @@ void MainWindow::switchAudioDevice(int deviceId)
         (deviceId == audio_device_id_ && flowgraph_))
         return;
 
+    if (audio_switch_in_progress_) {
+        pending_audio_device_id_ = deviceId;
+        appendLog(QStringLiteral("Audio input switch queued for device ID %1")
+                      .arg(deviceId));
+        return;
+    }
+
     appendLog(QStringLiteral("Switching audio input device: %1 -> %2")
                   .arg(audio_device_id_).arg(deviceId));
     status_timer_->stop();
-    QWidget* oldCentral = takeCentralWidget();
+    setSyncDisplay(false);
+    audio_switch_in_progress_ = true;
+    pending_audio_device_id_ = -1;
     const int oldDeviceId = audio_device_id_;
-    try {
-        if (flowgraph_)
-            flowgraph_->stop();
-        flowgraph_.reset();
-        delete oldCentral;
-        oldCentral = nullptr;
+    AsrtuFlowgraph* stoppingFlowgraph = flowgraph_.release();
+    if (!stoppingFlowgraph) {
+        finishAudioDeviceSwitch(nullptr, deviceId, oldDeviceId, {});
+        return;
+    }
 
+    // Audio drivers may block while a capture endpoint is being reset or
+    // closed (notably during RDP transitions and USB removal). Never execute
+    // that wait on Qt's GUI thread. The plots remain visible but inactive
+    // until the worker reports completion.
+    const QPointer<MainWindow> self(this);
+    std::thread([self, stoppingFlowgraph, deviceId, oldDeviceId] {
+        QString stopError;
+        try {
+            stoppingFlowgraph->stop();
+        } catch (const std::exception& error) {
+            stopError = QString::fromUtf8(error.what());
+        } catch (...) {
+            stopError = QStringLiteral("Unknown error while stopping audio input");
+        }
+        if (!self)
+            return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, stoppingFlowgraph, deviceId, oldDeviceId, stopError] {
+                if (self)
+                    self->finishAudioDeviceSwitch(stoppingFlowgraph, deviceId,
+                                                  oldDeviceId, stopError);
+            },
+            Qt::QueuedConnection);
+    }).detach();
+}
+
+void MainWindow::finishAudioDeviceSwitch(AsrtuFlowgraph* stoppedFlowgraph,
+                                         int deviceId, int oldDeviceId,
+                                         const QString& stopError)
+{
+    QWidget* oldCentral = takeCentralWidget();
+    if (stopError.isEmpty()) {
+        delete stoppedFlowgraph;
+    } else {
+        // Do not risk repeating a failed driver shutdown on the GUI thread.
+        // The abandoned graph is reclaimed when the process exits.
+        appendLog(QStringLiteral("Audio input stop failed; old graph abandoned: %1")
+                      .arg(stopError));
+    }
+    delete oldCentral;
+    oldCentral = nullptr;
+    try {
         if (recording_enabled_) {
             ++recording_segment_;
             recording_path_ = QDir(session_directory_).filePath(
@@ -759,7 +812,6 @@ void MainWindow::switchAudioDevice(int deviceId)
             appendLog(QStringLiteral("Automatic WAV recording continued: %1")
                           .arg(compactSessionPath(session_directory_, recording_path_)));
     } catch (const std::exception& error) {
-        delete oldCentral;
         flowgraph_.reset();
         audio_device_id_ = oldDeviceId;
         appendLog(QStringLiteral("Audio device switch failed: %1")
@@ -810,8 +862,14 @@ void MainWindow::switchAudioDevice(int deviceId)
     rssi_range_ready_ = false;
     iq_mismatch_ticks_ = 0;
     iq_mismatch_warned_ = false;
+    audio_switch_in_progress_ = false;
     status_timer_->start(200);
     updateStatus();
+    const int queuedDevice = pending_audio_device_id_;
+    pending_audio_device_id_ = -1;
+    if (queuedDevice >= 0 && queuedDevice != audio_device_id_)
+        QTimer::singleShot(0, this,
+                           [this, queuedDevice] { switchAudioDevice(queuedDevice); });
 }
 
 void MainWindow::submitSatnogsFrame(const QByteArray& frame)

@@ -124,6 +124,6 @@ Languages: **中文** · [English](README_EN.md) · [日本語](README_JA.md)
 
 本项目由 BG7ZDQ 以 [MIT License](LICENSE) 开源。第三方组件仍分别适用各自上游许可证，详见 [THIRD_PARTY.md](THIRD_PARTY.md)；MIT 许可不替代、修改或扩大任何第三方授权。
 
-GNU Radio 3.x、`gr-lilacsat` 和 `gr-hyacinthsat` 属 GPL 系依赖。MIT 源码可以与 GPL 组件配合使用，但包含和链接这些组件的完整二进制发行物还必须满足相应 GPL 源码、许可证和版权告知义务。SDR# 与上传代理不属于本项目 MIT 授权范围。
+GNU Radio 3.x、`gr-lilacsat` 和 `gr-hyacinth` 属 GPL 系依赖。MIT 源码可以与 GPL 组件配合使用，但包含和链接这些组件的完整二进制发行物还必须满足相应 GPL 源码、许可证和版权告知义务。SDR# 与上传代理不属于本项目 MIT 授权范围。
 
 本项目与 SDR#、GNU Radio 及所支持卫星的原作者或运营方不存在官方隶属或背书关系，除非相应权利方另有书面说明。

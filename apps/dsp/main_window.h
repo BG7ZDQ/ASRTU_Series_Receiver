@@ -35,6 +35,9 @@ private:
     void setupControlServer();
     void handleControlSocket(QLocalSocket* socket);
     void switchAudioDevice(int deviceId);
+    void finishAudioDeviceSwitch(AsrtuFlowgraph* stoppedFlowgraph,
+                                 int deviceId, int oldDeviceId,
+                                 const QString& stopError);
     void handleDecodedFrame(const QByteArray& frame);
     std::unique_ptr<AsrtuFlowgraph> createFlowgraph(int deviceId,
                                                     const QString& recordingPath);
@@ -63,7 +66,9 @@ private:
     bool real_if_12khz_ = false;
     bool shared_iq_bridge_ = false;
     bool recording_enabled_ = false;
+    bool audio_switch_in_progress_ = false;
     int audio_device_id_ = -1;
+    int pending_audio_device_id_ = -1;
     int recording_segment_ = 1;
     std::unique_ptr<SsdvReceiver> ssdv_receiver_;
     SsdvImageWindow* ssdv_window_ = nullptr;

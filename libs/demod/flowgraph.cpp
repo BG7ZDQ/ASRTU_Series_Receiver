@@ -364,24 +364,6 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
     const auto fec_a = FecCandidateSink::make();
     const auto fec_b = FecCandidateSink::make();
 
-    // Synchronizer diversity based on the useful topology of
-    // Lilacsat-soundmodem-CLI. Input conditioning is shared, so its expensive
-    // peak-scanning AGC, FFT/UI and network work are not duplicated.
-    const auto parallel_fll = gr::digital::fll_band_edge_cc::make(
-        kSps, kAlpha, 100, 0.068f);
-    const auto parallel_clock = gr::digital::symbol_sync_cc::make(
-        gr::digital::TED_GARDNER, kSps, 0.01f,
-        float(std::sqrt(2.0) / 2.0), 1.0f, 0.05f, 1);
-    const auto parallel_costas = gr::digital::costas_loop_cc::make(0.068f, 2, false);
-    const auto parallel_real = gr::blocks::complex_to_real::make(1);
-    const auto parallel_delay = gr::blocks::delay::make(sizeof(float), 1);
-    const auto parallel_viterbi_a = gr::lilacsat::vitfilt27_fb::make();
-    const auto parallel_viterbi_b = gr::lilacsat::vitfilt27_fb::make();
-    const auto parallel_unpack_a = gr::blocks::unpack_k_bits_bb::make(8);
-    const auto parallel_unpack_b = gr::blocks::unpack_k_bits_bb::make(8);
-    const auto parallel_fec_a = FecCandidateSink::make();
-    const auto parallel_fec_b = FecCandidateSink::make();
-
     snr_probe_ = gr::digital::probe_mpsk_snr_est_c::make(
         gr::digital::SNR_EST_SVR, 10000, 0.001);
     const auto rms = gr::blocks::rms_cf::make(0.0001);
@@ -597,21 +579,8 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
     tb_->connect(unpack_a, 0, fec_a, 0);
     tb_->connect(unpack_b, 0, fec_b, 0);
 
-    if (options.enable_parallel_decoder) {
-        tb_->connect(agc, 0, parallel_fll, 0);
-        tb_->connect(parallel_fll, 0, parallel_clock, 0);
-        tb_->connect(parallel_clock, 0, parallel_costas, 0);
-        tb_->connect(parallel_costas, 0, parallel_real, 0);
-        tb_->connect(parallel_real, 0, parallel_viterbi_a, 0);
-        tb_->connect(parallel_real, 0, parallel_delay, 0);
-        tb_->connect(parallel_delay, 0, parallel_viterbi_b, 0);
-        tb_->connect(parallel_viterbi_a, 0, parallel_unpack_a, 0);
-        tb_->connect(parallel_viterbi_b, 0, parallel_unpack_b, 0);
-        tb_->connect(parallel_unpack_a, 0, parallel_fec_a, 0);
-        tb_->connect(parallel_unpack_b, 0, parallel_fec_b, 0);
-    }
     if (openHoshimiDecoder) {
-        tb_->msg_connect(openHoshimiDecoder, "out", frame_monitor_, "parallel");
+        tb_->msg_connect(openHoshimiDecoder, "out", frame_monitor_, "openhoshimi");
         tb_->msg_connect(openHoshimiDecoder, "failed", frame_monitor_,
                          "local_openhoshimi");
     }
@@ -620,14 +589,6 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
         tb_->msg_connect(fec, "out", frame_monitor_, "primary");
         tb_->msg_connect(fec, "failed", frame_monitor_, "local_original");
     }
-    if (options.enable_parallel_decoder) {
-        for (const auto& fec : { parallel_fec_a, parallel_fec_b }) {
-            tb_->msg_connect(fec, "out", frame_monitor_, "parallel");
-            tb_->msg_connect(fec, "failed", frame_monitor_,
-                             "local_soundmodem");
-        }
-    }
-
     if (options.enable_network) {
         const auto tcp = gr::network::socket_pdu::make(
             "TCP_SERVER", "127.0.0.1", "9985", 10000, false);
@@ -720,9 +681,9 @@ std::uint64_t AsrtuFlowgraph::primaryFrameCount() const
 {
     return frame_monitor_->primaryFrameCount();
 }
-std::uint64_t AsrtuFlowgraph::parallelFrameCount() const
+std::uint64_t AsrtuFlowgraph::openHoshimiFrameCount() const
 {
-    return frame_monitor_->parallelFrameCount();
+    return frame_monitor_->openHoshimiFrameCount();
 }
 std::uint64_t AsrtuFlowgraph::suppressedDuplicateCount() const
 {

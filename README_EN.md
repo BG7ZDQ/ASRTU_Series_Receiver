@@ -119,6 +119,6 @@ See [docs/BUILDING.md](docs/BUILDING.md) for the complete environment, current L
 
 BG7ZDQ publishes this project under the [MIT License](LICENSE). Third-party components remain under their respective upstream licenses; see [THIRD_PARTY.md](THIRD_PARTY.md). The MIT license does not replace, modify, or extend any third-party grant.
 
-GNU Radio 3.x, `gr-lilacsat`, and `gr-hyacinthsat` are GPL-family dependencies. MIT-licensed source may interoperate with them, but binary distributions containing or linking them must also satisfy the applicable GPL source, license, and attribution obligations. SDR# and the upload proxy are outside this project's MIT grant.
+GNU Radio 3.x, `gr-lilacsat`, and `gr-hyacinth` are GPL-family dependencies. MIT-licensed source may interoperate with them, but binary distributions containing or linking them must also satisfy the applicable GPL source, license, and attribution obligations. SDR# and the upload proxy are outside this project's MIT grant.
 
 This project is not officially affiliated with or endorsed by SDR#, GNU Radio, or the authors and operators of supported satellites unless separately stated in writing by the relevant rights holder.

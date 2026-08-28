@@ -6,7 +6,7 @@ The repository's MIT License covers only original ASRTU Series Receiver code own
 | --- | --- | --- |
 | GNU Radio 3.x | https://github.com/gnuradio/gnuradio | GPL-3.0-or-later; the receiver links against GNU Radio 3.10 libraries |
 | gr-lilacsat | https://github.com/bg2bhc/gr-lilacsat | GPL-3.0-or-later in the 3.10-compatible source used by this project |
-| gr-hyacinthsat | https://github.com/HyacinthSat/gr-hyacinthsat | GPL-3.0-or-later; local audio-source compatibility changes retain this license |
+| gr-hyacinth | https://github.com/HyacinthSat/gr-hyacinth | GPL-3.0-or-later; the installed ABI and GNU Radio namespace remain `hyacinthsat` for compatibility |
 | SSDV DSLWP decoder | https://github.com/daniestevez/ssdv (derived from https://github.com/fsphil/ssdv) | GPL-3.0-or-later; vendored in `third_party/ssdv_dslwp/`, including the complete upstream `COPYING` file |
 | Qt 5 | https://www.qt.io/ | Use under the license applicable to the selected Qt distribution, commonly LGPLv3/GPLv3 for open-source Qt builds |
 | Qwt | https://qwt.sourceforge.io/ | Qwt License 1.0 |

@@ -34,14 +34,13 @@ FrameMonitor::FrameMonitor(Callback callback, PayloadCallback payloadCallback,
       payload_callback_(std::move(payloadCallback)),
       local_candidate_callback_(std::move(localCandidateCallback))
 {
-    for (const char* name : { "primary", "parallel" }) {
+    for (const char* name : { "primary", "openhoshimi" }) {
         const auto port = pmt::intern(name);
         message_port_register_in(port);
         set_msg_handler(port, [this, name](pmt::pmt_t msg) { handle(msg, name); });
     }
     for (const auto& entry : {
              std::pair{"local_openhoshimi", CandidatePriority::OpenHoshimi},
-             std::pair{"local_soundmodem", CandidatePriority::Soundmodem},
              std::pair{"local_original", CandidatePriority::Original},
          }) {
         const auto port = pmt::intern(entry.first);
@@ -169,8 +168,8 @@ void FrameMonitor::handle(const pmt::pmt_t& message, const char* path)
 
     last_frame_ms_.store(timestamp, std::memory_order_relaxed);
     const auto count = frame_count_.fetch_add(1, std::memory_order_relaxed) + 1;
-    if (std::string(path) == "parallel")
-        parallel_frame_count_.fetch_add(1, std::memory_order_relaxed);
+    if (std::string(path) == "openhoshimi")
+        openhoshimi_frame_count_.fetch_add(1, std::memory_order_relaxed);
     else
         primary_frame_count_.fetch_add(1, std::memory_order_relaxed);
 
@@ -209,9 +208,9 @@ std::uint64_t FrameMonitor::primaryFrameCount() const noexcept
     return primary_frame_count_.load(std::memory_order_relaxed);
 }
 
-std::uint64_t FrameMonitor::parallelFrameCount() const noexcept
+std::uint64_t FrameMonitor::openHoshimiFrameCount() const noexcept
 {
-    return parallel_frame_count_.load(std::memory_order_relaxed);
+    return openhoshimi_frame_count_.load(std::memory_order_relaxed);
 }
 
 std::uint64_t FrameMonitor::suppressedDuplicateCount() const noexcept

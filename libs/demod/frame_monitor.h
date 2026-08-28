@@ -26,15 +26,14 @@ public:
 
     enum class CandidatePriority {
         OpenHoshimi = 0,
-        Soundmodem = 1,
-        Original = 2,
+        Original = 1,
     };
 
     static sptr make(Callback callback, PayloadCallback payloadCallback = {},
                      PayloadCallback localCandidateCallback = {});
     std::uint64_t frameCount() const noexcept;
     std::uint64_t primaryFrameCount() const noexcept;
-    std::uint64_t parallelFrameCount() const noexcept;
+    std::uint64_t openHoshimiFrameCount() const noexcept;
     std::uint64_t suppressedDuplicateCount() const noexcept;
     double secondsSinceFrame() const noexcept;
     ~FrameMonitor() override;
@@ -68,7 +67,7 @@ private:
     std::deque<RecentFrame> recently_sent_;
     std::atomic<std::uint64_t> frame_count_{0};
     std::atomic<std::uint64_t> primary_frame_count_{0};
-    std::atomic<std::uint64_t> parallel_frame_count_{0};
+    std::atomic<std::uint64_t> openhoshimi_frame_count_{0};
     std::atomic<std::uint64_t> suppressed_duplicate_count_{0};
     std::atomic<std::int64_t> last_frame_ms_{0};
 
