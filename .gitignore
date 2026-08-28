@@ -2,6 +2,7 @@
 /outputs/
 /build/
 /build-*/
+/dist/
 /portable/
 /ui-*.png
 /packaging/inno/stage/
@@ -12,6 +13,15 @@
 
 # Local research/build workspace
 /work/
+/.ci-local/
+/.clang-format
+/.clang-tidy
+/packaging/arch/asrtu-series-receiver/
+/packaging/arch/gr-hyacinth/
+/packaging/arch/gr-lilacsat/
+/packaging/arch/pkg/
+/packaging/arch/src/
+/packaging/arch/*.pkg.tar.*
 
 # User and runtime state
 config.cfg
