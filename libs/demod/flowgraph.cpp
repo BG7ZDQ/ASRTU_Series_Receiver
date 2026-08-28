@@ -281,7 +281,7 @@ private:
 };
 }
 
-AsrtuFlowgraph::AsrtuFlowgraph(LogCallback callback, const Options& options)
+AsrtuFlowgraph::AsrtuFlowgraph(LogCallback callback, const Options &options)
 {
     build(std::move(callback), options);
 }

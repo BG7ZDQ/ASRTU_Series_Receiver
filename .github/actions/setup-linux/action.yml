@@ -45,8 +45,10 @@ runs:
     - name: Export dependency paths
       shell: bash
       run: |
+        oot_library_dirs=$(find "$RUNNER_TEMP/asrtu-oot/lib" -type f \
+          -name 'libgnuradio-*.so*' -printf '%h\n' | sort -u | paste -sd:)
         echo "ASRTU_OOT_PREFIX=$RUNNER_TEMP/asrtu-oot" >> "$GITHUB_ENV"
         echo "CMAKE_PREFIX_PATH=$RUNNER_TEMP/asrtu-oot" >> "$GITHUB_ENV"
         echo "CMAKE_INCLUDE_PATH=$RUNNER_TEMP/asrtu-oot/include" >> "$GITHUB_ENV"
-        echo "CMAKE_LIBRARY_PATH=$RUNNER_TEMP/asrtu-oot/lib" >> "$GITHUB_ENV"
-        echo "LD_LIBRARY_PATH=$RUNNER_TEMP/asrtu-oot/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+        echo "CMAKE_LIBRARY_PATH=$oot_library_dirs" >> "$GITHUB_ENV"
+        echo "LD_LIBRARY_PATH=$oot_library_dirs${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"

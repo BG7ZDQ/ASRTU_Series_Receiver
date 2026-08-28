@@ -11,4 +11,3 @@ cppcheck --project="$build_dir/compile_commands.json" \
 	--suppress=syntaxError \
 	--suppress=unknownMacro \
 	--suppress=checkersReport
-

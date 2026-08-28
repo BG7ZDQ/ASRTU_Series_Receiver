@@ -31,6 +31,26 @@ function Build-Oot([string]$Name, [string]$Repository, [string]$Revision,
     if ($LASTEXITCODE -ne 0) {
         throw "Unable to check out $Revision"
     }
+    if ($Name -eq 'gr-lilacsat') {
+        $libraryCmake = Join-Path $sourceDir 'lib\CMakeLists.txt'
+        $contents = Get-Content -LiteralPath $libraryCmake -Raw
+        $old = 'add_library(gnuradio-lilacsat SHARED ${lilacsat_sources})'
+        $new = @'
+if(WIN32)
+    set(lilacsat_sources
+        ccsds/tab.c
+        ccsds/viterbi27.c
+        vitfilt27_fb_impl.cc)
+endif()
+
+add_library(gnuradio-lilacsat SHARED ${lilacsat_sources})
+'@
+        if (-not $contents.Contains($old)) {
+            throw "Unable to prepare the Windows gr-lilacsat source set"
+        }
+        Set-Content -LiteralPath $libraryCmake -NoNewline `
+            -Value $contents.Replace($old, $new)
+    }
     $configureArgs = @('-S', $sourceDir, '-B', $buildDir, '-G', 'Ninja',
         '-DCMAKE_BUILD_TYPE=RelWithDebInfo',
         "-DCMAKE_INSTALL_PREFIX=$ootPrefix",

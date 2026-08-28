@@ -26,13 +26,28 @@ mkdir -p "$output_dir"
 cmake --install "$build_dir" --prefix "$appdir/usr"
 install -d "$appdir/usr/lib"
 
-for library in libgnuradio-lilacsat.so libgnuradio-hyacinthsat.so; do
-	cp -a "$oot_prefix/lib/$library"* "$appdir/usr/lib/"
-done
+copy_oot_library()
+{
+	local name=$1
+	local -a files
+
+	mapfile -t files < <(find "$oot_prefix" \( -type f -o -type l \) \
+		-name "$name*" -print)
+	if ((${#files[@]} == 0)); then
+		echo "unable to find $name in $oot_prefix" >&2
+		exit 1
+	fi
+	cp -a "${files[@]}" "$appdir/usr/lib/"
+}
+
+copy_oot_library libgnuradio-lilacsat.so
+copy_oot_library libgnuradio-hyacinthsat.so
+oot_library_dirs=$(find "$oot_prefix" -type f -name 'libgnuradio-*.so*' \
+	-printf '%h\n' | sort -u | paste -sd:)
 
 pushd "$output_dir" >/dev/null
 PATH="$tool_dir:$PATH" \
-LD_LIBRARY_PATH="$appdir/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+LD_LIBRARY_PATH="$appdir/usr/lib:$oot_library_dirs${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 LINUXDEPLOY_PLUGIN_QT="$linuxdeploy_plugin_qt" \
 LINUXDEPLOY_OUTPUT_VERSION="$version" \
 NO_STRIP=1 ARCH=x86_64 "$linuxdeploy" \
