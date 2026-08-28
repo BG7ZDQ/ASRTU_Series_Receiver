@@ -185,12 +185,8 @@ void FrameMonitor::handle(const pmt::pmt_t& message, const char* path)
         recently_sent_.push_back({timestamp, payload});
         // Publish before formatting/logging: the first decoder branch to
         // complete a frame remains the minimum-latency proxy path.
-        // The uploader (packaging/payload/proxy/proxy_mmt_gui.exe) reads the
-        // frame from a hard-coded 10-byte offset into the serialized PMT and
-        // validates nothing.  That offset holds only for
-        // cons(PMT_NIL, u8vector), so a metadata car of any size corrupts
-        // every upload.  Normalise the envelope here, once, for every
-        // producer.
+        // The uploader reads the frame from a fixed 10-byte offset in the
+        // serialized PMT, so every transport uses a metadata-free envelope.
         message_port_pub(pmt::intern("out"), pmt::cons(pmt::PMT_NIL, data));
         if (payload_callback_)
             payload_callback_(payload);

@@ -53,7 +53,7 @@ public:
         FrameMonitor::PayloadCallback local_candidate_callback;
     };
 
-    explicit AsrtuFlowgraph(LogCallback callback, Options options = {});
+    AsrtuFlowgraph(LogCallback callback, Options options);
     ~AsrtuFlowgraph();
 
     void start();
