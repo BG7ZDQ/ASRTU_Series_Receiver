@@ -264,6 +264,10 @@ static void sm_agc(struct sm_demod *d, const struct sm_cf *in,
 		d->agc_buffer[d->agc_index] = in[i];
 		d->agc_index = (d->agc_index + 1) % SM_AGC_WINDOW;
 
+		while (d->agc_dq_head != d->agc_dq_tail &&
+		       d->agc_dq_pos[d->agc_dq_head] + SM_AGC_WINDOW <= t)
+			d->agc_dq_head = (d->agc_dq_head + 1) % cap;
+
 		/* Drop back entries no larger than the incoming envelope. */
 		while (d->agc_dq_head != d->agc_dq_tail) {
 			size_t back = (d->agc_dq_tail + cap - 1) % cap;
@@ -276,11 +280,6 @@ static void sm_agc(struct sm_demod *d, const struct sm_cf *in,
 		d->agc_dq_pos[d->agc_dq_tail] = t;
 		d->agc_dq_env[d->agc_dq_tail] = e;
 		d->agc_dq_tail = (d->agc_dq_tail + 1) % cap;
-
-		/* Drop the front once it leaves the [t-window+1, t] window. */
-		while (d->agc_dq_head != d->agc_dq_tail &&
-		       d->agc_dq_pos[d->agc_dq_head] + SM_AGC_WINDOW <= t)
-			d->agc_dq_head = (d->agc_dq_head + 1) % cap;
 
 		max = d->agc_dq_env[d->agc_dq_head];
 		if (max < 0.0000001f)

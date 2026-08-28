@@ -1352,7 +1352,9 @@ char ssdv_dec_feed(ssdv_t *s, uint8_t *packet, ssdv_mode_t mode)
 			break;
 		default:
 			s->type      = packet[1] - 0x66;
-			s->callsign  = (packet[2] << 24) | (packet[3] << 16) | (packet[4] << 8) | packet[5];
+			s->callsign  = ((uint32_t)packet[2] << 24) |
+				       ((uint32_t)packet[3] << 16) |
+				       ((uint32_t)packet[4] << 8) | packet[5];
 			break;
 		}
 		
@@ -1531,7 +1533,9 @@ char ssdv_dec_is_packet(uint8_t *packet, int *errors, ssdv_mode_t mode)
 			  mode == ssdv_dslwp_mode ? CRC32_DSLWP_MAGIC_VALUE : CRC32_INITIAL_VALUE);
 		
 		i = pkt_offset + pkt_size_crcdata;
-		if(x == (pkt[i + 3] | (pkt[i + 2] << 8) | (pkt[i + 1] << 16) | (pkt[i] << 24)))
+		if(x == (pkt[i + 3] | ((uint32_t)pkt[i + 2] << 8) |
+			 ((uint32_t)pkt[i + 1] << 16) |
+			 ((uint32_t)pkt[i] << 24)))
 		{
 			/* Valid, set the type and continue */
 			type = mode == ssdv_dslwp_mode ? SSDV_TYPE_DSLWP : SSDV_TYPE_NOFEC;
@@ -1550,7 +1554,9 @@ char ssdv_dec_is_packet(uint8_t *packet, int *errors, ssdv_mode_t mode)
 		x = crc32(&pkt[1], pkt_size_crcdata, CRC32_INITIAL_VALUE);
 		
 		i = 1 + pkt_size_crcdata;
-		if(x == (pkt[i + 3] | (pkt[i + 2] << 8) | (pkt[i + 1] << 16) | (pkt[i] << 24)))
+		if(x == (pkt[i + 3] | ((uint32_t)pkt[i + 2] << 8) |
+			 ((uint32_t)pkt[i + 1] << 16) |
+			 ((uint32_t)pkt[i] << 24)))
 		{
 			/* Valid, set the type and continue */
 			type = SSDV_TYPE_NORMAL;
@@ -1574,7 +1580,9 @@ char ssdv_dec_is_packet(uint8_t *packet, int *errors, ssdv_mode_t mode)
 		x = crc32(&pkt[1], pkt_size_crcdata, CRC32_INITIAL_VALUE);
 		
 		i = 1 + pkt_size_crcdata;
-		if(x == (pkt[i + 3] | (pkt[i + 2] << 8) | (pkt[i + 1] << 16) | (pkt[i] << 24)))
+		if(x == (pkt[i + 3] | ((uint32_t)pkt[i + 2] << 8) |
+			 ((uint32_t)pkt[i + 1] << 16) |
+			 ((uint32_t)pkt[i] << 24)))
 		{
 			/* Valid, set the type and continue */
 			type = SSDV_TYPE_NORMAL;
@@ -1617,7 +1625,9 @@ void ssdv_dec_header(ssdv_packet_info_t *info, uint8_t *packet, ssdv_mode_t mode
 	
 	if(mode == ssdv_normal_mode)
 	{
-		info->callsign   = (packet[2] << 24) | (packet[3] << 16) | (packet[4] << 8) | packet[5];
+		info->callsign   = ((uint32_t)packet[2] << 24) |
+				   ((uint32_t)packet[3] << 16) |
+				   ((uint32_t)packet[4] << 8) | packet[5];
 		decode_callsign(info->callsign_s, info->callsign);
 		/* The rest of the header coincides with a DSLWP packet header */
 		packet += 6;
@@ -1685,4 +1695,3 @@ int ssdv_pkt_size_header(ssdv_mode_t mode) {
 }
 
 /*****************************************************************************/
-

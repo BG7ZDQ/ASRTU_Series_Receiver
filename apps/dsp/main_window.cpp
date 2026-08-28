@@ -651,6 +651,7 @@ std::unique_ptr<AsrtuFlowgraph> MainWindow::createFlowgraph(
     options.shared_iq_bridge = shared_iq_bridge_;
     options.fast_playback = fast_playback_;
     options.replay_rate = requestedReplayRate();
+    options.enable_network = playback_path_.isEmpty();
     options.audio_device_id = deviceId;
     options.payload_callback = [this](const std::vector<std::uint8_t>& payload) {
         const QByteArray frame(reinterpret_cast<const char*>(payload.data()),

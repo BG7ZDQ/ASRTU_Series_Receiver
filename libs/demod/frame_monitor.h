@@ -49,7 +49,7 @@ private:
     void handleLocalCandidate(const pmt::pmt_t& message,
                               CandidatePriority priority);
     void candidateWorker();
-    static std::uint32_t candidateKey(const std::vector<std::uint8_t>& payload);
+    static std::uint64_t candidateKey(const std::vector<std::uint8_t>& payload);
     static std::string describePdu(const pmt::pmt_t& message);
 
     Callback callback_;
@@ -78,7 +78,7 @@ private:
     };
     std::mutex candidate_mutex_;
     std::condition_variable candidate_cv_;
-    std::map<std::uint32_t, PendingCandidate> pending_candidates_;
+    std::map<std::uint64_t, PendingCandidate> pending_candidates_;
     bool stop_candidate_worker_ = false;
     std::thread candidate_worker_;
 };
