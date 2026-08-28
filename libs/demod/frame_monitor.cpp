@@ -51,7 +51,6 @@ FrameMonitor::FrameMonitor(Callback callback, PayloadCallback payloadCallback,
         });
     }
     message_port_register_out(pmt::intern("out"));
-    message_port_register_out(pmt::intern("network"));
     candidate_worker_ = std::thread([this] { candidateWorker(); });
 }
 
@@ -174,8 +173,6 @@ void FrameMonitor::handle(const pmt::pmt_t& message, const char* path)
         parallel_frame_count_.fetch_add(1, std::memory_order_relaxed);
     else
         primary_frame_count_.fetch_add(1, std::memory_order_relaxed);
-
-    message_port_pub(pmt::intern("network"), message);
 
     while (!recently_sent_.empty() &&
            timestamp - recently_sent_.front().sent_ms > kDuplicateWindowMs) {

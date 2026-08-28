@@ -100,6 +100,7 @@ private:
     std::shared_ptr<gr::digital::pfb_clock_sync_ccf> clock_sync_;
     std::shared_ptr<gr::digital::costas_loop_cc> costas_;
     std::shared_ptr<std::atomic<float>> equalizer_gain_;
+    std::shared_ptr<std::atomic<std::int64_t>> last_input_sample_ms_;
     std::shared_ptr<gr::qtgui::freq_sink_c> input_spectrum_;
     std::shared_ptr<gr::qtgui::freq_sink_f> input_spectrum_real_;
     std::shared_ptr<gr::qtgui::waterfall_sink_c> waterfall_;
@@ -108,5 +109,6 @@ private:
     std::shared_ptr<gr::qtgui::const_sink_c> constellation_sink_;
     FrameMonitor::sptr frame_monitor_;
     bool expects_stereo_iq_ = false;
+    bool monitors_live_audio_ = false;
     bool running_ = false;
 };

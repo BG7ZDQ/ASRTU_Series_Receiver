@@ -48,6 +48,7 @@
 
 #include <QWidget>
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <stdexcept>
 #include <utility>
@@ -60,6 +61,47 @@ constexpr double kRealIfCenterHz = 12000.0;
 constexpr double kRealIfDisplayCenterHz = -kRealIfCenterHz;
 constexpr double kSps = 5.0;
 constexpr float kAlpha = 0.35f;
+
+std::int64_t steadyNowMs()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
+
+class InputActivityProbe final : public gr::sync_block
+{
+public:
+    using sptr = std::shared_ptr<InputActivityProbe>;
+
+    static sptr make(std::shared_ptr<std::atomic<std::int64_t>> lastSampleMs)
+    {
+        return gnuradio::make_block_sptr<InputActivityProbe>(
+            std::move(lastSampleMs));
+    }
+
+    explicit InputActivityProbe(
+        std::shared_ptr<std::atomic<std::int64_t>> lastSampleMs)
+        : gr::sync_block("asrtu_input_activity_probe",
+                         gr::io_signature::make(1, 1, sizeof(gr_complex)),
+                         gr::io_signature::make(0, 0, 0)),
+          last_sample_ms_(std::move(lastSampleMs))
+    {
+    }
+
+    int work(int noutputItems, gr_vector_const_void_star& inputItems,
+             gr_vector_void_star& outputItems) override
+    {
+        (void)inputItems;
+        (void)outputItems;
+        if (noutputItems > 0)
+            last_sample_ms_->store(steadyNowMs(), std::memory_order_relaxed);
+        return noutputItems;
+    }
+
+private:
+    std::shared_ptr<std::atomic<std::int64_t>> last_sample_ms_;
+};
 
 class CausalAgcCc final : public gr::sync_block
 {
@@ -257,6 +299,7 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
     // the visibly accelerated replay rate.
     const double waterfallUpdateSeconds = options.fast_playback ? 0.01 : 0.10;
     expects_stereo_iq_ = !options.shared_iq_bridge && !options.real_if_12khz;
+    monitors_live_audio_ = options.wav_path.empty() && !options.shared_iq_bridge;
     tb_ = gr::make_top_block("Astro-series satellite C++/Qt demodulator", true);
 
     gr::basic_block_sptr source;
@@ -276,6 +319,10 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
     }
     if (!complexSource)
         complexSource = to_complex;
+    if (monitors_live_audio_) {
+        last_input_sample_ms_ =
+            std::make_shared<std::atomic<std::int64_t>>(steadyNowMs());
+    }
     const auto oscillator = gr::analog::sig_source_c::make(
         kIfRate, gr::analog::GR_COS_WAVE, options.input_frequency_hz,
         1.0, gr_complex(0.0f, 0.0f));
@@ -457,7 +504,12 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
                 tb_->connect(source, 1, recorder, 1);
         }
     }
-    gr::basic_block_sptr replayClockedSource = complexSource;
+    gr::basic_block_sptr monitoredSource = complexSource;
+    if (monitors_live_audio_) {
+        const auto activity = InputActivityProbe::make(last_input_sample_ms_);
+        tb_->connect(complexSource, 0, activity, 0);
+    }
+    gr::basic_block_sptr replayClockedSource = monitoredSource;
     if (options.fast_playback) {
         // The raw WAV source can run at ~60x. Replay that fast finishes the
         // file in under a second, so the waterfall never gets to scroll and
@@ -466,11 +518,11 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
         // same clock so its time axis tracks the actual decoder throughput.
         const auto replayThrottle = gr::blocks::throttle::make(
             sizeof(gr_complex), kIfRate * options.replay_rate);
-        tb_->connect(complexSource, 0, replayThrottle, 0);
+        tb_->connect(monitoredSource, 0, replayThrottle, 0);
         tb_->connect(replayThrottle, 0, mixer, 0);
         replayClockedSource = replayThrottle;
     } else {
-        tb_->connect(complexSource, 0, mixer, 0);
+        tb_->connect(monitoredSource, 0, mixer, 0);
     }
     tb_->connect(oscillator, 0, mixer, 1);
     if (options.enable_gui) {
@@ -581,8 +633,8 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
             "TCP_SERVER", "127.0.0.1", "9985", 10000, false);
         char zmqAddress[] = "tcp://127.0.0.1:5555";
         const auto zmq = gr::zeromq::pub_msg_sink::make(zmqAddress, 1000, true);
-        tb_->msg_connect(frame_monitor_, "network", tcp, "pdus");
-        tb_->msg_connect(frame_monitor_, "network", zmq, "in");
+        tb_->msg_connect(frame_monitor_, "out", tcp, "pdus");
+        tb_->msg_connect(frame_monitor_, "out", zmq, "in");
     }
 }
 
@@ -616,11 +668,15 @@ double AsrtuFlowgraph::rssi() const { return rssi_probe_->level(); }
 
 bool AsrtuFlowgraph::inputActive(double timeoutSeconds) const
 {
-    if (!shared_iq_source_)
-        return true;
     const auto timeout = std::chrono::milliseconds(
         std::max(1LL, static_cast<long long>(std::llround(timeoutSeconds * 1000.0))));
-    return shared_iq_source_->hasRecentSamples(timeout);
+    if (shared_iq_source_)
+        return shared_iq_source_->hasRecentSamples(timeout);
+    if (!monitors_live_audio_ || !last_input_sample_ms_)
+        return true;
+    return steadyNowMs() -
+               last_input_sample_ms_->load(std::memory_order_relaxed) <=
+           timeout.count();
 }
 
 bool AsrtuFlowgraph::stereoIqContentMismatch() const

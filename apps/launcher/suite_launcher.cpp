@@ -881,13 +881,13 @@ private:
         }
         const int index = audio_device_->findText(wanted, Qt::MatchFixedString);
         audio_device_->setCurrentIndex(index >= 0 ? index : 0);
-        const int selectedId = audio_device_->currentData().toInt();
         blocker.unblock();
-        if (selectedId != previousId && input_mode_->currentData().toInt() != 2) {
-            notifyRunningDspAudioDevice(selectedId);
-            if (autoSaveTimer_)
-                autoSaveTimer_->start();
-        }
+        // Device enumeration is observational only. RDP logon/logoff and USB
+        // hot-plug can reorder WinMM numeric IDs; treating that reorder as a
+        // user selection used to stop and rebuild the GNU Radio graph from
+        // the UI thread, which could freeze on a disappearing endpoint. The
+        // currentIndexChanged handler still applies an explicit user choice.
+        (void)previousId;
     }
 
     QString savedSatellite() const
