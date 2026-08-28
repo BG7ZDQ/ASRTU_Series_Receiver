@@ -581,8 +581,8 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
             "TCP_SERVER", "127.0.0.1", "9985", 10000, false);
         char zmqAddress[] = "tcp://127.0.0.1:5555";
         const auto zmq = gr::zeromq::pub_msg_sink::make(zmqAddress, 1000, true);
-        tb_->msg_connect(frame_monitor_, "out", tcp, "pdus");
-        tb_->msg_connect(frame_monitor_, "out", zmq, "in");
+        tb_->msg_connect(frame_monitor_, "network", tcp, "pdus");
+        tb_->msg_connect(frame_monitor_, "network", zmq, "in");
     }
 }
 
