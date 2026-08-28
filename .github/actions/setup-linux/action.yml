@@ -27,6 +27,7 @@ runs:
           ninja-build \
           patchelf \
           pkg-config \
+          jq \
           qtbase5-dev \
           rpm \
           xvfb

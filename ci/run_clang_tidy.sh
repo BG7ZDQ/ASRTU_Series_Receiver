@@ -11,5 +11,23 @@ if ((${#files[@]} == 0)); then
 	exit 0
 fi
 
+declare -A compile_files
+while IFS= read -r file; do
+	compile_files["$file"]=1
+done < <(jq -r '.[].file' "$build_dir/compile_commands.json")
+
+files=()
+while IFS= read -r file; do
+	file=$(realpath "$file")
+	if [[ -v "compile_files[$file]" ]]; then
+		files+=("$file")
+	fi
+done < <(git diff --name-only --diff-filter=ACMR "$base" HEAD -- \
+	'*.cc' '*.cpp')
+
+if ((${#files[@]} == 0)); then
+	exit 0
+fi
+
 clang-tidy -p "$build_dir" --checks="$checks" --header-filter='^(apps|libs|tests)/' \
 	--warnings-as-errors='*' "${files[@]}"
