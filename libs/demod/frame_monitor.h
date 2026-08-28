@@ -56,8 +56,8 @@ private:
     PayloadCallback payload_callback_;
     PayloadCallback local_candidate_callback_;
     struct RecentFrame {
-        std::int64_t sent_ms;
-        std::vector<std::uint8_t> payload;
+	    std::int64_t sent_ms = 0;
+	    std::vector<std::uint8_t> payload;
     };
 
     // GNU Radio message handlers may be entered concurrently from the main,

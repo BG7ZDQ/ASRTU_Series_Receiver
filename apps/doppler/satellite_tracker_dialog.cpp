@@ -307,10 +307,10 @@ void SatelliteTrackerDialog::finishDownloads()
                          .arg(downloadSources_.size()));
 }
 
-bool SatelliteTrackerDialog::installTle(const QByteArray& data, const QString& source)
+bool SatelliteTrackerDialog::installTle(const QByteArray& tleData, const QString& source)
 {
     Q_UNUSED(source)
-    const QList<QByteArray> rawLines = data.split('\n');
+    const QList<QByteArray> rawLines = tleData.split('\n');
     QVector<QByteArray> lines;
     for (QByteArray line : rawLines) {
         line = line.trimmed();

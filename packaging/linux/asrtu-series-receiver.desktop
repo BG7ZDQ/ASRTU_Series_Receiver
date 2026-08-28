@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=ASRTU Series Receiver
+Comment=ASRTU satellite receiver and decoder
+Exec=ASRTU1_Demod_CQt
+Icon=asrtu-series-receiver
+Categories=Network;HamRadio;
+Terminal=false

@@ -1,0 +1,55 @@
+name: Setup Linux build dependencies
+description: Install and cache the GNU Radio OOT dependencies used by ASRTU.
+
+runs:
+  using: composite
+  steps:
+    - name: Install system dependencies
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install --yes --no-install-recommends \
+          build-essential \
+          ccache \
+          clang \
+          clang-format \
+          clang-tidy \
+          cmake \
+          cppcheck \
+          dpkg-dev \
+          file \
+          gnuradio-dev \
+          libboost-all-dev \
+          libfftw3-dev \
+          libqwt-qt5-dev \
+          libsndfile1-dev \
+          libzmq3-dev \
+          ninja-build \
+          patchelf \
+          pkg-config \
+          jq \
+          qtbase5-dev \
+          rpm \
+          xvfb
+    - name: Restore GNU Radio OOT cache
+      id: oot-cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.temp }}/asrtu-oot
+        key: ${{ runner.os }}-gnuradio-3.10-oot-${{ hashFiles('ci/oot-dependencies.env') }}
+    - name: Build GNU Radio OOT dependencies
+      if: steps.oot-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        "$GITHUB_WORKSPACE/ci/install_linux_oot.sh" \
+          "$RUNNER_TEMP/asrtu-oot" "$RUNNER_TEMP/asrtu-oot-src"
+    - name: Export dependency paths
+      shell: bash
+      run: |
+        oot_library_dirs=$(find "$RUNNER_TEMP/asrtu-oot/lib" -type f \
+          -name 'libgnuradio-*.so*' -printf '%h\n' | sort -u | paste -sd:)
+        echo "ASRTU_OOT_PREFIX=$RUNNER_TEMP/asrtu-oot" >> "$GITHUB_ENV"
+        echo "CMAKE_PREFIX_PATH=$RUNNER_TEMP/asrtu-oot" >> "$GITHUB_ENV"
+        echo "CMAKE_INCLUDE_PATH=$RUNNER_TEMP/asrtu-oot/include" >> "$GITHUB_ENV"
+        echo "CMAKE_LIBRARY_PATH=$oot_library_dirs" >> "$GITHUB_ENV"
+        echo "LD_LIBRARY_PATH=$oot_library_dirs${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"

@@ -35,7 +35,7 @@
   -Configuration Release
 ```
 
-## Linux（解码器源码可构建，尚未提供正式发行包）
+## Linux
 
 Linux 可以构建 `ASRTU1_Demod_CQt` 解码器；Windows 启动器、代理包装器、
 SDR# 插件和 Inno Setup 安装器不会生成。建议使用 GNU Radio 3.10、Qt 5 和
@@ -77,8 +77,11 @@ Linux 当前范围与限制：
   `stereo_iq_source` 实现，需要在目标发行版实测。
 - SDR# 本地共享内存桥使用 Windows named mapping；Linux 构建中该输入不会
   产生样本，需要改用声卡/录音，或另行实现跨平台共享传输。
-- 当前没有 Linux 启动器、代理包装器、AppImage/Flatpak/deb/rpm 包，也没有
-  Linux CI；因此暂不把 Linux 标记为完整支持的平台。
+- Linux CI 会执行严格编译、单元测试、Cppcheck、Clang-Tidy、ASan、UBSan
+  和 TSan，并构建 AppImage、deb、rpm；Arch Linux 打包元数据由
+  `packaging/arch/PKGBUILD` 提供并在 CI 中校验。
+- Linux 发行包属于 CI 产物，正式发布仅由 `v*` tag 触发；运行时硬件和 OOT
+  模块兼容性仍需在目标发行版上实测。
 - `benchmark_main.cpp` 使用 Windows 进程统计 API，非 Windows 默认关闭
   `ASRTU_BUILD_BENCHMARK`。
 
@@ -91,5 +94,31 @@ Windows 专用部分。macOS 版本需要验证 Core Audio 输入、替代共享
 宣称已经提供可直接发布的 macOS 构建。
 
 ## 验证建议
+
+### Arch Linux 打包工具
+
+本地生成 rpm 需要 `rpm-tools`，其中包含 `rpmbuild`：
+
+```bash
+sudo pacman -S --needed rpm-tools
+```
+
+本地生成 AppImage 需要 `linuxdeploy` 和 Qt plugin。可以下载官方
+AppImage 版本并赋予执行权限：
+
+```bash
+mkdir -p "$HOME/.local/bin"
+curl --fail --location --retry 3 \
+  -o "$HOME/.local/bin/linuxdeploy.AppImage" \
+  https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+curl --fail --location --retry 3 \
+  -o "$HOME/.local/bin/linuxdeploy-plugin-qt.AppImage" \
+  https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+chmod +x "$HOME/.local/bin/linuxdeploy"*
+```
+
+Arch 用户也应安装 `patchelf`、`desktop-file-utils`、`fuse2` 和 `rpm-tools`。
+AppImage 运行时若系统启用了较新的 FUSE，使用 `APPIMAGE_EXTRACT_AND_RUN=1`
+可绕过 FUSE 挂载限制。
 
 每次发布至少验证：程序冷启动、三种实时输入、文件播放、切换/移除声卡、启停录音、FEC 帧输出、代理启动、TLE 下载、多普勒开关、中文/英文/日文界面以及 100%/150%/200% DPI。Linux 或 macOS 构建应在对应系统上另行完成编译、声卡、文件回放和 FEC 回归，不能用 Windows 构建结果代替。

@@ -1,0 +1,251 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - 'v*'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  format:
+    name: Format and workflow checks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Resolve comparison base
+        id: base
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: echo "sha=$(ci/resolve_base_revision.sh)" >> "$GITHUB_OUTPUT"
+      - name: Install format tools
+        run: sudo apt-get update && sudo apt-get install --yes clang-format
+      - name: Validate workflow syntax
+        run: |
+          docker run --rm --volume "$PWD:/work:ro" --workdir /work \
+            rhysd/actionlint:1.7.12 -color
+      - name: Check changed C and C++ formatting
+        run: |
+          BASE_SHA=${{ steps.base.outputs.sha }}
+          git diff --check "$BASE_SHA" HEAD
+          ci/check_format.sh "$BASE_SHA"
+
+  linux:
+    name: Linux strict build and static analysis
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Resolve comparison base
+        id: base
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: echo "sha=$(ci/resolve_base_revision.sh)" >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/setup-linux
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DASRTU_BUILD_BENCHMARK=OFF \
+            -DASRTU_STRICT_WARNINGS=ON \
+            -DBUILD_TESTING=ON
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: Run Cppcheck
+        run: ci/run_cppcheck.sh build
+      - name: Run Clang-Tidy on changed translation units
+        run: |
+          BASE_SHA=${{ steps.base.outputs.sha }}
+          ci/run_clang_tidy.sh build "$BASE_SHA"
+
+  sanitizers:
+    name: Linux ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ASan and UBSan
+            build_dir: build-asan-ubsan
+            c_flags: -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined
+            cxx_flags: -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined
+            link_flags: -fsanitize=address,undefined
+          - name: TSan
+            build_dir: build-tsan
+            c_flags: -O1 -g -fno-omit-frame-pointer -fsanitize=thread
+            cxx_flags: -O1 -g -fno-omit-frame-pointer -fsanitize=thread
+            link_flags: -fsanitize=thread
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-linux
+      - name: Configure
+        run: |
+          cmake -S . -B "${{ matrix.build_dir }}" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DASRTU_BUILD_BENCHMARK=OFF \
+            -DASRTU_STRICT_WARNINGS=ON \
+            -DBUILD_TESTING=ON \
+            -DCMAKE_C_FLAGS="${{ matrix.c_flags }}" \
+            -DCMAKE_CXX_FLAGS="${{ matrix.cxx_flags }}" \
+            -DCMAKE_EXE_LINKER_FLAGS="${{ matrix.link_flags }}"
+      - name: Build
+        run: cmake --build "${{ matrix.build_dir }}" --parallel
+      - name: Test ASan and UBSan
+        if: matrix.name == 'ASan and UBSan'
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1
+        run: ctest --test-dir "${{ matrix.build_dir }}" --output-on-failure
+      - name: Test TSan
+        if: matrix.name == 'TSan'
+        env:
+          TSAN_OPTIONS: suppressions=${{ github.workspace }}/ci/tsan.supp:halt_on_error=1
+        run: ctest --test-dir "${{ matrix.build_dir }}" --output-on-failure
+
+  windows:
+    name: Windows strict build
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-name: asrtu
+          create-args: >-
+            python=3.11 cmake ninja pkg-config gnuradio=3.10 qt-main=5 qwt
+            boost-cpp fftw libsndfile zeromq
+          channels: conda-forge
+          cache-environment: true
+      - name: Build OOT dependencies and ASRTU
+        shell: pwsh
+        run: micromamba run -n asrtu powershell -NoProfile -ExecutionPolicy Bypass -File ci/build_windows.ps1
+      - name: Upload Windows binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: asrtu-windows-x64
+          path: build-windows/*.exe
+          if-no-files-found: error
+
+  packages:
+    name: Linux packages
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-linux
+      - name: Configure release build
+        run: |
+          cmake -S . -B build-package -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DASRTU_BUILD_BENCHMARK=OFF \
+            -DASRTU_STRICT_WARNINGS=ON \
+            -DBUILD_TESTING=ON
+      - name: Build and test
+        run: |
+          cmake --build build-package --parallel
+          ctest --test-dir build-package --output-on-failure
+      - name: Create deb and rpm packages
+        run: |
+          cpack --config build-package/CPackConfig.cmake -G DEB -B dist/packages
+          cpack --config build-package/CPackConfig.cmake -G RPM -B dist/packages
+      - name: Download linuxdeploy
+        run: |
+          mkdir -p dist/tools
+          curl --fail --location --retry 3 \
+            --output dist/tools/linuxdeploy.AppImage \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          curl --fail --location --retry 3 \
+            --output dist/tools/linuxdeploy-plugin-qt.AppImage \
+            https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          curl --fail --location --retry 3 \
+            --output dist/tools/runtime-x86_64 \
+            https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64
+          chmod +x dist/tools/linuxdeploy.AppImage dist/tools/linuxdeploy-plugin-qt.AppImage dist/tools/runtime-x86_64
+      - name: Create AppImage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+          LINUXDEPLOY: ${{ github.workspace }}/dist/tools/linuxdeploy.AppImage
+          LINUXDEPLOY_PLUGIN_QT: ${{ github.workspace }}/dist/tools/linuxdeploy-plugin-qt.AppImage
+          LDAI_RUNTIME_FILE: ${{ github.workspace }}/dist/tools/runtime-x86_64
+          VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '1.5.3' }}
+        run: ci/build_appimage.sh build-package "$ASRTU_OOT_PREFIX" dist/appimage
+      - name: Verify AppImage startup
+        run: |
+          appimage=$(find dist/appimage -maxdepth 1 -name '*.AppImage' -print -quit)
+          test -n "$appimage"
+          set +e
+          APPIMAGE_EXTRACT_AND_RUN=1 \
+            XDG_CONFIG_HOME="$RUNNER_TEMP/asrtu-config" \
+            XDG_DATA_HOME="$RUNNER_TEMP/asrtu-data" \
+            timeout 10 xvfb-run --auto-servernum "$appimage" \
+            > appimage-launch.log 2>&1
+          status=$?
+          set -e
+          if [[ "$status" -ne 124 ]]; then
+            cat appimage-launch.log
+            exit 1
+          fi
+          if grep -E 'cannot open shared object|Could not load the Qt platform plugin' \
+            appimage-launch.log; then
+            exit 1
+          fi
+      - name: Upload Linux packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: asrtu-linux-packages
+          path: |
+            dist/packages/*.deb
+            dist/packages/*.rpm
+            dist/appimage/*.AppImage
+          if-no-files-found: error
+
+  release:
+    name: Publish tag artifacts
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: packages
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download Linux packages
+        uses: actions/download-artifact@v4
+        with:
+          name: asrtu-linux-packages
+          path: dist
+      - name: Publish tag artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/**/*.deb
+            dist/**/*.rpm
+            dist/**/*.AppImage
+
+  arch-package:
+    name: Arch PKGBUILD syntax
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate Arch package metadata
+        run: |
+          docker run --rm \
+            --volume "$PWD:/src:ro" \
+            --workdir /tmp \
+            archlinux:base-devel \
+            bash -lc 'useradd --create-home --user-group builder && install -d -o builder -g builder /build && cp /src/packaging/arch/PKGBUILD /build && chown builder:builder /build/PKGBUILD && su builder -s /bin/bash -c "cd /build && makepkg --printsrcinfo > .SRCINFO && test -s .SRCINFO"'

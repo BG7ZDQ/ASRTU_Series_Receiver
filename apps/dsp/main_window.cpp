@@ -269,15 +269,6 @@ double requestedReplayRate()
     return 30.0;
 }
 
-QString requestedOption(const QString& name)
-{
-    const QStringList arguments = QCoreApplication::arguments();
-    const int option = arguments.indexOf(name);
-    if (option >= 0 && option + 1 < arguments.size())
-        return arguments.at(option + 1);
-    return {};
-}
-
 QString compactSessionPath(const QString& sessionDirectory, const QString& path)
 {
     return QStringLiteral("/%1/%2")

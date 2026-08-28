@@ -50,7 +50,7 @@ public:
 private:
 	struct QueuedFrame {
 		QByteArray frame;
-		std::uint64_t generation;
+		std::uint64_t generation = 0;
 	};
 
 	void workerLoop();
