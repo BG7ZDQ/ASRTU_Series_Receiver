@@ -137,7 +137,15 @@ bool SsdvReceiver::processFrame(const QByteArray& frame)
 
     ssdv_packet_info_t info{};
     ssdv_dec_header(&info, bytes, ssdv_dslwp_mode);
-    if (image_id_ != int(info.image_id)) {
+    const std::uint16_t packetId = info.packet_id;
+    const auto firstPacket = packets_.find(0);
+    const bool replacedFirstPacket =
+        packetId == 0 && firstPacket != packets_.end() &&
+        firstPacket->second != packet;
+    if (image_id_ != int(info.image_id) ||
+        spacecraft_header_ != spacecraftHeader || width_ != info.width ||
+        height_ != info.height || quality_ != info.quality ||
+        replacedFirstPacket) {
         packets_.clear();
         image_id_ = info.image_id;
         width_ = info.width;
@@ -149,14 +157,13 @@ bool SsdvReceiver::processFrame(const QByteArray& frame)
         image_path_ = QDir(session_directory_).filePath(
             QStringLiteral("SSDV_%1_ID%2.jpg")
                 .arg(QDateTime::currentDateTime().toString(
-                    QStringLiteral("yyyyMMdd_HHmmss")))
+                    QStringLiteral("yyyyMMdd_HHmmss_zzz")))
                 .arg(image_id_));
         if (log_callback_)
             log_callback_(QStringLiteral("SSDV image started: ID %1, %2x%3, quality %4")
                               .arg(image_id_).arg(width_).arg(height_).arg(quality_));
     }
 
-    const std::uint16_t packetId = info.packet_id;
     const auto existing = packets_.find(packetId);
     if (existing != packets_.end() && existing->second == packet)
         return false;

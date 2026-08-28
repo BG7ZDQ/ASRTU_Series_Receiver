@@ -130,19 +130,18 @@ void FrameMonitor::candidateWorker()
     }
 }
 
-std::uint32_t FrameMonitor::candidateKey(
+std::uint64_t FrameMonitor::candidateKey(
     const std::vector<std::uint8_t>& payload)
 {
     if (payload.size() >= 8) {
-        // CCSDS short header is 5 bytes; a DSLWP SSDV packet then starts with
-        // image_id and a 16-bit packet_id. This identity remains stable when
-        // replay runs faster than the 50 ms arbitration window.
-        return (std::uint32_t(payload[5]) << 16) |
-               (std::uint32_t(payload[6]) << 8) | payload[7];
+        std::uint64_t key = 0;
+        for (std::size_t i = 0; i < 8; ++i)
+            key = (key << 8) | payload[i];
+        return key;
     }
-    std::uint32_t key = 2166136261u;
+    std::uint64_t key = 14695981039346656037ULL;
     for (const auto byte : payload)
-        key = (key ^ byte) * 16777619u;
+        key = (key ^ byte) * 1099511628211ULL;
     return key;
 }
 

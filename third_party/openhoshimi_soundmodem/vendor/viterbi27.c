@@ -62,7 +62,7 @@
 	vi->nmetric[2*i] = m0;\
 	if(m1 > m0){\
 		vi->nmetric[2*i] = m1;\
-		vi->dec |= 1 << ((2*i) & 31);\
+		vi->dec |= 1UL << ((2*i) & 31);\
 	}\
 	/* ACS for 1 branch */\
 	m0 -= (vi->mets[sym] - vi->mets[3^sym]);\
@@ -70,7 +70,7 @@
 	vi->nmetric[2*i+1] = m0;\
 	if(m1 > m0){\
 		vi->nmetric[2*i+1] = m1;\
-		vi->dec |= 1 << ((2*i+1) & 31);\
+		vi->dec |= 1UL << ((2*i+1) & 31);\
 	}\
 }
 
@@ -82,7 +82,7 @@
 	vi->cmetric[2*i] = m0;\
 	if(m1 > m0){\
 		vi->cmetric[2*i] = m1;\
-		vi->dec |= 1 << ((2*i) & 31);\
+		vi->dec |= 1UL << ((2*i) & 31);\
 	}\
 	/* ACS for 1 branch */\
 	m0 -= (vi->mets[sym] - vi->mets[3^sym]);\
@@ -90,7 +90,7 @@
 	vi->cmetric[2*i+1] = m0;\
 	if(m1 > m0){\
 		vi->cmetric[2*i+1] = m1;\
-		vi->dec |= 1 << ((2*i+1) & 31);\
+		vi->dec |= 1UL << ((2*i+1) & 31);\
 	}\
 }
 
@@ -135,7 +135,7 @@ traceback(unsigned long paths[],unsigned int pi, unsigned char *dst)
     pi = (pi - 1) % PATHMEM;	/* Undo last increment of pi */
     for(i=0; i < MERGEDIST-6; i++)
     {
-        if(paths[2*pi + (beststate >> 5)] & (1 << (beststate & 31)))
+        if(paths[2*pi + (beststate >> 5)] & (1UL << (beststate & 31)))
         {
             beststate |= 64;	/* 2^(K-1) */
         }
@@ -151,7 +151,7 @@ traceback(unsigned long paths[],unsigned int pi, unsigned char *dst)
         data[j] = 0;
         for(i=0; i<8; i++)
         {
-            if(paths[2*pi + (beststate >> 5)] & (1 << (beststate & 31)))
+            if(paths[2*pi + (beststate >> 5)] & (1UL << (beststate & 31)))
             {
                 beststate |= 64;	/* 2^(K-1) */
                 data[j] |= 1 << i;
@@ -324,5 +324,3 @@ void encode27(unsigned char *encstate, unsigned char *symbols, unsigned char *da
 
     return;
 }
-
-

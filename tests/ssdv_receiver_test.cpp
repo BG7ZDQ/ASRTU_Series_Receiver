@@ -54,7 +54,8 @@ int main(int argc, char* argv[])
     {
         std::unique_lock<std::mutex> lock(resultMutex);
         if (!resultReady.wait_for(lock, std::chrono::seconds(3), [&] {
-                return updates > 0 && !last.image.isNull();
+                return updates > 0 && !last.image.isNull() &&
+                       last.received_packets >= 20;
             })) {
             std::cerr << "SSDV reconstruction timed out\n";
             return 5;
@@ -70,6 +71,24 @@ int main(int argc, char* argv[])
         !QFileInfo(result.path).fileName().contains(QStringLiteral("ID43"))) {
         std::cerr << "SSDV reconstruction did not produce the expected image\n";
         return 5;
+    }
+
+    QByteArray second = data;
+    for (int offset = 0; offset < second.size(); offset += 223) {
+        second[offset] = char(0x20);
+        second[offset + 1] = char(0x52);
+    }
+    for (int offset = 0; offset < second.size(); offset += 223)
+        receiver.ingestFrame(second.mid(offset, 223));
+    {
+        std::unique_lock<std::mutex> lock(resultMutex);
+        if (!resultReady.wait_for(lock, std::chrono::seconds(3), [&] {
+                return last.spacecraft_header == 0x2052 &&
+                       last.satellite == QStringLiteral("BY-04");
+            })) {
+            std::cerr << "SSDV session identity did not change\n";
+            return 6;
+        }
     }
     std::cout << "SSDV OK: " << result.path.toLocal8Bit().constData() << '\n';
     return 0;

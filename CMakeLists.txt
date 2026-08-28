@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 project(ASRTU1Qt VERSION 1.5.3 LANGUAGES C CXX)
 
+include(CTest)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC OFF)
@@ -217,20 +219,37 @@ if(MSVC)
     target_compile_options(ASRTU1_Benchmark PRIVATE /W4 /permissive- /utf-8)
 endif()
 
-add_executable(ASRTU1_SsdvTest
-    tests/ssdv_receiver_test.cpp
-    libs/demod/ssdv_receiver.cpp
-    libs/demod/ssdv_receiver.h)
-target_include_directories(ASRTU1_SsdvTest PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/libs/demod)
-target_link_libraries(ASRTU1_SsdvTest PRIVATE Qt5::Core Qt5::Gui ssdv_dslwp)
-target_compile_definitions(ASRTU1_SsdvTest PRIVATE
-    ASRTU_TEST_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/asrtu1_ssdv_capture.b64")
-if(MSVC)
-    target_compile_options(ASRTU1_SsdvTest PRIVATE /W4 /permissive- /utf-8)
 endif()
-enable_testing()
-add_test(NAME ssdv_receiver COMMAND ASRTU1_SsdvTest)
-set_tests_properties(ssdv_receiver PROPERTIES ENVIRONMENT_MODIFICATION
-    "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt5::Core>;QT_PLUGIN_PATH=set:$<TARGET_FILE_DIR:Qt5::Core>/../plugins")
+
+if(BUILD_TESTING)
+    add_executable(ASRTU1_FrameMonitorTest
+        tests/frame_monitor_test.cpp
+        libs/demod/frame_monitor.cpp
+        libs/demod/frame_monitor.h)
+    target_include_directories(ASRTU1_FrameMonitorTest PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/libs/demod)
+    target_link_libraries(ASRTU1_FrameMonitorTest PRIVATE
+        gnuradio::gnuradio-runtime
+        gnuradio::gnuradio-blocks)
+
+    add_executable(ASRTU1_SsdvTest
+        tests/ssdv_receiver_test.cpp
+        libs/demod/ssdv_receiver.cpp
+        libs/demod/ssdv_receiver.h)
+    target_include_directories(ASRTU1_SsdvTest PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/libs/demod)
+    target_link_libraries(ASRTU1_SsdvTest PRIVATE
+        Qt5::Core Qt5::Gui ssdv_dslwp)
+    target_compile_definitions(ASRTU1_SsdvTest PRIVATE
+        ASRTU_TEST_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/asrtu1_ssdv_capture.b64")
+    if(MSVC)
+        target_compile_options(ASRTU1_FrameMonitorTest PRIVATE
+            /W4 /permissive- /utf-8)
+        target_compile_options(ASRTU1_SsdvTest PRIVATE
+            /W4 /permissive- /utf-8)
+    endif()
+    add_test(NAME frame_monitor COMMAND ASRTU1_FrameMonitorTest)
+    add_test(NAME ssdv_receiver COMMAND ASRTU1_SsdvTest)
+    set_tests_properties(ssdv_receiver PROPERTIES ENVIRONMENT_MODIFICATION
+        "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt5::Core>;QT_PLUGIN_PATH=set:$<TARGET_FILE_DIR:Qt5::Core>/../plugins")
 endif()

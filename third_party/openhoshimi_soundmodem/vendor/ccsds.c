@@ -26,6 +26,7 @@
 
 #include "ccsds.h"
 #include <stdio.h>
+#include <string.h>
 
 #define TX_EN()
 #define TX_DIS()
@@ -41,7 +42,7 @@ void ccsds_init(Ccsds *cc, uint32_t sync_word, uint16_t len_frame, void *obj_ptr
 
 
     //gen_met(mettab, amp, esn0, 0.0, 4);
-
+    memset(cc, 0, sizeof(*cc));
     vitfilt27_init(&(cc->vi));
 
     cc->sending = 0;
@@ -304,6 +305,7 @@ void ccsds_rx_proc(Ccsds *cc, unsigned char *syms, unsigned int n_syms)
     {
         for (i = 0; i < n_syms/8; i++)
         {
+            current_out = 0;
             for(j=0; j<8; j++)
             {
                 current_out <<= 1;
@@ -351,6 +353,8 @@ void ccsds_pull(Ccsds *cc)
     uint8_t current_in;
     int16_t byte_corr;
 
+    if (fifo_isempty(&cc->rx_fifo))
+        return;
 
     while((!fifo_isempty(&(cc->rx_fifo))) || mask_bit_in)
     {
@@ -457,8 +461,5 @@ void ccsds_pull(Ccsds *cc)
         mask_bit_in >>= 1;
     }
 }
-
-
-
 
 
