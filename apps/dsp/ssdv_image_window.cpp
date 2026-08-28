@@ -19,6 +19,7 @@
 #include <utility>
 
 namespace {
+constexpr int kMaxGalleryImages = 32;
 
 QString kTitleStyle = QStringLiteral(
     "font-size:16px; font-weight:700; color:#17202a;");
@@ -299,6 +300,9 @@ void SsdvImageWindow::setClearCallback(std::function<void()> callback)
 
 void SsdvImageWindow::updateImage(const SsdvImageUpdate& update)
 {
+    if (update.generation < minimum_generation_)
+        return;
+
     int index = -1;
     for (int i = 0; i < gallery_.size(); ++i) {
         if (gallery_.at(i).path == update.path) {
@@ -311,6 +315,12 @@ void SsdvImageWindow::updateImage(const SsdvImageUpdate& update)
         index = gallery_.size() - 1;
     } else {
         gallery_[index] = update;
+    }
+    if (gallery_.size() > kMaxGalleryImages) {
+        gallery_.removeFirst();
+        --index;
+        if (gallery_index_ > 0)
+            --gallery_index_;
     }
     // Follow the newest image while it is arriving. If the operator is
     // browsing an older image, keep that selection stable.
@@ -395,6 +405,7 @@ void SsdvImageWindow::refreshMetadata()
 
 void SsdvImageWindow::clearDisplay()
 {
+    ++minimum_generation_;
     image_ = {};
     image_path_.clear();
     gallery_.clear();
@@ -436,4 +447,3 @@ void SsdvImageWindow::refreshPixmap()
     image_label_->setPixmap(QPixmap::fromImage(image_).scaled(
         target, Qt::KeepAspectRatio, Qt::SmoothTransformation));
 }
-

@@ -16,6 +16,7 @@
 /* You should have received a copy of the GNU General Public License     */
 /* along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 
+#include <stddef.h>
 #include <stdint.h>
 
 #ifndef INC_SSDV_H
@@ -76,8 +77,8 @@ typedef struct
 	uint8_t  image_id;
 	uint16_t packet_id;
 	uint8_t  mcu_mode;  /* 0 = 2x2, 1 = 2x1, 2 = 1x2, 3 = 1x1           */
-	uint16_t mcu_id;
-	uint16_t mcu_count;
+	uint32_t mcu_id;
+	uint32_t mcu_count;
 	uint8_t  quality;   /* JPEG quality level for encoding, 0-7         */
 	uint16_t packet_mcu_id;
 	uint8_t  packet_mcu_offset;
@@ -157,7 +158,7 @@ typedef struct {
 	uint16_t mcu_mode;
 	uint8_t  mcu_offset;
 	uint16_t mcu_id;
-	uint16_t mcu_count;
+	uint32_t mcu_count;
 } ssdv_packet_info_t;
 
 /* Encoding */
@@ -169,11 +170,11 @@ extern char ssdv_enc_feed(ssdv_t *s, uint8_t *buffer, size_t length);
 /* Decoding */
 extern char ssdv_dec_init(ssdv_t *s);
 extern char ssdv_dec_set_buffer(ssdv_t *s, uint8_t *buffer, size_t length);
-extern char ssdv_dec_feed(ssdv_t *s, uint8_t *packet, ssdv_mode_t mode);
+extern char ssdv_dec_feed(ssdv_t *s, const uint8_t *packet, ssdv_mode_t mode);
 extern char ssdv_dec_get_jpeg(ssdv_t *s, uint8_t **jpeg, size_t *length);
 
 extern char ssdv_dec_is_packet(uint8_t *packet, int *errors, ssdv_mode_t mode);
-extern void ssdv_dec_header(ssdv_packet_info_t *info, uint8_t *packet, ssdv_mode_t mode);
+extern void ssdv_dec_header(ssdv_packet_info_t *info, const uint8_t *packet, ssdv_mode_t mode);
 
 extern int ssdv_pkt_size(ssdv_mode_t mode);
 extern int ssdv_pkt_size_header(ssdv_mode_t mode);
@@ -182,4 +183,3 @@ extern int ssdv_pkt_size_header(ssdv_mode_t mode);
 }
 #endif
 #endif
-

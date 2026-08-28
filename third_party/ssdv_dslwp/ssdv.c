@@ -1221,7 +1221,7 @@ static void ssdv_out_headers(ssdv_t *s)
 	ssdv_write_marker(s, J_SOS,   10, sos);
 }
 
-static void ssdv_fill_gap(ssdv_t *s, uint16_t next_mcu)
+static void ssdv_fill_gap(ssdv_t *s, uint32_t next_mcu)
 {
 	if(s->mcupart > 0 || s->acpart > 0)
 	{
@@ -1283,19 +1283,29 @@ char ssdv_dec_init(ssdv_t *s)
 
 char ssdv_dec_set_buffer(ssdv_t *s, uint8_t *buffer, size_t length)
 {
-	size_t c = s->outp - s->out;
-	
-	s->outp = buffer + c;
+	size_t c = 0;
+
+	if (buffer == NULL)
+		return(SSDV_ERROR);
+
+	if (s->out != NULL || s->outp != NULL)
+	{
+		if (s->out == NULL || s->outp == NULL || s->outp < s->out)
+			return(SSDV_ERROR);
+		c = (size_t) (s->outp - s->out);
+	}
+
+	if (c > length)
+		return(SSDV_BUFFER_FULL);
+
 	s->out = buffer;
+	s->outp = buffer + c;
 	s->out_len = length - c;
-	
-	/* Flush the output bits */
-	ssdv_outbits(s, 0, 0);
-	
-	return(SSDV_OK);
+
+	return(ssdv_outbits(s, 0, 0));
 }
 
-char ssdv_dec_feed(ssdv_t *s, uint8_t *packet, ssdv_mode_t mode)
+char ssdv_dec_feed(ssdv_t *s, const uint8_t *packet, ssdv_mode_t mode)
 {
 	int i = 0, r;
 	uint8_t b;
@@ -1339,9 +1349,6 @@ char ssdv_dec_feed(ssdv_t *s, uint8_t *packet, ssdv_mode_t mode)
 	/* If this is the first packet, write the JPEG headers */
 	if(s->packet_id == 0)
 	{
-		const char *factor;
-		char callsign[SSDV_MAX_CALLSIGN + 1];
-		
 		/* Read the fixed headers from the packet */
 		switch (s->type) {
 		case SSDV_TYPE_DSLWP:
@@ -1361,7 +1368,8 @@ char ssdv_dec_feed(ssdv_t *s, uint8_t *packet, ssdv_mode_t mode)
 		s->image_id  = packet[image_id_offset];
 		s->width     = packet[image_id_offset + 3] << 4;
 		s->height    = packet[image_id_offset + 4] << 4;
-		s->mcu_count = packet[image_id_offset + 3] * packet[image_id_offset + 4];
+		s->mcu_count = (uint32_t) packet[image_id_offset + 3] *
+			       packet[image_id_offset + 4];
 		s->quality   = ((packet[image_id_offset + 5] >> 3) & 7) ^ 4;
 		s->mcu_mode  = packet[image_id_offset + 5] & 0x03;
 		
@@ -1376,19 +1384,11 @@ char ssdv_dec_feed(ssdv_t *s, uint8_t *packet, ssdv_mode_t mode)
 		
 		switch(s->mcu_mode & 3)
 		{
-		case 0: factor = "2x2"; s->ycparts = 4; break;
-		case 1: factor = "1x2"; s->ycparts = 2; s->mcu_count *= 2; break;
-		case 2: factor = "2x1"; s->ycparts = 2; s->mcu_count *= 2; break;
-		case 3: factor = "1x1"; s->ycparts = 1; s->mcu_count *= 4; break;
+		case 0: s->ycparts = 4; break;
+		case 1: s->ycparts = 2; s->mcu_count *= 2; break;
+		case 2: s->ycparts = 2; s->mcu_count *= 2; break;
+		case 3: s->ycparts = 1; s->mcu_count *= 4; break;
 		}
-		
-		/* Display information about the image */
-		fprintf(stderr, "Callsign: %s\n", decode_callsign(callsign, s->callsign));
-		fprintf(stderr, "Image ID: %02X\n", s->image_id);
-		fprintf(stderr, "Resolution: %ix%i\n", s->width, s->height);
-		fprintf(stderr, "MCU blocks: %i\n", s->mcu_count);
-		fprintf(stderr, "Sampling factor: %s\n", factor);
-		fprintf(stderr, "Quality level: %d\n", s->quality);
 		
 		/* Output JPEG headers and enable byte stuffing */
 		ssdv_out_headers(s);
@@ -1400,13 +1400,8 @@ char ssdv_dec_feed(ssdv_t *s, uint8_t *packet, ssdv_mode_t mode)
 	{
 		if(packet_id < s->packet_id)
 		{
-			/* The decoder can only accept packets in the correct order */
-			fprintf(stderr, "Packets are not in order. %i > %i\n", s->packet_id - 1, packet_id);
 			return(SSDV_FEED_ME);
 		}
-		
-		/* One or more packets have been lost! */
-		fprintf(stderr, "Gap detected between packets %i and %i\n", s->packet_id - 1, packet_id);
 		
 		/* If this packet has no new MCU, ignore */
 		if(s->packet_mcu_id == 0xFFFF) return(SSDV_FEED_ME);
@@ -1439,7 +1434,6 @@ char ssdv_dec_feed(ssdv_t *s, uint8_t *packet, ssdv_mode_t mode)
 			/* Abandon the packet if the MCU index is not what it should be. */
 			if(s->mcu_id != s->packet_mcu_id)
 			{
-				fprintf(stderr, "Unexpected MCU ID in packet %d.\n", packet_id);
 				return(SSDV_FEED_ME);
 			}
 		}
@@ -1453,10 +1447,8 @@ char ssdv_dec_feed(ssdv_t *s, uint8_t *packet, ssdv_mode_t mode)
 		/* Process the new data until more needed, or an error occurs */
 		while((r = ssdv_process(s)) == SSDV_OK);
 		
-		if(r == SSDV_BUFFER_FULL)
-		{
-			/* Realloc memory */
-		}
+		if (r == SSDV_BUFFER_FULL)
+			return(SSDV_BUFFER_FULL);
 		else if(r == SSDV_EOI)
 		{
 			/* All done! */
@@ -1464,8 +1456,6 @@ char ssdv_dec_feed(ssdv_t *s, uint8_t *packet, ssdv_mode_t mode)
 		}
 		else if(r != SSDV_FEED_ME)
 		{
-			/* An error occured */
-			fprintf(stderr, "ssdv_process() failed: %i\n", r);
 			return(SSDV_ERROR);
 		}
 	}
@@ -1478,13 +1468,14 @@ char ssdv_dec_feed(ssdv_t *s, uint8_t *packet, ssdv_mode_t mode)
 
 char ssdv_dec_get_jpeg(ssdv_t *s, uint8_t **jpeg, size_t *length)
 {
-	/* Is the image complete? */
-	if(s->mcu_id < s->mcu_count) ssdv_fill_gap(s, s->mcu_count);
-	
-	/* Sync, and final EOI header and return */
-	ssdv_outbits_sync(s);
+	if (s->mcu_id < s->mcu_count)
+		ssdv_fill_gap(s, s->mcu_count);
+	if (ssdv_outbits_sync(s) != SSDV_OK)
+		return(SSDV_BUFFER_FULL);
 	s->out_stuff = 0;
 	ssdv_write_marker(s, J_EOI, 0, 0);
+	if (s->out_len == 0)
+		return(SSDV_BUFFER_FULL);
 	
 	*jpeg = s->out;
 	*length = (size_t) (s->outp - s->out);
@@ -1600,7 +1591,9 @@ char ssdv_dec_is_packet(uint8_t *packet, int *errors, ssdv_mode_t mode)
 	
 	if(p.type != type) return(-1);
 	if(p.width == 0 || p.height == 0) return(-1);
-	if(p.mcu_id != 0xFFFF)
+	if (p.mcu_count == 0 || p.mcu_count > UINT16_MAX)
+		return(-1);
+	if (p.mcu_id != 0xFFFF)
 	{
 		if(p.mcu_id >= p.mcu_count) return(-1);
 		if(p.mcu_offset >= pkt_size_payload) return(-1);
@@ -1612,7 +1605,7 @@ char ssdv_dec_is_packet(uint8_t *packet, int *errors, ssdv_mode_t mode)
 	return(0);
 }
 
-void ssdv_dec_header(ssdv_packet_info_t *info, uint8_t *packet, ssdv_mode_t mode)
+void ssdv_dec_header(ssdv_packet_info_t *info, const uint8_t *packet, ssdv_mode_t mode)
 {
 	if(mode == ssdv_normal_mode || mode == ssdv_jy1sat_mode)
 	{
@@ -1659,7 +1652,7 @@ void ssdv_dec_header(ssdv_packet_info_t *info, uint8_t *packet, ssdv_mode_t mode
 	info->mcu_mode   = packet[5] & 0x03;
 	info->mcu_offset = packet[6];
 	info->mcu_id     = (packet[7] << 8) | packet[8];
-	info->mcu_count  = packet[3] * packet[4];
+	info->mcu_count  = (uint32_t) packet[3] * packet[4];
 	if(info->mcu_mode == 1 || info->mcu_mode == 2) info->mcu_count *= 2;
 	else if(info->mcu_mode == 3) info->mcu_count *= 4;
 }
