@@ -1,0 +1,63 @@
+pkgname=asrtu-series-receiver
+pkgver=1.5.3
+pkgrel=1
+pkgdesc='ASRTU satellite receiver and GNU Radio decoder'
+arch=('x86_64')
+url='https://github.com/BG7ZDQ/ASRTU_Series_Receiver'
+license=('MIT' 'GPL-3.0-or-later')
+depends=('gnuradio' 'qt5-base' 'qwt' 'boost-libs' 'fftw' 'zeromq'
+	 'libsndfile')
+makedepends=('cmake' 'git' 'ninja' 'boost')
+_lilacsat_revision=74df3007f93899a29f543f49df35505025ada355
+_hyacinth_revision=38fc963c6c1da8da06c3713729230c0b32738ff8
+source=(
+	"${pkgname}::git+${url}.git#tag=v${pkgver}"
+	"gr-lilacsat::git+https://github.com/bg2bhc/gr-lilacsat.git#commit=${_lilacsat_revision}"
+	"gr-hyacinth::git+https://github.com/HyacinthSat/gr-hyacinth.git#commit=${_hyacinth_revision}"
+)
+b2sums=('SKIP' 'SKIP' 'SKIP')
+
+build_oot()
+{
+	local name=$1
+	local build_dir="${srcdir}/build-${name}"
+	shift
+
+	cmake -S "${srcdir}/${name}" -B "$build_dir" -G Ninja \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_INSTALL_PREFIX=/usr \
+		-DCMAKE_PREFIX_PATH="${srcdir}/oot-prefix" \
+		"$@"
+	cmake --build "$build_dir"
+	cmake --install "$build_dir" --prefix "${srcdir}/oot-prefix"
+}
+
+build() {
+	build_oot gr-lilacsat -DENABLE_PYTHON=OFF -DENABLE_DOXYGEN=OFF
+	build_oot gr-hyacinth -DHYACINTHSAT_ENABLE_PYTHON=OFF \
+		-DENABLE_DOXYGEN=OFF
+
+	cmake -S "${srcdir}/${pkgname}" -B "${srcdir}/build" -G Ninja \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_INSTALL_PREFIX=/usr \
+		-DCMAKE_PREFIX_PATH="${srcdir}/oot-prefix" \
+		-DCMAKE_INCLUDE_PATH="${srcdir}/oot-prefix/include" \
+		-DCMAKE_LIBRARY_PATH="${srcdir}/oot-prefix/lib" \
+		-DASRTU_BUILD_BENCHMARK=OFF
+	cmake --build "${srcdir}/build"
+}
+
+check() {
+	LD_LIBRARY_PATH="${srcdir}/oot-prefix/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
+		ctest --test-dir "${srcdir}/build" --output-on-failure
+}
+
+package() {
+	DESTDIR="${pkgdir}" cmake --install "${srcdir}/build-gr-lilacsat" \
+		--prefix /usr
+	DESTDIR="${pkgdir}" cmake --install "${srcdir}/build-gr-hyacinth" \
+		--prefix /usr
+	DESTDIR="${pkgdir}" cmake --install "${srcdir}/build" --prefix /usr
+	install -Dm644 "${srcdir}/${pkgname}/LICENSE" \
+		"${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}
