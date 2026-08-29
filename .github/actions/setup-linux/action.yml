@@ -23,6 +23,7 @@ runs:
           libboost-all-dev \
           libfftw3-dev \
           libqwt-qt5-dev \
+          libqt5websockets5-dev \
           libsndfile1-dev \
           libzmq3-dev \
           ninja-build \

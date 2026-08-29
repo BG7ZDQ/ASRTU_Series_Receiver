@@ -21,6 +21,7 @@ int main()
 	const auto graph = gr::make_top_block("frame-monitor-test");
 	std::vector<std::uint8_t> payload(223);
 	std::vector<std::thread> threads;
+	threads.reserve(8);
 
 	graph->msg_connect(monitor, "out", local, "store");
 	graph->start();
@@ -55,6 +56,11 @@ int main()
 	    pmt::intern("local_original"),
 	    pmt::cons(pmt::make_dict(),
 		      pmt::init_u8vector(second.size(), second.data())));
+	const std::vector<std::uint8_t> shortPayload(222, 0x42);
+	monitor->_post(
+	    pmt::intern("primary"),
+	    pmt::cons(pmt::PMT_NIL, pmt::init_u8vector(shortPayload.size(),
+						       shortPayload.data())));
 	std::this_thread::sleep_for(std::chrono::milliseconds(200));
 	graph->stop();
 	graph->wait();
@@ -66,7 +72,7 @@ int main()
 			     pmt::is_null(pmt::car(forwarded)) &&
 			     pmt::equal(pmt::cdr(forwarded), pmt::cdr(message));
 	}
-	if (!normalized ||
+	if (!normalized || monitor->frameCount() != 8 ||
 	    monitor->suppressedDuplicateCount() != 7 ||
 	    candidates.load() != 2) {
 		std::cerr << "Frame monitor arbitration failed\n";

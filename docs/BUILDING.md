@@ -37,9 +37,10 @@
 
 ## Linux
 
-Linux 可以构建 `ASRTU1_Launcher`、`ASRTU1_Demod_CQt` 和
-`ASRTU_Doppler`。Windows 代理包装器、SDR# 插件和 Inno Setup 安装器不会
-生成；遥测上传代理的源码不属于本仓库，因此 Linux 包暂不提供上传代理。
+Linux 可以构建 `ASRTU1_Launcher`、`ASRTU1_Demod_CQt`、
+`ASRTU_Doppler` 和 `ASRTU_UploadProxy`。Windows 代理包装器、SDR# 插件和
+Inno Setup 安装器不会生成。Linux 原生上传代理会反序列化 GNU Radio PMT
+PDU，并拒绝非 223 字节的遥测帧；它不使用 Windows 旧代理的固定头偏移。
 建议使用 GNU Radio 3.10、Qt 5 和同一 ABI/编译器构建全部 OOT 模块。
 
 以 Ubuntu/Debian 为例，基础依赖可安装为：
@@ -47,7 +48,7 @@ Linux 可以构建 `ASRTU1_Launcher`、`ASRTU1_Demod_CQt` 和
 ```bash
 sudo apt update
 sudo apt install build-essential cmake ninja-build pkg-config \
-  qtbase5-dev libqt5svg5-dev libqwt-qt5-dev \
+  qtbase5-dev libqt5svg5-dev libqt5websockets5-dev libqwt-qt5-dev \
   gnuradio-dev libvolk2-dev libfftw3-dev libboost-all-dev \
   libsndfile1-dev libzmq3-dev
 ```
@@ -67,6 +68,7 @@ cmake --build build-linux --parallel
 
 ```bash
 ./build-linux/ASRTU1_Launcher
+./build-linux/ASRTU_UploadProxy
 ./build-linux/ASRTU1_Demod_CQt --wav /path/to/stereo_iq.wav --no-record
 ./build-linux/ASRTU1_Demod_CQt --wav /path/to/mono_12khz_if.wav \
   --real-if-12k --no-record
@@ -126,6 +128,7 @@ chmod +x "$HOME/.local/bin/linuxdeploy"*
 ```
 
 Arch 用户也应安装 `patchelf`、`desktop-file-utils`、`fuse2` 和 `rpm-tools`。
+构建 Linux 上传代理还需要 `qt5-websockets`。
 AppImage 运行时若系统启用了较新的 FUSE，使用 `APPIMAGE_EXTRACT_AND_RUN=1`
 可绕过 FUSE 挂载限制。
 

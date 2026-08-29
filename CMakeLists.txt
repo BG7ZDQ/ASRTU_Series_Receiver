@@ -22,7 +22,11 @@ function(asrtu_enable_strict_warnings target)
     endif()
 endfunction()
 
-find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets Network)
+set(ASRTU_QT_COMPONENTS Core Gui Widgets Network)
+if(NOT WIN32)
+    list(APPEND ASRTU_QT_COMPONENTS WebSockets)
+endif()
+find_package(Qt5 REQUIRED COMPONENTS ${ASRTU_QT_COMPONENTS})
 set(ASRTU_GNURADIO_COMPONENTS
     runtime analog blocks digital fft filter network qtgui zeromq)
 if(NOT WIN32)
@@ -244,6 +248,29 @@ if(WIN32)
         target_compile_options(ASRTU_Proxy PRIVATE /W4 /permissive- /utf-8)
     endif()
     asrtu_enable_strict_warnings(ASRTU_Proxy)
+else()
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(ASRTU_ZMQ REQUIRED IMPORTED_TARGET libzmq)
+    add_executable(ASRTU_UploadProxy
+        apps/proxy/main.cpp
+        apps/proxy/proxy_config.cpp
+        apps/proxy/proxy_config.h
+        apps/proxy/upload_proxy.cpp
+        apps/proxy/upload_proxy.h
+        libs/proxy/pmt_frame_decoder.cpp
+        libs/proxy/pmt_frame_decoder.h
+        libs/common/runtime_paths.cpp
+        libs/common/runtime_paths.h)
+    target_include_directories(ASRTU_UploadProxy PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/apps/proxy
+        ${CMAKE_CURRENT_SOURCE_DIR}/libs/proxy
+        ${CMAKE_CURRENT_SOURCE_DIR}/libs/common)
+    target_link_libraries(ASRTU_UploadProxy PRIVATE
+        Qt5::Core Qt5::Network Qt5::WebSockets
+        gnuradio::gnuradio-runtime PkgConfig::ASRTU_ZMQ)
+    asrtu_enable_strict_warnings(ASRTU_UploadProxy)
+    install(TARGETS ASRTU_UploadProxy
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
 option(ASRTU_BUILD_BENCHMARK "Build the Windows benchmark helper" ${WIN32})
@@ -320,6 +347,27 @@ if(BUILD_TESTING)
         gnuradio::gnuradio-runtime
         gnuradio::gnuradio-blocks)
 
+    add_executable(ASRTU1_PmtFrameDecoderTest
+        tests/pmt_frame_decoder_test.cpp
+        libs/proxy/pmt_frame_decoder.cpp
+        libs/proxy/pmt_frame_decoder.h)
+    target_include_directories(ASRTU1_PmtFrameDecoderTest PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/libs/proxy)
+    target_link_libraries(ASRTU1_PmtFrameDecoderTest PRIVATE
+        gnuradio::gnuradio-runtime)
+
+    if(NOT WIN32)
+        add_executable(ASRTU1_ProxyConfigTest
+            tests/proxy_config_test.cpp
+            apps/proxy/proxy_config.cpp
+            apps/proxy/proxy_config.h)
+        target_include_directories(ASRTU1_ProxyConfigTest PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/apps/proxy)
+        target_link_libraries(ASRTU1_ProxyConfigTest PRIVATE Qt5::Core)
+        asrtu_enable_strict_warnings(ASRTU1_ProxyConfigTest)
+        add_test(NAME proxy_config COMMAND ASRTU1_ProxyConfigTest)
+    endif()
+
     add_executable(ASRTU1_SsdvTest
         tests/ssdv_receiver_test.cpp
         libs/demod/ssdv_receiver.cpp
@@ -333,12 +381,16 @@ if(BUILD_TESTING)
     if(MSVC)
         target_compile_options(ASRTU1_FrameMonitorTest PRIVATE
             /W4 /permissive- /utf-8)
+        target_compile_options(ASRTU1_PmtFrameDecoderTest PRIVATE
+            /W4 /permissive- /utf-8)
         target_compile_options(ASRTU1_SsdvTest PRIVATE
             /W4 /permissive- /utf-8)
     endif()
     asrtu_enable_strict_warnings(ASRTU1_FrameMonitorTest)
+    asrtu_enable_strict_warnings(ASRTU1_PmtFrameDecoderTest)
     asrtu_enable_strict_warnings(ASRTU1_SsdvTest)
     add_test(NAME frame_monitor COMMAND ASRTU1_FrameMonitorTest)
+    add_test(NAME pmt_frame_decoder COMMAND ASRTU1_PmtFrameDecoderTest)
     add_test(NAME ssdv_receiver COMMAND ASRTU1_SsdvTest)
     set_tests_properties(ssdv_receiver PROPERTIES ENVIRONMENT_MODIFICATION
         "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt5::Core>;QT_PLUGIN_PATH=set:$<TARGET_FILE_DIR:Qt5::Core>/../plugins")
@@ -352,9 +404,11 @@ set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
     "ASRTU series satellite receiver and decoder")
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "ASRTU Series Receiver")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "gnuradio (>= 3.10), libqwt-qt5-6")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS
+    "gnuradio (>= 3.10), libqwt-qt5-6, libqt5websockets5")
 set(CPACK_DEBIAN_PACKAGE_SECTION "hamradio")
-set(CPACK_RPM_PACKAGE_REQUIRES "gnuradio >= 3.10, qwt-qt5")
+set(CPACK_RPM_PACKAGE_REQUIRES
+    "gnuradio >= 3.10, qwt-qt5, qt5-qtwebsockets")
 set(CPACK_RPM_PACKAGE_LICENSE "MIT and GPL-3.0-or-later")
 set(CPACK_RPM_PACKAGE_GROUP "Applications/Communications")
 include(CPack)
