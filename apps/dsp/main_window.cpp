@@ -2,6 +2,7 @@
 
 #include "flowgraph.h"
 #include "rssi_meter.h"
+#include "runtime_paths.h"
 #include "snr_plot.h"
 #include "ssdv_image_window.h"
 #include "ssdv_receiver.h"
@@ -203,19 +204,20 @@ QString requestedSessionDirectory()
 
 QString createSessionDirectory()
 {
-    QString directory = requestedSessionDirectory();
-    if (directory.isEmpty()) {
-        const QString root = QDir::cleanPath(
-            QDir(QCoreApplication::applicationDirPath())
-                .absoluteFilePath(QStringLiteral("../ASRTU1_Records")));
-        directory = QDir(root).filePath(
-            QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_HHmmss_zzz")));
-    }
-    if (!QDir().mkpath(directory))
-        throw std::runtime_error(
-            QStringLiteral("Unable to create session directory: %1")
-                .arg(directory).toUtf8().constData());
-    return QDir(directory).absolutePath();
+	QString directory = requestedSessionDirectory();
+	if (directory.isEmpty()) {
+		const QString root = asrtu::recordsDirectory();
+		directory =
+		    QDir(root).filePath(QDateTime::currentDateTime().toString(
+			QStringLiteral("yyyyMMdd_HHmmss_zzz")));
+	}
+	if (!QDir().mkpath(directory))
+		throw std::runtime_error(
+		    QStringLiteral("Unable to create session directory: %1")
+			.arg(directory)
+			.toUtf8()
+			.constData());
+	return QDir(directory).absolutePath();
 }
 
 bool requestedRealIf12k()
@@ -374,9 +376,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
         flowgraph_->start();
         appendLog(QStringLiteral("Flowgraph started"));
     } catch (const std::exception& e) {
-        QMessageBox::critical(this, QStringLiteral("Initialization failed"),
-                              QString::fromUtf8(e.what()));
-        throw;
+	    appendLog(QStringLiteral("Initialization failed: %1")
+			  .arg(QString::fromUtf8(e.what())));
+	    throw;
     }
 
     status_timer_ = new QTimer(this);

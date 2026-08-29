@@ -10,4 +10,5 @@ cppcheck --project="$build_dir/compile_commands.json" \
 	--suppress=missingIncludeSystem \
 	--suppress=syntaxError \
 	--suppress=unknownMacro \
+	--suppress='uninitvar:*third_party/sgp4/sgp4.c' \
 	--suppress=checkersReport

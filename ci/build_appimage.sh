@@ -52,7 +52,9 @@ LINUXDEPLOY_PLUGIN_QT="$linuxdeploy_plugin_qt" \
 LINUXDEPLOY_OUTPUT_VERSION="$version" \
 NO_STRIP=1 ARCH=x86_64 "$linuxdeploy" \
 	--appdir "$appdir" \
+	--executable "$appdir/usr/bin/ASRTU1_Launcher" \
 	--executable "$appdir/usr/bin/ASRTU1_Demod_CQt" \
+	--executable "$appdir/usr/bin/ASRTU_Doppler" \
 	--desktop-file "$appdir/usr/share/applications/asrtu-series-receiver.desktop" \
 	--icon-file "$appdir/usr/share/icons/hicolor/512x512/apps/asrtu-series-receiver.png" \
 	--library "$appdir/usr/lib/libgnuradio-lilacsat.so" \

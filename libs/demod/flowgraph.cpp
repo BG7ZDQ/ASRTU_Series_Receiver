@@ -5,6 +5,9 @@
 
 #include <gnuradio/analog/feedforward_agc_cc.h>
 #include <gnuradio/analog/sig_source.h>
+#ifndef _WIN32
+#include <gnuradio/audio/source.h>
+#endif
 #include <gnuradio/blocks/complex_to_float.h>
 #include <gnuradio/blocks/complex_to_real.h>
 #include <gnuradio/blocks/delay.h>
@@ -304,18 +307,40 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
 
     gr::basic_block_sptr source;
     gr::basic_block_sptr complexSource;
+    bool sourceHasSecondOutput = false;
     const auto to_complex = gr::blocks::float_to_complex::make(1);
     if (options.shared_iq_bridge) {
         shared_iq_source_ = SharedIqSource::make();
         source = shared_iq_source_;
         complexSource = source;
     } else if (options.wav_path.empty()) {
-        source = gr::hyacinthsat::stereo_iq_source::make(
-            48000, options.audio_device_id, false);
+#ifdef _WIN32
+	    source = gr::hyacinthsat::stereo_iq_source::make(
+		48000, options.audio_device_id, false);
+	    sourceHasSecondOutput = true;
+#else
+	    if (options.real_if_12khz) {
+		    const std::string device =
+			options.audio_device_id < 0
+			    ? std::string{}
+			    : "plughw:" +
+				  std::to_string(options.audio_device_id) +
+				  ",0";
+		    // A real-IF input needs only one channel. Asking ALSA for
+		    // two channels makes valid mono radios and microphones fail
+		    // topology validation before the flowgraph can start.
+		    source = gr::audio::source::make(48000, device, true);
+	    } else {
+		    source = gr::hyacinthsat::stereo_iq_source::make(
+			48000, options.audio_device_id, false);
+		    sourceHasSecondOutput = true;
+	    }
+#endif
     } else {
-        source = gr::hyacinthsat::wav_iq_source::make(
-            options.wav_path, 48000, false,
-            options.enable_gui && !options.fast_playback);
+	    source = gr::hyacinthsat::wav_iq_source::make(
+		options.wav_path, 48000, false,
+		options.enable_gui && !options.fast_playback);
+	    sourceHasSecondOutput = true;
     }
     if (!complexSource)
         complexSource = to_complex;
@@ -462,9 +487,11 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
             kIfRate, gr::analog::GR_CONST_WAVE, 0.0, 0.0, 0.0);
         const auto unusedRightChannel = gr::blocks::null_sink::make(sizeof(float));
         tb_->connect(zero, 0, to_complex, 1);
-        // Both audio source blocks expose two mandatory outputs. Drain the
-        // unused channel in real-IF mode so GNU Radio can validate the graph.
-        tb_->connect(source, 1, unusedRightChannel, 0);
+	// WAV playback and the Windows capture block expose a second output;
+	// drain it in real-IF mode. Linux live real-IF capture deliberately
+	// requests one ALSA channel and therefore has nothing to drain.
+	if (sourceHasSecondOutput)
+		tb_->connect(source, 1, unusedRightChannel, 0);
     } else if (!options.shared_iq_bridge) {
         tb_->connect(source, 1, to_complex, 1);
     }

@@ -37,9 +37,10 @@
 
 ## Linux
 
-Linux 可以构建 `ASRTU1_Demod_CQt` 解码器；Windows 启动器、代理包装器、
-SDR# 插件和 Inno Setup 安装器不会生成。建议使用 GNU Radio 3.10、Qt 5 和
-同一 ABI/编译器构建全部 OOT 模块。
+Linux 可以构建 `ASRTU1_Launcher`、`ASRTU1_Demod_CQt` 和
+`ASRTU_Doppler`。Windows 代理包装器、SDR# 插件和 Inno Setup 安装器不会
+生成；遥测上传代理的源码不属于本仓库，因此 Linux 包暂不提供上传代理。
+建议使用 GNU Radio 3.10、Qt 5 和同一 ABI/编译器构建全部 OOT 模块。
 
 以 Ubuntu/Debian 为例，基础依赖可安装为：
 
@@ -62,9 +63,10 @@ cmake -S . -B build-linux -G Ninja \
 cmake --build build-linux --parallel
 ```
 
-启动录音回放示例：
+启动器及录音回放示例：
 
 ```bash
+./build-linux/ASRTU1_Launcher
 ./build-linux/ASRTU1_Demod_CQt --wav /path/to/stereo_iq.wav --no-record
 ./build-linux/ASRTU1_Demod_CQt --wav /path/to/mono_12khz_if.wav \
   --real-if-12k --no-record
@@ -73,10 +75,16 @@ cmake --build build-linux --parallel
 Linux 当前范围与限制：
 
 - 录音文件、GNU Radio DSP、FEC、Qt图形、TCP/ZMQ输出可作为主要移植路径。
+- Linux 默认把录音和日志写入当前用户的 XDG 数据目录，不会写入 AppImage
+  挂载点或 `/usr` 等系统安装目录。
+- Linux 启动器当前使用系统默认音频输入。数字设备选择仍需与
+  `gr-hyacinth` 的 ALSA 设备编号保持一致后再开放。
+- Doppler 窗口可以在 Linux 计算并显示跟踪结果；自动控制 SDR# 的共享内存
+  发布仍是 Windows 专用功能。
 - 实时声卡能否工作取决于本机 GNU Radio 音频后端和 `gr-hyacinth` 的
   `stereo_iq_source` 实现，需要在目标发行版实测。
-- SDR# 本地共享内存桥使用 Windows named mapping；Linux 构建中该输入不会
-  产生样本，需要改用声卡/录音，或另行实现跨平台共享传输。
+- SDR# 本地共享内存桥使用 Windows named mapping；Linux 构建中不提供该
+  输入，需要改用声卡/录音，或另行实现跨平台共享传输。
 - Linux CI 会执行严格编译、单元测试、Cppcheck、Clang-Tidy、ASan、UBSan
   和 TSan，并构建 AppImage、deb、rpm；Arch Linux 打包元数据由
   `packaging/arch/PKGBUILD` 提供并在 CI 中校验。

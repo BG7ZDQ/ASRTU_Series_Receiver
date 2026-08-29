@@ -28,4 +28,4 @@ WAV/OGG playback ───┘                                      └─> Viter
 
 ## 运行数据
 
-录音和日志默认写入安装目录旁的 `ASRTU1_Records/<timestamp>/`。TLE 聚合缓存保存到当前用户的应用数据目录。呼号和坐标只写入本机配置，不应提交到版本库。
+录音和日志在 Windows 默认写入安装目录旁的 `ASRTU1_Records/<timestamp>/`，在 Linux 写入 `QStandardPaths::GenericDataLocation/ASRTU/ASRTU1_Records/<timestamp>/`。TLE 聚合缓存保存到当前用户的应用数据目录。呼号和坐标只写入本机配置，不应提交到版本库。

@@ -56,15 +56,29 @@ int main(int argc, char* argv[])
             const QString screenshotPath = QString::fromLocal8Bit(argv[2]);
             QTimer::singleShot(1500, &window, [&app, &window, screenshotPath] {
                 if (!window.grab().save(screenshotPath))
-                    std::cerr << "Unable to save UI screenshot" << std::endl;
-                app.quit();
+			std::cerr << "Unable to save UI screenshot" << '\n';
+		app.quit();
             });
         }
         return app.exec();
-    } catch (const std::exception& e) {
-        std::cerr << "Fatal error: " << e.what() << std::endl;
-        QMessageBox::critical(nullptr, QStringLiteral("ASRTU fatal error"),
-                              QString::fromUtf8(e.what()));
-        return EXIT_FAILURE;
+    } catch (const std::exception &e) {
+	    std::cerr << "Fatal error: " << e.what() << '\n';
+	    QString message = QString::fromUtf8(e.what());
+	    if (message.contains(
+		    QStringLiteral("check topology failed on audio_"))) {
+		    message =
+			QCoreApplication::translate(
+			    "ASRTU",
+			    "无法按当前模式打开音频输入设备。\n\n"
+			    "“立体声零中频 RAW 模式 I/Q "
+			    "输入”必须由声卡提供两个录音声道；"
+			    "若你的电台或麦克风只有一个声道，请在启动器中选择"
+			    "“单声道实数域 12KHz 电台 IF "
+			    "输入”。\n\n底层错误：%1")
+			    .arg(message);
+	    }
+	    QMessageBox::critical(nullptr, QStringLiteral("ASRTU fatal error"),
+				  message);
+	    return EXIT_FAILURE;
     }
 }
