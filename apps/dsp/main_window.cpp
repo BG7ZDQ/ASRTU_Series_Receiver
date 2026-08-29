@@ -376,7 +376,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
         flowgraph_->start();
         appendLog(QStringLiteral("Flowgraph started"));
     } catch (const std::exception& e) {
-        throw;
+	    appendLog(QStringLiteral("Initialization failed: %1")
+			  .arg(QString::fromUtf8(e.what())));
+	    throw;
     }
 
     status_timer_ = new QTimer(this);
