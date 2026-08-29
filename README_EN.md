@@ -4,7 +4,7 @@
 
 A C++/Qt suite for receiving, demodulating, forwarding telemetry, and automatically correcting Doppler shift for ASRTU-series satellites. It includes a receiver/decoder, desktop launcher, telemetry-proxy wrapper, and an SDR# local RAW I/Q bridge plugin.
 
-Author: **BG7ZDQ**
+Contributors: **BG7ZDQ** **BI1NWO** **BG6HNY** **BG4QBF**
 
 ## Features
 

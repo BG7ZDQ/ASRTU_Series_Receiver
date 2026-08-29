@@ -2,7 +2,7 @@
 
 ASRTU 系列卫星接收、解调、遥测转发与自动多普勒工具。项目包含 C++/Qt 接收解码器、桌面启动器、遥测代理启动包装器，以及 SDR# 本地 RAW I/Q 桥接插件。
 
-Author: **BG7ZDQ**
+Contributors: **BG7ZDQ** **BI1NWO** **BG6HNY** **BG4QBF**
 
 Languages: **中文** · [English](README_EN.md) · [日本語](README_JA.md)
 
