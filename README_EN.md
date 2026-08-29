@@ -76,7 +76,7 @@ Doppler correction only adjusts the receiver frequency; it does not prove succes
 
 ### 8. Recording and playback
 
-- Automatic recording stores WAV and log files under `ASRTU1_Records/<timestamp>/`.
+- Automatic recording stores WAV and log files under `ASRTU1_Records/<timestamp>/`. Windows uses a folder beside the installation by default; Linux uses the current user's data directory.
 - **Open Recordings and Logs** opens that directory.
 - **Play Recording File** accepts supported recordings. Mono files are treated as 12 kHz real IF; stereo files are treated as zero-IF I/Q.
 - **Quick Play Recording File** provides a shorter path for selecting a recording and running regression checks. It does not switch to live sound-card input.

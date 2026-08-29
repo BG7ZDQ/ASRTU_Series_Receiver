@@ -42,9 +42,11 @@
 #include <QWidget>
 
 #include "translation.h"
+#include "runtime_paths.h"
 
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -52,6 +54,15 @@
 #endif
 
 namespace {
+QString executableName(const QString &baseName)
+{
+#ifdef Q_OS_WIN
+	return baseName + QStringLiteral(".exe");
+#else
+	return baseName;
+#endif
+}
+
 void notifyRunningDspAudioDevice(int deviceId)
 {
     QLocalSocket socket;
@@ -72,7 +83,12 @@ QString decoderDirectory()
 
 QString proxyDirectory()
 {
-    return QCoreApplication::applicationDirPath() + QStringLiteral("/../proxy");
+#ifdef Q_OS_WIN
+	return QCoreApplication::applicationDirPath() +
+	       QStringLiteral("/../proxy");
+#else
+	return QFileInfo(asrtu::proxyConfigPath()).absolutePath();
+#endif
 }
 
 QString sdrSharpDirectory()
@@ -82,7 +98,7 @@ QString sdrSharpDirectory()
 
 QString configPath()
 {
-    return proxyDirectory() + QStringLiteral("/config.cfg");
+	return asrtu::proxyConfigPath();
 }
 
 struct SatelliteProfile {
@@ -125,12 +141,9 @@ QString webSocketForSatellite(const QString& name)
     return satelliteProfiles().first().webSocket;
 }
 
-QString recordsDirectory();
-
 QString recordsDirectory()
 {
-    return QDir::cleanPath(
-        QDir(decoderDirectory()).absoluteFilePath(QStringLiteral("../ASRTU1_Records")));
+	return asrtu::recordsDirectory();
 }
 
 QString escapedConfigString(QString value)
@@ -242,17 +255,18 @@ bool startSdrSharp(qint64* processId, QString* error)
 }
 
 bool startDoppler(double longitude, double latitude, double altitude,
-                  const QString& satellite, qint64* processId, QString* error)
+		  const QString &satellite, qint64 *processId, QString *error)
 {
-    const QString executable = decoderDirectory() + QStringLiteral("/ASRTU_Doppler.exe");
-    const QStringList arguments{
-        QStringLiteral("--longitude"), QString::number(longitude, 'f', 6),
-        QStringLiteral("--latitude"), QString::number(latitude, 'f', 6),
-        QStringLiteral("--altitude"), QString::number(altitude, 'f', 2),
-        QStringLiteral("--satellite"), satellite
-    };
-    return startProgram(executable, arguments, decoderDirectory(), {}, false,
-                        processId, error);
+	const QString executable =
+	    QDir(decoderDirectory())
+		.filePath(executableName(QStringLiteral("ASRTU_Doppler")));
+	const QStringList arguments{
+	    QStringLiteral("--longitude"), QString::number(longitude, 'f', 6),
+	    QStringLiteral("--latitude"),  QString::number(latitude, 'f', 6),
+	    QStringLiteral("--altitude"),  QString::number(altitude, 'f', 2),
+	    QStringLiteral("--satellite"), satellite};
+	return startProgram(executable, arguments, decoderDirectory(), {},
+			    false, processId, error);
 }
 
 QString logTail(const QString& path)
@@ -339,79 +353,91 @@ bool startProxy(const QString& launchLog, qint64* processId, QString* error)
     return true;
 }
 
-bool startSuite(bool enableProxy, int inputMode, const QString& wavPath,
-                bool fastPlayback,
-                int audioDeviceId, bool recordingEnabled,
-                QString* sessionDirectory,
-                qint64* proxyProcessId, QString* error)
+bool startSuite(bool enableProxy, int inputMode, const QString &wavPath,
+		bool fastPlayback, int audioDeviceId, bool recordingEnabled,
+		QString *sessionDirectory, qint64 *proxyProcessId,
+		QString *error)
 {
-    const QString decoder = decoderDirectory() + QStringLiteral("/ASRTU1_Demod_CQt.exe");
-    *sessionDirectory = createSessionDirectory(error);
-    if (sessionDirectory->isEmpty())
-        return false;
-    QString playbackPath = wavPath;
-    if (!playbackPath.isEmpty()) {
-        if (QFileInfo(playbackPath).suffix().compare(
-                QStringLiteral("wav"), Qt::CaseInsensitive) != 0) {
-            const QString converter = decoderDirectory() +
-                QStringLiteral("/sndfile-convert.exe");
-            if (!QFileInfo::exists(converter)) {
-                *error = QCoreApplication::translate("ASRTU", "找不到录音格式转换器。 ");
-                return false;
-            }
-            const QString converted = QDir(*sessionDirectory).filePath(
-                QStringLiteral("playback_input.wav"));
-            QProcess conversion;
-            conversion.setProgram(converter);
-            conversion.setArguments({QStringLiteral("-pcm16"), playbackPath, converted});
-            conversion.setWorkingDirectory(decoderDirectory());
-            conversion.start();
-            if (!conversion.waitForStarted(3000) ||
-                !conversion.waitForFinished(60000) ||
-                conversion.exitStatus() != QProcess::NormalExit ||
-                conversion.exitCode() != 0) {
-                *error = QCoreApplication::translate("ASRTU", "无法转换录音文件：/%1")
-                             .arg(QFileInfo(playbackPath).fileName());
-                return false;
-            }
-            playbackPath = converted;
-        }
-        const int channels = wavChannelCount(playbackPath);
-        if (channels != 1 && channels != 2) {
-            *error = QCoreApplication::translate("ASRTU", "仅支持单声道或双声道录音文件。");
-            return false;
-        }
-        inputMode = channels == 1 ? 1 : 0;
-    }
-    qint64 proxyPid = 0;
-    if (enableProxy) {
-        const QString proxyLog = QDir(*sessionDirectory).filePath(
-            QStringLiteral("proxy.log"));
-        if (!startProxy(proxyLog, &proxyPid, error))
-            return false;
-    }
-    qint64 decoderPid = 0;
-    QStringList decoderArguments{
-        QStringLiteral("--session-dir"), *sessionDirectory
-    };
-    if (!playbackPath.isEmpty())
-        decoderArguments << QStringLiteral("--wav") << playbackPath;
-    if (!playbackPath.isEmpty() && fastPlayback)
-        decoderArguments << QStringLiteral("--fast-playback");
-    else if (!recordingEnabled)
-        decoderArguments << QStringLiteral("--no-record");
-    if (inputMode == 1)
-        decoderArguments << QStringLiteral("--real-if-12k");
-    else if (inputMode == 2)
-        decoderArguments << QStringLiteral("--sdrsharp-iq-bridge");
-    if (playbackPath.isEmpty() && inputMode != 2)
-        decoderArguments << QStringLiteral("--audio-device")
-                         << QString::number(audioDeviceId);
-    if (!startProgram(decoder, decoderArguments,
-                      decoderDirectory(), {}, false, &decoderPid, error))
-        return false;
-    *proxyProcessId = proxyPid;
-    return true;
+	const QString decoder =
+	    QDir(decoderDirectory())
+		.filePath(executableName(QStringLiteral("ASRTU1_Demod_CQt")));
+	*sessionDirectory = createSessionDirectory(error);
+	if (sessionDirectory->isEmpty())
+		return false;
+	QString playbackPath = wavPath;
+	if (!playbackPath.isEmpty()) {
+		if (QFileInfo(playbackPath)
+			.suffix()
+			.compare(QStringLiteral("wav"), Qt::CaseInsensitive) !=
+		    0) {
+			const QString converter =
+			    QDir(decoderDirectory())
+				.filePath(executableName(
+				    QStringLiteral("sndfile-convert")));
+			if (!QFileInfo::exists(converter)) {
+				*error = QCoreApplication::translate(
+				    "ASRTU", "找不到录音格式转换器。 ");
+				return false;
+			}
+			const QString converted =
+			    QDir(*sessionDirectory)
+				.filePath(QStringLiteral("playback_input.wav"));
+			QProcess conversion;
+			conversion.setProgram(converter);
+			conversion.setArguments({QStringLiteral("-pcm16"),
+						 playbackPath, converted});
+			conversion.setWorkingDirectory(decoderDirectory());
+			conversion.start();
+			if (!conversion.waitForStarted(3000) ||
+			    !conversion.waitForFinished(60000) ||
+			    conversion.exitStatus() != QProcess::NormalExit ||
+			    conversion.exitCode() != 0) {
+				*error =
+				    QCoreApplication::translate(
+					"ASRTU", "无法转换录音文件：/%1")
+					.arg(
+					    QFileInfo(playbackPath).fileName());
+				return false;
+			}
+			playbackPath = converted;
+		}
+		const int channels = wavChannelCount(playbackPath);
+		if (channels != 1 && channels != 2) {
+			*error = QCoreApplication::translate(
+			    "ASRTU", "仅支持单声道或双声道录音文件。");
+			return false;
+		}
+		inputMode = channels == 1 ? 1 : 0;
+	}
+	qint64 proxyPid = 0;
+	if (enableProxy) {
+		const QString proxyLog =
+		    QDir(*sessionDirectory)
+			.filePath(QStringLiteral("proxy.log"));
+		if (!startProxy(proxyLog, &proxyPid, error))
+			return false;
+	}
+	qint64 decoderPid = 0;
+	QStringList decoderArguments{QStringLiteral("--session-dir"),
+				     *sessionDirectory};
+	if (!playbackPath.isEmpty())
+		decoderArguments << QStringLiteral("--wav") << playbackPath;
+	if (!playbackPath.isEmpty() && fastPlayback)
+		decoderArguments << QStringLiteral("--fast-playback");
+	else if (!recordingEnabled)
+		decoderArguments << QStringLiteral("--no-record");
+	if (inputMode == 1)
+		decoderArguments << QStringLiteral("--real-if-12k");
+	else if (inputMode == 2)
+		decoderArguments << QStringLiteral("--sdrsharp-iq-bridge");
+	if (playbackPath.isEmpty() && inputMode != 2)
+		decoderArguments << QStringLiteral("--audio-device")
+				 << QString::number(audioDeviceId);
+	if (!startProgram(decoder, decoderArguments, decoderDirectory(), {},
+			  false, &decoderPid, error))
+		return false;
+	*proxyProcessId = proxyPid;
+	return true;
 }
 
 class LauncherWindow final : public QWidget
@@ -1056,56 +1082,78 @@ private:
 };
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
-    QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-    QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+	QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+	QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
 #if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
-    QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
-        Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
+	QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
+	    Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
 #endif
-    QApplication application(argc, argv);
-    QTranslator translator;
-    installSystemTranslation(application, translator);
-    QFont uiFont(QStringLiteral("Microsoft YaHei UI"), 9);
-    uiFont.setStyleStrategy(static_cast<QFont::StyleStrategy>(
-        QFont::PreferAntialias | QFont::PreferQuality));
-    uiFont.setHintingPreference(QFont::PreferFullHinting);
-    application.setFont(uiFont);
-    QCoreApplication::setOrganizationName(QStringLiteral("ASRTU"));
-    QCoreApplication::setApplicationName(QStringLiteral("ASRTU1_Launcher"));
+	QApplication application(argc, argv);
+	QTranslator translator;
+	installSystemTranslation(application, translator);
+	QFont uiFont(QStringLiteral("Microsoft YaHei UI"), 9);
+	uiFont.setStyleStrategy(static_cast<QFont::StyleStrategy>(
+	    QFont::PreferAntialias | QFont::PreferQuality));
+	uiFont.setHintingPreference(QFont::PreferFullHinting);
+	application.setFont(uiFont);
+	QCoreApplication::setOrganizationName(QStringLiteral("ASRTU"));
+	QCoreApplication::setApplicationName(QStringLiteral("ASRTU1_Launcher"));
 
-    if (application.arguments().contains(QStringLiteral("--start"))) {
-        QString error;
-        QString sessionDirectory;
-        qint64 proxyProcessId = 0;
-        if (!startSuite(true, 0, {}, false, -1, true,
-                        &sessionDirectory, &proxyProcessId, &error)) {
-            QMessageBox::critical(nullptr, QCoreApplication::translate("ASRTU", "阿斯图系列卫星启动失败"), error);
-            return 1;
-        }
-        return 0;
-    }
+	if (application.arguments().contains(
+		QStringLiteral("--check-session-directory"))) {
+		QString error;
+		const QString directory = createSessionDirectory(&error);
+		if (directory.isEmpty()) {
+			std::cerr << error.toUtf8().constData() << '\n';
+			return 1;
+		}
+		std::cout << directory.toUtf8().constData() << '\n';
+		return 0;
+	}
 
-    if (application.arguments().contains(QStringLiteral("--sdrsharp"))) {
-        QString error;
-        qint64 processId = 0;
-        if (!startSdrSharp(&processId, &error)) {
-            QMessageBox::critical(nullptr, QCoreApplication::translate("ASRTU", "SDR# 启动失败"), error);
-            return 1;
-        }
-        return 0;
-    }
+	if (application.arguments().contains(QStringLiteral("--start"))) {
+		QString error;
+		QString sessionDirectory;
+		qint64 proxyProcessId = 0;
+		if (!startSuite(true, 0, {}, false, -1, true, &sessionDirectory,
+				&proxyProcessId, &error)) {
+			QMessageBox::critical(
+			    nullptr,
+			    QCoreApplication::translate(
+				"ASRTU", "阿斯图系列卫星启动失败"),
+			    error);
+			return 1;
+		}
+		return 0;
+	}
 
-    LauncherWindow window;
-    window.show();
-    const int screenshotOption = application.arguments().indexOf(QStringLiteral("--screenshot"));
-    if (screenshotOption >= 0 && screenshotOption + 1 < application.arguments().size()) {
-        const QString path = application.arguments().at(screenshotOption + 1);
-        QTimer::singleShot(300, &window, [&application, &window, path] {
-            window.grab().save(path);
-            application.quit();
-        });
-    }
-    return application.exec();
+	if (application.arguments().contains(QStringLiteral("--sdrsharp"))) {
+		QString error;
+		qint64 processId = 0;
+		if (!startSdrSharp(&processId, &error)) {
+			QMessageBox::critical(nullptr,
+					      QCoreApplication::translate(
+						  "ASRTU", "SDR# 启动失败"),
+					      error);
+			return 1;
+		}
+		return 0;
+	}
+
+	LauncherWindow window;
+	window.show();
+	const int screenshotOption =
+	    application.arguments().indexOf(QStringLiteral("--screenshot"));
+	if (screenshotOption >= 0 &&
+	    screenshotOption + 1 < application.arguments().size()) {
+		const QString path =
+		    application.arguments().at(screenshotOption + 1);
+		QTimer::singleShot(300, &window, [&application, &window, path] {
+			window.grab().save(path);
+			application.quit();
+		});
+	}
+	return application.exec();
 }

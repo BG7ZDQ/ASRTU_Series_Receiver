@@ -190,9 +190,13 @@ jobs:
         run: |
           appimage=$(find dist/appimage -maxdepth 1 -name '*.AppImage' -print -quit)
           test -n "$appimage"
+          XDG_CONFIG_HOME="$RUNNER_TEMP/asrtu-config" \
+            XDG_DATA_HOME="$RUNNER_TEMP/asrtu-data" \
+            timeout 30 xvfb-run --auto-servernum "$appimage" \
+            --check-session-directory \
+            > appimage-session-check.log 2>&1
           set +e
-          APPIMAGE_EXTRACT_AND_RUN=1 \
-            XDG_CONFIG_HOME="$RUNNER_TEMP/asrtu-config" \
+          XDG_CONFIG_HOME="$RUNNER_TEMP/asrtu-config" \
             XDG_DATA_HOME="$RUNNER_TEMP/asrtu-data" \
             timeout 10 xvfb-run --auto-servernum "$appimage" \
             > appimage-launch.log 2>&1

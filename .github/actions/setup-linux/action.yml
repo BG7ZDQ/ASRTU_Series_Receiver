@@ -19,6 +19,7 @@ runs:
           dpkg-dev \
           file \
           gnuradio-dev \
+          libfuse2t64 \
           libboost-all-dev \
           libfftw3-dev \
           libqwt-qt5-dev \
