@@ -8,6 +8,7 @@
 
 namespace {
 constexpr std::int64_t kDuplicateWindowMs = 2000;
+constexpr std::size_t kTelemetryFrameBytes = 223;
 constexpr auto kCandidateArbitrationWindow = std::chrono::milliseconds(50);
 
 std::int64_t nowMs()
@@ -37,7 +38,8 @@ FrameMonitor::FrameMonitor(Callback callback, PayloadCallback payloadCallback,
     for (const char* name : { "primary", "openhoshimi" }) {
         const auto port = pmt::intern(name);
         message_port_register_in(port);
-        set_msg_handler(port, [this, name](pmt::pmt_t msg) { handle(msg, name); });
+	set_msg_handler(
+	    port, [this, name](const pmt::pmt_t &msg) { handle(msg, name); });
     }
     for (const auto& entry : {
              std::pair{"local_openhoshimi", CandidatePriority::OpenHoshimi},
@@ -45,9 +47,10 @@ FrameMonitor::FrameMonitor(Callback callback, PayloadCallback payloadCallback,
          }) {
         const auto port = pmt::intern(entry.first);
         message_port_register_in(port);
-        set_msg_handler(port, [this, priority = entry.second](pmt::pmt_t msg) {
-            handleLocalCandidate(msg, priority);
-        });
+	set_msg_handler(port,
+			[this, priority = entry.second](const pmt::pmt_t &msg) {
+				handleLocalCandidate(msg, priority);
+			});
     }
     message_port_register_out(pmt::intern("out"));
     candidate_worker_ = std::thread([this] { candidateWorker(); });
@@ -153,6 +156,8 @@ void FrameMonitor::handle(const pmt::pmt_t& message, const char* path)
 
     std::size_t length = 0;
     const auto* bytes = pmt::u8vector_elements(data, length);
+    if (length != kTelemetryFrameBytes)
+	    return;
     std::vector<std::uint8_t> payload(bytes, bytes + length);
     const auto timestamp = nowMs();
     // A successful FEC result always wins over every failed local candidate.
@@ -181,11 +186,11 @@ void FrameMonitor::handle(const pmt::pmt_t& message, const char* path)
         [&payload](const RecentFrame& frame) { return frame.payload == payload; });
     if (!duplicate) {
         recently_sent_.push_back({timestamp, payload});
-        // Publish before formatting/logging: the first decoder branch to
-        // complete a frame remains the minimum-latency proxy path.
-        // The uploader reads the frame from a fixed 10-byte offset in the
-        // serialized PMT, so every transport uses a metadata-free envelope.
-        message_port_pub(pmt::intern("out"), pmt::cons(pmt::PMT_NIL, data));
+	// Publish before formatting/logging: the first decoder branch to
+	// complete a frame remains the minimum-latency proxy path.
+	// Keep the network PDU canonical for legacy subscribers. New clients
+	// must deserialize PMT instead of assuming a fixed wire header.
+	message_port_pub(pmt::intern("out"), pmt::cons(pmt::PMT_NIL, data));
         if (payload_callback_)
             payload_callback_(payload);
     } else {

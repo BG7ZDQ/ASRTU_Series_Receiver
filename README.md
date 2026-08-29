@@ -62,7 +62,8 @@ Languages: **中文** · [English](README_EN.md) · [日本語](README_JA.md)
 
 1. 确认呼号和地面站坐标填写正确。
 2. 点击 **启动上传代理**，在弹出的列表中选择本次要上传的卫星。
-3. 代理使用独立控制台显示 WebSocket 连接和上传信息；启动接收与启动代理互相独立，可以只进行本地解码。
+3. Linux 原生代理会先用 PMT 库解析 ZMQ PDU，再上传其中的 223 字节遥测；
+   Windows 使用随安装包提供的旧代理。启动接收与启动代理互相独立，可以只进行本地解码。
 4. 收到 FEC 帧后，检查代理窗口是否显示连接成功和数据转发记录。
 
 ### 7. 卫星跟踪与自动多普勒
@@ -124,6 +125,6 @@ Languages: **中文** · [English](README_EN.md) · [日本語](README_JA.md)
 
 本项目由 BG7ZDQ 以 [MIT License](LICENSE) 开源。第三方组件仍分别适用各自上游许可证，详见 [THIRD_PARTY.md](THIRD_PARTY.md)；MIT 许可不替代、修改或扩大任何第三方授权。
 
-GNU Radio 3.x、`gr-lilacsat` 和 `gr-hyacinth` 属 GPL 系依赖。MIT 源码可以与 GPL 组件配合使用，但包含和链接这些组件的完整二进制发行物还必须满足相应 GPL 源码、许可证和版权告知义务。SDR# 与上传代理不属于本项目 MIT 授权范围。
+GNU Radio 3.x、`gr-lilacsat` 和 `gr-hyacinth` 属 GPL 系依赖。MIT 源码可以与 GPL 组件配合使用，但包含和链接这些组件的完整二进制发行物还必须满足相应 GPL 源码、许可证和版权告知义务。SDR# 与另行提供的 Windows 旧上传代理不属于本项目 MIT 授权范围；该说明不适用于仓库内的 Linux 原生代理源码。
 
 本项目与 SDR#、GNU Radio 及所支持卫星的原作者或运营方不存在官方隶属或背书关系，除非相应权利方另有书面说明。

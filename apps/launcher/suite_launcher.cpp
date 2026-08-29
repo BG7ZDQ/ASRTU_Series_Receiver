@@ -9,6 +9,7 @@
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QDoubleSpinBox>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
 #include <QFileDialog>
@@ -35,6 +36,7 @@
 #include <QSizePolicy>
 #include <QStyle>
 #include <QTextStream>
+#include <QThread>
 #include <QTimer>
 #include <QTranslator>
 #include <QUrl>
@@ -51,6 +53,11 @@
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <mmsystem.h>
+#else
+#include <cerrno>
+#include <signal.h>
+#include <sys/types.h>
+#include <unistd.h>
 #endif
 
 namespace {
@@ -306,8 +313,18 @@ bool processSurvivedStartup(qint64 processId, int timeoutMs, quint32* exitCode)
         *exitCode = quint32(nativeExitCode);
     return waitResult == WAIT_TIMEOUT;
 #else
-    Q_UNUSED(processId)
-    Q_UNUSED(timeoutMs)
+	QElapsedTimer timer;
+	timer.start();
+	while (timer.elapsed() < timeoutMs) {
+		if (processId <= 0 ||
+		    (::kill(static_cast<pid_t>(processId), 0) != 0 &&
+		     errno == ESRCH)) {
+			if (exitCode)
+				*exitCode = 1;
+			return false;
+		}
+		QThread::msleep(25);
+	}
     if (exitCode)
         *exitCode = 0;
     return true;
@@ -316,41 +333,70 @@ bool processSurvivedStartup(qint64 processId, int timeoutMs, quint32* exitCode)
 
 bool startProxy(const QString& launchLog, qint64* processId, QString* error)
 {
-    const QString proxyWrapper = proxyDirectory() + QStringLiteral("/ASRTU_Proxy.exe");
-    const QString proxy = QFileInfo::exists(proxyWrapper)
-                              ? proxyWrapper
-                              : proxyDirectory() + QStringLiteral("/proxy_mmt_gui.exe");
-    if (!QFileInfo::exists(configPath())) {
-        *error = QCoreApplication::translate("ASRTU", "尚未配置上传信息，请先填写呼号和地面站资料。");
-        return false;
-    }
-    if (!launchLog.isEmpty()) {
-        appendProxyLaunchLog(launchLog,
-                             QStringLiteral("Starting interactive proxy console: %1")
-                                 .arg(proxy));
-    }
-    qint64 proxyPid = 0;
-    if (!startProgram(proxy, {}, proxyDirectory(), {}, true, &proxyPid, error))
-        return false;
-    quint32 exitCode = 0;
-    if (!processSurvivedStartup(proxyPid, 1200, &exitCode)) {
-        *error = QCoreApplication::translate("ASRTU", "上传代理启动后立即退出（代码 %1）。")
-                     .arg(exitCode);
-        if (!launchLog.isEmpty()) {
-            const QString output = logTail(launchLog);
-            *error += QCoreApplication::translate("ASRTU", "\n日志：%1").arg(launchLog);
-            if (!output.isEmpty())
-                *error += QCoreApplication::translate("ASRTU", "\n\n最后输出：\n%1").arg(output);
-        }
-        return false;
-    }
-    if (!launchLog.isEmpty()) {
-        appendProxyLaunchLog(launchLog,
-                             QStringLiteral("Proxy startup check passed; PID=%1")
-                                 .arg(proxyPid));
-    }
-    *processId = proxyPid;
-    return true;
+#ifdef Q_OS_WIN
+	const QString proxyWrapper =
+	    proxyDirectory() + QStringLiteral("/ASRTU_Proxy.exe");
+	const QString proxy =
+	    QFileInfo::exists(proxyWrapper)
+		? proxyWrapper
+		: proxyDirectory() + QStringLiteral("/proxy_mmt_gui.exe");
+#else
+	const QString proxy =
+	    QDir(QCoreApplication::applicationDirPath())
+		.filePath(QStringLiteral("ASRTU_UploadProxy"));
+#endif
+	if (!QFileInfo::exists(configPath())) {
+		*error = QCoreApplication::translate(
+		    "ASRTU", "尚未配置上传信息，请先填写呼号和地面站资料。");
+		return false;
+	}
+	if (!launchLog.isEmpty()) {
+		appendProxyLaunchLog(
+		    launchLog,
+		    QStringLiteral("Starting interactive proxy console: %1")
+			.arg(proxy));
+	}
+	qint64 proxyPid = 0;
+	QStringList proxyArguments;
+#ifndef Q_OS_WIN
+	proxyArguments << QStringLiteral("--config") << configPath();
+#endif
+#ifdef Q_OS_WIN
+	const QString proxyOutputLog;
+	constexpr bool visibleProxyConsole = true;
+#else
+	const QString &proxyOutputLog = launchLog;
+	constexpr bool visibleProxyConsole = false;
+#endif
+	if (!startProgram(proxy, proxyArguments, proxyDirectory(),
+			  proxyOutputLog, visibleProxyConsole, &proxyPid,
+			  error))
+		return false;
+	quint32 exitCode = 0;
+	if (!processSurvivedStartup(proxyPid, 1200, &exitCode)) {
+		*error = QCoreApplication::translate(
+			     "ASRTU", "上传代理启动后立即退出（代码 %1）。")
+			     .arg(exitCode);
+		if (!launchLog.isEmpty()) {
+			const QString output = logTail(launchLog);
+			*error +=
+			    QCoreApplication::translate("ASRTU", "\n日志：%1")
+				.arg(launchLog);
+			if (!output.isEmpty())
+				*error += QCoreApplication::translate(
+					      "ASRTU", "\n\n最后输出：\n%1")
+					      .arg(output);
+		}
+		return false;
+	}
+	if (!launchLog.isEmpty()) {
+		appendProxyLaunchLog(
+		    launchLog,
+		    QStringLiteral("Proxy startup check passed; PID=%1")
+			.arg(proxyPid));
+	}
+	*processId = proxyPid;
+	return true;
 }
 
 bool startSuite(bool enableProxy, int inputMode, const QString &wavPath,

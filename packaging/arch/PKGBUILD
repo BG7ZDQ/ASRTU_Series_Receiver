@@ -5,7 +5,7 @@ pkgdesc='ASRTU satellite receiver and GNU Radio decoder'
 arch=('x86_64')
 url='https://github.com/BG7ZDQ/ASRTU_Series_Receiver'
 license=('MIT' 'GPL-3.0-or-later')
-depends=('gnuradio' 'qt5-base' 'qwt' 'boost-libs' 'fftw' 'zeromq'
+depends=('gnuradio' 'qt5-base' 'qt5-websockets' 'qwt' 'boost-libs' 'fftw' 'zeromq'
 	 'libsndfile')
 makedepends=('cmake' 'git' 'ninja' 'boost')
 _lilacsat_revision=74df3007f93899a29f543f49df35505025ada355

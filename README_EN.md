@@ -2,7 +2,7 @@
 
 [中文](README.md) · **English** · [日本語](README_JA.md)
 
-A C++/Qt suite for receiving, demodulating, forwarding telemetry, and automatically correcting Doppler shift for ASRTU-series satellites. It includes a receiver/decoder, desktop launcher, telemetry-proxy wrapper, and an SDR# local RAW I/Q bridge plugin.
+A C++/Qt suite for receiving, demodulating, forwarding telemetry, and automatically correcting Doppler shift for ASRTU-series satellites. It includes a receiver/decoder, desktop launcher, native Linux telemetry proxy, Windows telemetry-proxy wrapper, and an SDR# local RAW I/Q bridge plugin.
 
 Contributors: **BG7ZDQ** **BI1NWO** **BG6HNY** **BG4QBF**
 
@@ -63,7 +63,7 @@ After choosing the mode and sound card, click **Start Receiver**. Enable **Autom
 
 The two upload paths are optional and independent of local decoding:
 
-- **Start Upload Proxy** opens the existing WebSocket proxy. Select the destination satellite in the dialog shown before launch.
+- **Start Upload Proxy** opens the platform upload proxy. The native Linux proxy safely deserializes GNU Radio PMT PDUs before uploading their 223-byte telemetry payload. Select the destination satellite in the dialog shown before launch.
 - **Also upload to SatNOGS** submits each newly decoded live FEC frame directly to the SatNOGS telemetry API using the selected satellite, callsign, and station coordinates.
 
 Keep the computer clock, callsign, and coordinates accurate. SatNOGS submission is disabled during file playback so historical recordings are not reported as current observations.
@@ -91,7 +91,7 @@ Doppler correction only adjusts the receiver frequency; it does not prove succes
 
 ## Repository layout
 
-- `apps/` — DSP receiver, launcher, Doppler window, and proxy wrapper
+- `apps/` — DSP receiver, launcher, Doppler window, native Linux proxy, and Windows proxy wrapper
 - `libs/` — demodulation/FEC pipeline and shared code
 - `plugins/` — SDR# local RAW I/Q and Doppler bridge
 - `assets/` — branding, icons, UI resources, and translations
@@ -119,6 +119,6 @@ See [docs/BUILDING.md](docs/BUILDING.md) for the complete environment, current L
 
 BG7ZDQ publishes this project under the [MIT License](LICENSE). Third-party components remain under their respective upstream licenses; see [THIRD_PARTY.md](THIRD_PARTY.md). The MIT license does not replace, modify, or extend any third-party grant.
 
-GNU Radio 3.x, `gr-lilacsat`, and `gr-hyacinth` are GPL-family dependencies. MIT-licensed source may interoperate with them, but binary distributions containing or linking them must also satisfy the applicable GPL source, license, and attribution obligations. SDR# and the upload proxy are outside this project's MIT grant.
+GNU Radio 3.x, `gr-lilacsat`, and `gr-hyacinth` are GPL-family dependencies. MIT-licensed source may interoperate with them, but binary distributions containing or linking them must also satisfy the applicable GPL source, license, and attribution obligations. SDR# and the separately supplied legacy Windows upload proxy are outside this project's MIT grant; that statement does not apply to the native Linux proxy source in this repository.
 
 This project is not officially affiliated with or endorsed by SDR#, GNU Radio, or the authors and operators of supported satellites unless separately stated in writing by the relevant rights holder.

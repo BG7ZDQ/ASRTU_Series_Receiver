@@ -13,7 +13,7 @@ The repository's MIT License covers only original ASRTU Series Receiver code own
 | SGP4 C99 | vendored in `third_party/sgp4/` | MIT; the complete upstream copyright and license text is retained in `SGP4_LICENSE.txt` |
 | SDR# | https://airspy.com/download/ | Separate Airspy/SDR# terms; not covered by this repository's MIT License |
 | SDR# plugin reference API | supplied with the applicable SDR# SDK | Reference license; SDK source is not included in this repository |
-| Telemetry upload proxy | supplied by its owner | Separate component; not relicensed by this project |
+| Legacy Windows telemetry upload proxy | supplied by its owner | Separate bundled component; not relicensed by this project. This does not apply to the original Linux proxy source under `apps/proxy/` and `libs/proxy/`. |
 | Inno Setup English messages | https://github.com/jrsoftware/issrc | Inno Setup License; `packaging/inno/English.isl` is pinned to the official 6.4.3 source so local compiler translations cannot alter the English installer |
 
 The Windows installer also carries transitive runtime libraries from the selected radioconda/Qt/GNU Radio environment. A public binary release must retain their notices and satisfy source-offer or source-distribution obligations where required. The repository's MIT license applies only to BG7ZDQ's original code; integrated third-party payloads retain their own terms and permissions.

@@ -22,7 +22,9 @@ WAV/OGG playback ───┘                                      └─> Viter
 ## 进程间通信
 
 - 解码帧：TCP PDU，默认 `127.0.0.1:9985`
-- 上传发布：ZMQ PUB，默认 `127.0.0.1:5555`
+- 上传发布：ZMQ PUB，默认 `127.0.0.1:5555`。线上消息是 GNU Radio PMT
+  序列化的 PDU；订阅端必须使用 PMT 反序列化，并验证载荷为 223 字节，不能
+  假定或直接跳过固定长度的序列化头。
 - SDR# RAW I/Q：Windows 本地共享内存
 - 自动多普勒：`Local\\ASRTU_DOPPLER_CONTROL_V1` 共享内存映射
 
