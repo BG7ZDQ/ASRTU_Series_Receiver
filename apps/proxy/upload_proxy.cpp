@@ -157,7 +157,7 @@ void UploadProxy::submitFrame(const QByteArray &frame)
 	    {QStringLiteral("proxy_alt"), config_.altitude},
 	    {QStringLiteral("proxy_lat"), config_.latitude},
 	    {QStringLiteral("raw_data"),
-	     QString::fromLatin1(frame.toHex().toUpper())},
+	     "b'" + QString::fromLatin1(frame.toHex()) + "'"},
 	    {QStringLiteral("proxy_receive_time"),
 	     static_cast<double>(QDateTime::currentMSecsSinceEpoch())},
 	};
