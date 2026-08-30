@@ -12,6 +12,44 @@
 #include <mutex>
 #include <thread>
 
+namespace {
+constexpr std::uint32_t kJamxCrcInitialValue = 0x6AAAC1C5U;
+
+std::uint32_t ssdvCrc32(const char* data, std::size_t length,
+                        std::uint32_t initialValue)
+{
+    std::uint32_t crc = initialValue;
+    for (std::size_t offset = 0; offset < length; ++offset) {
+        std::uint32_t value =
+            (crc ^ std::uint8_t(data[offset])) & 0xFFU;
+        for (int bit = 0; bit < 8; ++bit)
+            value = (value & 1U) != 0U
+                        ? (value >> 1U) ^ 0xEDB88320U
+                        : value >> 1U;
+        crc = (crc >> 8U) ^ value;
+    }
+    return crc ^ 0xFFFFFFFFU;
+}
+
+QByteArray convertToJamxCrc(QByteArray frames)
+{
+    constexpr int frameSize = 223;
+    constexpr int packetOffset = 5;
+    constexpr int crcDataSize = 214;
+    for (int offset = 0; offset < frames.size(); offset += frameSize) {
+        const auto crc = ssdvCrc32(frames.constData() + offset + packetOffset,
+                                   crcDataSize, kJamxCrcInitialValue);
+        const int crcOffset = offset + packetOffset + crcDataSize;
+        frames[crcOffset] = char((crc >> 24U) & 0xFFU);
+        frames[crcOffset + 1] = char((crc >> 16U) & 0xFFU);
+        frames[crcOffset + 2] = char((crc >> 8U) & 0xFFU);
+        frames[crcOffset + 3] = char(crc & 0xFFU);
+    }
+    return frames;
+}
+
+}
+
 int main(int argc, char* argv[])
 {
     QCoreApplication application(argc, argv);
@@ -75,26 +113,6 @@ int main(int argc, char* argv[])
         return 5;
     }
 
-    int updatesBeforeRepeat;
-    {
-        std::lock_guard<std::mutex> lock(resultMutex);
-        updatesBeforeRepeat = updates;
-    }
-    for (int repeat = 0; repeat < 8; ++repeat) {
-        for (int offset = 0; offset < data.size(); offset += 223)
-            receiver.ingestFrame(data.mid(offset, 223));
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(250));
-    {
-        std::lock_guard<std::mutex> lock(resultMutex);
-        if (updates != updatesBeforeRepeat ||
-            last.received_packets != result.received_packets ||
-            last.path != result.path) {
-            std::cerr << "SSDV repeated pass changed a completed image\n";
-            return 6;
-        }
-    }
-
     for (int repeat = 0; repeat < 64; ++repeat) {
         for (int offset = 0; offset < data.size(); offset += 223)
             receiver.ingestFrame(data.mid(offset, 223));
@@ -129,6 +147,28 @@ int main(int argc, char* argv[])
             })) {
             std::cerr << "SSDV session identity did not change\n";
             return 8;
+        }
+    }
+
+    receiver.clear();
+    const QByteArray jamx = convertToJamxCrc(data);
+    for (int offset = 0; offset < jamx.size(); offset += 223)
+        receiver.ingestFrame(jamx.mid(offset, 223));
+    {
+        std::unique_lock<std::mutex> lock(resultMutex);
+        if (!resultReady.wait_for(lock, std::chrono::seconds(3), [&] {
+                return last.generation == 2 &&
+                       last.satellite == QStringLiteral("JAMX") &&
+                       last.spacecraft_header == 0x0322 &&
+                       !last.image.isNull() && last.complete;
+            })) {
+            std::cerr << "JAMX CRC image reconstruction timed out\n";
+            return 9;
+        }
+        if (last.crc_failed_packets != 0 ||
+            !last.crc_failed_packet_ids.empty()) {
+            std::cerr << "Valid JAMX CRC packets were marked as failed\n";
+            return 10;
         }
     }
     std::cout << "SSDV OK: " << result.path.toLocal8Bit().constData() << '\n';

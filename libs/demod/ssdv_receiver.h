@@ -11,6 +11,7 @@
 #include <condition_variable>
 #include <deque>
 #include <mutex>
+#include <set>
 #include <thread>
 #include <vector>
 
@@ -28,7 +29,9 @@ struct SsdvImageUpdate {
 	int first_packet = -1;
 	int last_packet = -1;
 	int missing_packets = 0;
+	int crc_failed_packets = 0;
 	std::vector<std::uint16_t> received_packet_ids;
+	std::vector<std::uint16_t> crc_failed_packet_ids;
 	std::vector<std::uint16_t> missing_packet_ids;
 	bool complete = false;
 };
@@ -66,6 +69,7 @@ private:
 	ImageCallback image_callback_;
 	LogCallback log_callback_;
 	std::map<std::uint16_t, QByteArray> packets_;
+	std::set<std::uint16_t> crc_failed_packet_ids_;
 	int image_id_ = -1;
 	int width_ = 0;
 	int height_ = 0;
@@ -73,6 +77,7 @@ private:
 	std::uint64_t state_generation_ = 0;
 	std::uint64_t session_serial_ = 0;
 	bool complete_ = false;
+	bool jamx_mode_ = false;
 
 	std::mutex queue_mutex_;
 	std::condition_variable queue_cv_;
