@@ -1,4 +1,5 @@
 #include "satellite_tracker_dialog.h"
+#include "version.h"
 
 #include <QComboBox>
 #include <QCoreApplication>
@@ -67,7 +68,8 @@ SatelliteTrackerDialog::SatelliteTrackerDialog(
     setWindowFlags(Qt::Window | Qt::WindowTitleHint | Qt::WindowSystemMenuHint |
                    Qt::WindowMinimizeButtonHint | Qt::WindowMaximizeButtonHint |
                    Qt::WindowCloseButtonHint);
-    setWindowTitle(QCoreApplication::translate("ASRTU", "阿斯图系列卫星跟踪与多普勒"));
+    setWindowTitle(QCoreApplication::translate("ASRTU", "阿斯图系列卫星跟踪与多普勒") +
+                   QStringLiteral(" v") + QStringLiteral(ASRTU_VERSION));
     setWindowIcon(QIcon(QStringLiteral(":/icons/win98_doppler.png")));
     setAttribute(Qt::WA_DeleteOnClose, true);
     buildUi();

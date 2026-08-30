@@ -10,6 +10,7 @@
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QElapsedTimer>
+#include <QEvent>
 #include <QFile>
 #include <QFileInfo>
 #include <QFileDialog>
@@ -28,6 +29,7 @@
 #include <QProcessEnvironment>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QResizeEvent>
 #include <QSaveFile>
 #include <QScrollArea>
 #include <QSettings>
@@ -45,6 +47,7 @@
 
 #include "translation.h"
 #include "runtime_paths.h"
+#include "version.h"
 
 #include <algorithm>
 #include <cmath>
@@ -493,7 +496,8 @@ public:
     {
         // Keep the launcher available while decoder/proxy windows are created.
         setWindowIcon(QIcon(QStringLiteral(":/launcher/astro_series_launcher.png")));
-        setWindowTitle(QCoreApplication::translate("ASRTU", "阿斯图系列卫星启动器"));
+        setWindowTitle(QCoreApplication::translate("ASRTU", "阿斯图系列卫星启动器") +
+                       QStringLiteral(" v") + QStringLiteral(ASRTU_VERSION));
         // Keep the launcher compact on low-resolution and high-DPI displays.
         // The scroll area below keeps all controls reachable at the minimum size.
         setMinimumSize(260, 300);
@@ -669,6 +673,11 @@ public:
         status_label_ = new QLabel(QCoreApplication::translate("ASRTU", "就绪"), this);
         status_label_->setStyleSheet(QStringLiteral(
             "color:#667788; padding:0 2px 2px 2px;"));
+        // A long playback filename must not widen the launcher; the label
+        // width is layout-driven and long text is elided in setStatusText().
+        status_label_->setMinimumWidth(0);
+        status_label_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        status_label_->installEventFilter(this);
         layout->addWidget(status_label_);
 
         auto* buttons = new QGridLayout;
@@ -742,7 +751,7 @@ public:
                 QMessageBox::critical(this, errorTitle, error);
                 return;
             }
-            status_label_->setText(
+            setStatusText(
                 QCoreApplication::translate("ASRTU", "正在播放：/%1；日志：%2")
                     .arg(QFileInfo(wavPath).fileName(),
                          compactSessionDirectory(sessionDirectory)));
@@ -777,7 +786,7 @@ public:
                 QMessageBox::critical(this, QCoreApplication::translate("ASRTU", "上传代理启动失败"), error);
                 return;
             }
-            status_label_->setText(
+            setStatusText(
                 QCoreApplication::translate("ASRTU", "上传代理已启动（PID %1）").arg(processId));
         });
         connect(start, &QPushButton::clicked, this, [this] {
@@ -811,7 +820,7 @@ public:
                 QMessageBox::critical(this, QCoreApplication::translate("ASRTU", "启动失败"), error);
                 return;
             }
-            status_label_->setText(
+            setStatusText(
                 QCoreApplication::translate("ASRTU", "接收已启动；录音与日志：%1")
                     .arg(compactSessionDirectory(sessionDirectory)));
         });
@@ -877,6 +886,40 @@ public:
     }
 
 private:
+    void setStatusText(const QString& text)
+    {
+        status_text_ = text;
+        refreshStatusElide();
+    }
+
+    void refreshStatusElide()
+    {
+        if (!status_label_)
+            return;
+        const int available = status_label_->width();
+        if (available > 0) {
+            const QString elided = status_label_->fontMetrics().elidedText(
+                status_text_, Qt::ElideMiddle, available);
+            if (elided != status_label_->text())
+                status_label_->setText(elided);
+        } else {
+            status_label_->setText(status_text_);
+        }
+    }
+
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (watched == status_label_ && event->type() == QEvent::Resize)
+            refreshStatusElide();
+        return QWidget::eventFilter(watched, event);
+    }
+
+    void resizeEvent(QResizeEvent* event) override
+    {
+        QWidget::resizeEvent(event);
+        refreshStatusElide();
+    }
+
     void updateAudioDeviceVisibility()
     {
         const bool visible = input_mode_->currentData().toInt() != 2;
@@ -1109,7 +1152,7 @@ private:
             return false;
         }
         if (notify && status_label_)
-            status_label_->setText(QCoreApplication::translate("ASRTU", "设置已保存"));
+            setStatusText(QCoreApplication::translate("ASRTU", "设置已保存"));
         return true;
     }
 
@@ -1125,6 +1168,7 @@ private:
     QCheckBox* recording_enabled_ = nullptr;
     QTimer* autoSaveTimer_ = nullptr;
     QLabel* status_label_ = nullptr;
+    QString status_text_;
 };
 }
 

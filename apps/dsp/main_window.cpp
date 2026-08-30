@@ -6,6 +6,7 @@
 #include "snr_plot.h"
 #include "ssdv_image_window.h"
 #include "ssdv_receiver.h"
+#include "version.h"
 
 #include <QApplication>
 #include <QCloseEvent>
@@ -280,7 +281,8 @@ QString compactSessionPath(const QString& sessionDirectory, const QString& path)
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 {
-    setWindowTitle(QCoreApplication::translate("ASRTU", "阿斯图系列卫星接收解码"));
+    setWindowTitle(QCoreApplication::translate("ASRTU", "阿斯图系列卫星接收解码") +
+                   QStringLiteral(" v") + QStringLiteral(ASRTU_VERSION));
     setMinimumSize(760, 640);
     if (const QScreen* screen = QGuiApplication::primaryScreen()) {
         const QSize available = screen->availableGeometry().size();
