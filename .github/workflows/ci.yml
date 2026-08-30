@@ -129,17 +129,39 @@ jobs:
           environment-name: asrtu
           create-args: >-
             python=3.11 cmake ninja pkg-config gnuradio=3.10 qt-main=5 qwt
-            boost-cpp fftw libsndfile zeromq
+            boost-cpp fftw libsndfile zeromq m2w64-binutils
           channels: conda-forge
           cache-environment: true
       - name: Build OOT dependencies and ASRTU
         shell: pwsh
         run: micromamba run -n asrtu powershell -NoProfile -ExecutionPolicy Bypass -File ci/build_windows.ps1
+      - name: Smoke-test packaged Windows binaries
+        shell: pwsh
+        run: |
+          $portable = "dist/windows/portable"
+          $launcher = Join-Path $portable "ASRTU1_Launcher.exe"
+          if (-not (Test-Path -LiteralPath $launcher)) {
+            throw "Packaged launcher not found: $launcher"
+          }
+          $process = Start-Process -FilePath $launcher `
+            -ArgumentList '--check-session-directory' -PassThru -Wait
+          if ($process.ExitCode -ne 0) {
+            throw "Launcher session check failed with exit code $($process.ExitCode)"
+          }
+          $shot = Join-Path $env:RUNNER_TEMP "asrtu-demod-smoke.png"
+          $process = Start-Process -FilePath (Join-Path $portable "ASRTU1_Demod_CQt.exe") `
+            -ArgumentList @('--screenshot', $shot) -PassThru -Wait
+          if ($process.ExitCode -ne 0) {
+            throw "Demod smoke test failed with exit code $($process.ExitCode)"
+          }
+          if (-not (Test-Path -LiteralPath $shot)) {
+            throw "Demod smoke test did not produce a screenshot"
+          }
       - name: Upload Windows binaries
         uses: actions/upload-artifact@v4
         with:
           name: asrtu-windows-x64
-          path: build-windows/*.exe
+          path: dist/windows/*.zip
           if-no-files-found: error
 
   packages:
