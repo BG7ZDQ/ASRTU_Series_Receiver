@@ -266,18 +266,16 @@ bool SsdvReceiver::processFrame(const QByteArray& frame,
 		firstPacket->second != packet;
 	const bool duplicatePacket =
 		existing != packets_.end() && existing->second == packet;
-	// Some transmitters reuse both the image ID and identical packet contents
-	// on every carousel pass. A validated packet counter wrapping from a
-	// non-zero value back to zero is a reliable round boundary even when the
-	// previous EOI packet was lost. Repeated copies of packet zero do not split
-	// the session because the current maximum is still zero.
-	const bool packetCounterWrapped = (crcValid || jamxCrcValid) &&
-		info.packet_id == 0 && !packets_.empty() &&
-		packets_.rbegin()->first > 0;
+	// SSDV packets arrive in counter order on the live downlink. Any validated
+	// decrease therefore starts a new image/pass, even when the image ID is
+	// reused and the previous EOI packet was lost. Do not use CRC-failed packet
+	// headers for this decision because a damaged counter could split an image.
+	const bool packetCounterRegressed = (crcValid || jamxCrcValid) &&
+		!packets_.empty() && info.packet_id < packets_.rbegin()->first;
 	const bool sessionChanged = image_id_ != int(info.image_id) ||
 		spacecraft_header_ != spacecraftHeader || width_ != info.width ||
 		height_ != info.height || quality_ != info.quality ||
-		replacedFirstPacket || packetCounterWrapped || formatChanged;
+		replacedFirstPacket || packetCounterRegressed || formatChanged;
 
 	if (sessionChanged) {
 		packets_.clear();

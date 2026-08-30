@@ -113,6 +113,23 @@ int main(int argc, char* argv[])
         return 5;
     }
 
+    // The fixture begins at packet 34 and ends at packet 59. Replaying it
+    // exercises a non-zero counter regression (59 -> 34): this must create a
+    // fresh image even though its image ID and packet contents are unchanged.
+    for (int offset = 0; offset < data.size(); offset += 223)
+        receiver.ingestFrame(data.mid(offset, 223));
+    {
+        std::unique_lock<std::mutex> lock(resultMutex);
+        if (!resultReady.wait_for(lock, std::chrono::seconds(3), [&] {
+                return !last.image.isNull() &&
+                       last.received_packets == result.received_packets &&
+                       last.path != result.path;
+            })) {
+            std::cerr << "SSDV packet-counter regression did not start a new image\n";
+            return 6;
+        }
+    }
+
     for (int repeat = 0; repeat < 64; ++repeat) {
         for (int offset = 0; offset < data.size(); offset += 223)
             receiver.ingestFrame(data.mid(offset, 223));
