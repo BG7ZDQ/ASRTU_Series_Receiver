@@ -42,11 +42,19 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <functional>
+#include <iostream>
 #include <stdexcept>
 #include <thread>
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
+
 namespace {
+constexpr int kJamxSatnogsNoradId = 98248;
+
 class RightClickResetFilter final : public QObject
 {
 public:
@@ -914,12 +922,17 @@ void MainWindow::submitSatnogsFrame(const QByteArray& frame)
                       QStringLiteral("application/x-www-form-urlencoded"));
     QNetworkReply* reply = satnogs_network_->post(
         request, form.query(QUrl::FullyEncoded).toUtf8());
-    connect(reply, &QNetworkReply::finished, this, [this, reply] {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, noradId] {
         const int status = reply->attribute(
             QNetworkRequest::HttpStatusCodeAttribute).toInt();
         if (reply->error() == QNetworkReply::NoError) {
             appendLog(QStringLiteral("SatNOGS upload accepted (HTTP %1)")
                           .arg(status));
+            // JAMX has no MMT proxy; the decoder is its only upload path, so
+            // surface successful SatNOGS deliveries in a dedicated console
+            // window instead of relying on the decoder log.
+            if (noradId == kJamxSatnogsNoradId)
+                showJamxSatnogsConsole();
         } else {
             appendLog(QStringLiteral("SatNOGS upload failed (HTTP %1): %2")
                           .arg(status)
@@ -927,6 +940,29 @@ void MainWindow::submitSatnogsFrame(const QByteArray& frame)
         }
         reply->deleteLater();
     });
+}
+
+void MainWindow::showJamxSatnogsConsole()
+{
+#ifdef Q_OS_WIN
+    if (!jamx_console_ready_) {
+        if (!AllocConsole())
+            return;
+        SetConsoleTitleW(L"SatNOGS Upload - JAMX");
+        FILE* stream = nullptr;
+        if (freopen_s(&stream, "CONOUT$", "w", stdout) != 0)
+            stream = nullptr;
+        setvbuf(stdout, nullptr, _IONBF, 0);
+        jamx_console_ready_ = true;
+        std::cout << "=== SatNOGS Upload (JAMX) ===\n";
+    }
+    std::cout << QDateTime::currentDateTime()
+                     .toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"))
+                     .toStdString()
+              << "  Frame accepted by SatNOGS\n";
+#else
+    (void)this;
+#endif
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)

@@ -39,6 +39,7 @@ private:
                                  int deviceId, int oldDeviceId,
                                  const QString& stopError);
     void handleDecodedFrame(const QByteArray& frame);
+    void showJamxSatnogsConsole();
     std::unique_ptr<AsrtuFlowgraph> createFlowgraph(int deviceId,
                                                     const QString& recordingPath);
 
@@ -58,6 +59,7 @@ private:
     double rssi_max_ = 10.0;
     qint64 last_snr_log_ms_ = -1000;
     int iq_mismatch_ticks_ = 0;
+    bool jamx_console_ready_ = false;
     bool iq_mismatch_warned_ = false;
     QNetworkAccessManager* satnogs_network_ = nullptr;
     QLocalServer* control_server_ = nullptr;

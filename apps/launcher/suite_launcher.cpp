@@ -129,7 +129,10 @@ QList<SatelliteProfile> satelliteProfiles()
 {
     return {
         {QStringLiteral("ASRTU-1"), QStringLiteral("ws://1.92.100.130"), 61781},
-        {QStringLiteral("BY-04uv"), QStringLiteral("ws://119.45.229.166"), 98247}
+        {QStringLiteral("BY-04uv"), QStringLiteral("ws://119.45.229.166"), 98247},
+        // JAMX has no MMT upload server; telemetry is submitted directly to
+        // SatNOGS by the decoder, so the WebSocket target stays empty.
+        {QStringLiteral("JAMX"), QString(), 98248}
     };
 }
 
@@ -780,6 +783,20 @@ public:
             settings.setValue(QStringLiteral("satnogs_longitude"), longitude_->value());
             settings.setValue(QStringLiteral("satnogs_latitude"), latitude_->value());
             settings.sync();
+            // Satellites without an MMT server (e.g. JAMX) upload SatNOGS
+            // directly from the decoder; there is no proxy process to start.
+            if (webSocketForSatellite(satellite).isEmpty()) {
+                if (satnogsEnabled) {
+                    setStatusText(
+                        QCoreApplication::translate("ASRTU", "已启用 SatNOGS 上传：%1")
+                            .arg(satellite));
+                } else {
+                    setStatusText(
+                        QCoreApplication::translate("ASRTU", "已保存 %1 设置（未启用 SatNOGS 上传）")
+                            .arg(satellite));
+                }
+                return;
+            }
             QString error;
             qint64 processId = 0;
             if (!startProxy({}, &processId, &error)) {
@@ -1032,6 +1049,15 @@ private:
         auto* satnogs = new QCheckBox(
             QCoreApplication::translate("ASRTU", "同时上传至 SatNOGS"), &dialog);
         satnogs->setChecked(false);
+        // Satellites without an MMT server only have the SatNOGS path, so the
+        // checkbox is enabled by default for them and follows the selection.
+        const auto refreshSatnogsDefault = [satnogs, satellite] {
+            const QString name = satellite->currentText();
+            satnogs->setChecked(webSocketForSatellite(name).isEmpty());
+        };
+        refreshSatnogsDefault();
+        connect(satellite, qOverload<int>(&QComboBox::currentIndexChanged), this,
+                [refreshSatnogsDefault](int) { refreshSatnogsDefault(); });
         layout->addWidget(satnogs);
         auto* box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
                                          &dialog);
