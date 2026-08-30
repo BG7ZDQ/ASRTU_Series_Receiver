@@ -25,6 +25,12 @@
 
 输出的便携目录位于 `portable/ASRTU1_Demod_CQt`。
 
+Windows CI（`.github/workflows/ci.yml` 的 `windows` job）会在每次 push/PR 时
+构建自包含便携包并上传 `asrtu-windows-x64.zip` 产物：解压后即可在未安装
+radioconda/GNU Radio 的 Windows 上直接运行（无需安装器）。CI 在上传前会对
+打包产物做启动冒烟测试（启动器会话检查与解码器截图），并在 `windows-installer`
+job 中把同一份最新便携包组装为 Inno Setup 安装器。
+
 ## SDR# 插件
 
 插件面向兼容旧版插件 API 的 SDR#，需要合法取得的 SDR# API 程序集：
