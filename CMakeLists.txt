@@ -1,5 +1,19 @@
 cmake_minimum_required(VERSION 3.20)
-project(ASRTU1Qt VERSION 1.5.3 LANGUAGES C CXX)
+project(ASRTU1Qt VERSION 1.5.4 LANGUAGES C CXX)
+
+# Windows RC version resources need a comma-separated number and a display
+# string; both are derived from the single PROJECT_VERSION source.
+string(REPLACE "." "," ASRTU_VERSION_COMMA ${PROJECT_VERSION})
+
+# rc.exe (MSVC) does not inherit target_compile_definitions, so pass the
+# version macros explicitly to each resource file.
+set_source_files_properties(
+    apps/dsp/demod.rc
+    apps/launcher/launcher.rc
+    apps/doppler/doppler.rc
+    apps/proxy-wrapper/proxy_wrapper.rc
+    PROPERTIES COMPILE_DEFINITIONS
+    "ASRTU_VERSION_COMMA=${ASRTU_VERSION_COMMA};ASRTU_VERSION_STRING=\"${PROJECT_VERSION}\"")
 
 include(CTest)
 
@@ -199,7 +213,8 @@ endif()
 if(MSVC)
     target_compile_options(ASRTU1_Launcher PRIVATE /W4 /permissive- /utf-8)
 endif()
-target_compile_definitions(ASRTU1_Launcher PRIVATE ASRTU_VERSION="${PROJECT_VERSION}")
+target_compile_definitions(ASRTU1_Launcher PRIVATE
+    ASRTU_VERSION="${PROJECT_VERSION}")
 asrtu_enable_strict_warnings(ASRTU1_Launcher)
 
 add_executable(ASRTU_Doppler
@@ -231,7 +246,8 @@ endif()
 if(MSVC)
     target_compile_options(ASRTU_Doppler PRIVATE /W4 /permissive- /utf-8)
 endif()
-target_compile_definitions(ASRTU_Doppler PRIVATE ASRTU_VERSION="${PROJECT_VERSION}")
+target_compile_definitions(ASRTU_Doppler PRIVATE
+    ASRTU_VERSION="${PROJECT_VERSION}")
 asrtu_enable_strict_warnings(ASRTU_Doppler)
 
 install(TARGETS ASRTU1_Launcher ASRTU_Doppler
@@ -246,7 +262,8 @@ if(WIN32)
         apps/proxy-wrapper/proxy_wrapper.rc
     )
     target_link_libraries(ASRTU_Proxy PRIVATE Shell32 Ole32 Propsys)
-    target_compile_definitions(ASRTU_Proxy PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+    target_compile_definitions(ASRTU_Proxy PRIVATE
+        NOMINMAX WIN32_LEAN_AND_MEAN)
     if(MSVC)
         target_compile_options(ASRTU_Proxy PRIVATE /W4 /permissive- /utf-8)
     endif()

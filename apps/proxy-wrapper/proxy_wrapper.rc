@@ -1,3 +1,39 @@
 #include <windows.h>
 
 IDI_APPLICATION_ICON ICON "../../assets/icons/win98_proxy.ico"
+
+#ifndef ASRTU_VERSION_COMMA
+#define ASRTU_VERSION_COMMA 1,5,4
+#endif
+#ifndef ASRTU_VERSION_STRING
+#define ASRTU_VERSION_STRING "1.5.4"
+#endif
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION ASRTU_VERSION_COMMA
+ PRODUCTVERSION ASRTU_VERSION_COMMA
+ FILEFLAGSMASK 0x3fL
+ FILEFLAGS 0x0L
+ FILEOS 0x40004L
+ FILETYPE 0x1L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName", "BG7ZDQ"
+            VALUE "FileDescription", "ASRTU Series Receiver upload proxy"
+            VALUE "FileVersion", ASRTU_VERSION_STRING
+            VALUE "InternalName", "ASRTU_Proxy.exe"
+            VALUE "LegalCopyright", "By BG7ZDQ"
+            VALUE "OriginalFilename", "ASRTU_Proxy.exe"
+            VALUE "ProductName", "ASRTU Series Receiver"
+            VALUE "ProductVersion", ASRTU_VERSION_STRING
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

@@ -86,7 +86,16 @@ if (Test-Path -LiteralPath $sdrSharpConfig) {
         [Text.UTF8Encoding]::new($false))
 }
 
-& $InnoSetup (Join-Path $PSScriptRoot 'ASRTU1_Receiver_Setup.iss')
+# Resolve the application version from CMakeLists.txt so the installer never
+# drifts from the single PROJECT_VERSION source.
+$versionLine = Select-String -LiteralPath (Join-Path $repoRoot 'CMakeLists.txt') `
+    -Pattern 'project\(ASRTU1Qt VERSION ([0-9.]+)' | Select-Object -First 1
+if (-not $versionLine) {
+    throw 'Unable to read the application version from CMakeLists.txt'
+}
+$appVersion = $versionLine.Matches[0].Groups[1].Value
+
+& $InnoSetup "/DAppVersion=$appVersion" (Join-Path $PSScriptRoot 'ASRTU1_Receiver_Setup.iss')
 if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
 
 $installer = Join-Path $PSScriptRoot 'dist\ASRTU_Series_Receiver_Setup.exe'

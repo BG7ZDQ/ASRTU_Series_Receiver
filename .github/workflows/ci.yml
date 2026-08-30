@@ -214,13 +214,16 @@ jobs:
             --output dist/tools/runtime-x86_64 \
             https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64
           chmod +x dist/tools/linuxdeploy.AppImage dist/tools/linuxdeploy-plugin-qt.AppImage dist/tools/runtime-x86_64
+      - name: Resolve application version
+        id: version
+        run: echo "app=$(sed -n 's/^project(ASRTU1Qt VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)" >> "$GITHUB_OUTPUT"
       - name: Create AppImage
         env:
           APPIMAGE_EXTRACT_AND_RUN: '1'
           LINUXDEPLOY: ${{ github.workspace }}/dist/tools/linuxdeploy.AppImage
           LINUXDEPLOY_PLUGIN_QT: ${{ github.workspace }}/dist/tools/linuxdeploy-plugin-qt.AppImage
           LDAI_RUNTIME_FILE: ${{ github.workspace }}/dist/tools/runtime-x86_64
-          VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '1.5.3' }}
+          VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || steps.version.outputs.app }}
         run: ci/build_appimage.sh build-package "$ASRTU_OOT_PREFIX" dist/appimage
       - name: Verify AppImage startup
         run: |

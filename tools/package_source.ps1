@@ -1,9 +1,22 @@
 param(
-    [string]$Version = '1.5.3',
+    [string]$Version = '',
     [string]$OutputRoot = "$PSScriptRoot\..\outputs"
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Derive the version from CMakeLists.txt (the single source of truth) unless
+# the caller overrides it explicitly.
+if (-not $Version) {
+    $versionLine = Select-String `
+        -LiteralPath (Join-Path $PSScriptRoot '..\CMakeLists.txt') `
+        -Pattern 'project\(ASRTU1Qt VERSION ([0-9.]+)' | Select-Object -First 1
+    if (-not $versionLine) {
+        throw 'Unable to read the application version from CMakeLists.txt'
+    }
+    $Version = $versionLine.Matches[0].Groups[1].Value
+}
+
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
 $releaseName = "ASRTU_Series_Receiver_Source_v$Version"
