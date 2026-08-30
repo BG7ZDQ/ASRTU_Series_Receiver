@@ -16,9 +16,53 @@ namespace {
 constexpr int kCcsdsFrameSize = 223;
 constexpr int kCcsdsShortHeaderSize = 5;
 constexpr int kDslwpPacketSize = 218;
+constexpr int kDslwpCrcDataSize = kDslwpPacketSize - 4;
 constexpr std::size_t kImageBufferSize = 32 * 1024 * 1024;
 constexpr std::size_t kMaxQueuedFrames = 4096;
 constexpr auto kPreviewRefreshInterval = std::chrono::milliseconds(100);
+constexpr std::uint32_t kJamxCrcInitialValue = 0x6AAAC1C5U;
+
+std::uint32_t ssdvCrc32(const char* data, std::size_t length,
+			std::uint32_t initialValue)
+{
+	std::uint32_t crc = initialValue;
+	for (std::size_t offset = 0; offset < length; ++offset) {
+		std::uint32_t value =
+			(crc ^ std::uint8_t(data[offset])) & 0xFFU;
+		for (int bit = 0; bit < 8; ++bit)
+			value = (value & 1U) != 0U
+					? (value >> 1U) ^ 0xEDB88320U
+					: value >> 1U;
+		crc = (crc >> 8U) ^ value;
+	}
+	return crc ^ 0xFFFFFFFFU;
+}
+
+bool hasJamxCrc(const QByteArray& packet)
+{
+	if (packet.size() != kDslwpPacketSize)
+		return false;
+	const auto* bytes = reinterpret_cast<const std::uint8_t*>(packet.constData());
+	const std::uint32_t expected =
+		(std::uint32_t(bytes[kDslwpCrcDataSize]) << 24U) |
+		(std::uint32_t(bytes[kDslwpCrcDataSize + 1]) << 16U) |
+		(std::uint32_t(bytes[kDslwpCrcDataSize + 2]) << 8U) |
+		std::uint32_t(bytes[kDslwpCrcDataSize + 3]);
+	return ssdvCrc32(packet.constData(), kDslwpCrcDataSize,
+			 kJamxCrcInitialValue) == expected;
+}
+
+bool plausibleSsdvHeader(const ssdv_packet_info_t& info)
+{
+	if (info.width == 0 || info.height == 0 || info.width > 8192 ||
+	    info.height > 8192 || info.mcu_count == 0 ||
+	    info.mcu_count > std::uint32_t(std::numeric_limits<std::uint16_t>::max()))
+		return false;
+	if (info.mcu_id != 0xFFFF &&
+	    (info.mcu_id >= info.mcu_count || info.mcu_offset >= 205))
+		return false;
+	return true;
+}
 
 int virtualChannelId(const QByteArray& frame)
 {
@@ -28,8 +72,10 @@ int virtualChannelId(const QByteArray& frame)
 	return (word >> 1) & 0x07;
 }
 
-QString satelliteName(std::uint16_t header)
+QString satelliteName(std::uint16_t header, bool jamxMode)
 {
+	if (jamxMode)
+		return QStringLiteral("JAMX");
 	if (header == 0x0322)
 		return QStringLiteral("ASRTU-1");
 	if (header == 0x2052)
@@ -175,35 +221,75 @@ bool SsdvReceiver::processFrame(const QByteArray& frame,
 		return false;
 
 	auto* bytes = reinterpret_cast<std::uint8_t*>(packet.data());
-	if (ssdv_dec_is_packet(bytes, &errors, ssdv_dslwp_mode) != SSDV_OK)
-		return false;
+	const bool crcValid =
+		ssdv_dec_is_packet(bytes, &errors, ssdv_dslwp_mode) == SSDV_OK;
+	const bool jamxCrcValid = !crcValid && hasJamxCrc(packet);
 
 	ssdv_packet_info_t info{};
 	ssdv_dec_header(&info, bytes, ssdv_dslwp_mode);
-
+	if (!plausibleSsdvHeader(info))
+		return false;
 	const auto existing = packets_.find(info.packet_id);
+	const bool existingCrcFailed =
+		existing != packets_.end() &&
+		crc_failed_packet_ids_.find(info.packet_id) !=
+			crc_failed_packet_ids_.end();
+	// Both the DSLWP and JAMX CRC initial values are valid protocol variants.
+	// Only packets that fail both checks are accepted as best-effort recovery
+	// data and shown as CRC-failed in the UI.
+	const bool crcFailed = !crcValid && !jamxCrcValid;
+	// Never let an unverified copy overwrite a packet that already passed a
+	// recognized CRC. A later verified copy may still upgrade a yellow packet.
+	if (existing != packets_.end() && !existingCrcFailed && crcFailed)
+		return false;
+
+	// A packet with neither known CRC is useful only after a validated packet
+	// has established the image identity. This permits damaged packets to
+	// improve a local preview without allowing arbitrary VC1 telemetry to
+	// create false SSDV sessions.
+	if (!crcValid && !jamxCrcValid &&
+	    (image_id_ < 0 || image_id_ != int(info.image_id) ||
+	     width_ != info.width || height_ != info.height ||
+	     quality_ != info.quality || spacecraft_header_ != spacecraftHeader ||
+	     (!packets_.empty() && existing == packets_.end() &&
+	      info.packet_id > packets_.rbegin()->first + 64U)))
+		return false;
+	const bool packetJamxMode = jamxCrcValid ||
+		(!crcValid && !jamxCrcValid && jamx_mode_);
+	const bool formatChanged = image_id_ >= 0 &&
+		(crcValid || jamxCrcValid) && packetJamxMode != jamx_mode_;
+
 	const auto firstPacket = packets_.find(0);
 	const bool replacedFirstPacket =
-		info.packet_id == 0 && firstPacket != packets_.end() &&
+		(crcValid || jamxCrcValid) && info.packet_id == 0 &&
+		firstPacket != packets_.end() &&
 		firstPacket->second != packet;
 	const bool duplicatePacket =
 		existing != packets_.end() && existing->second == packet;
-	const bool restartCompletedSession = complete_ &&
-		existing == packets_.end();
+	// Some transmitters reuse both the image ID and identical packet contents
+	// on every carousel pass. A validated packet counter wrapping from a
+	// non-zero value back to zero is a reliable round boundary even when the
+	// previous EOI packet was lost. Repeated copies of packet zero do not split
+	// the session because the current maximum is still zero.
+	const bool packetCounterWrapped = (crcValid || jamxCrcValid) &&
+		info.packet_id == 0 && !packets_.empty() &&
+		packets_.rbegin()->first > 0;
 	const bool sessionChanged = image_id_ != int(info.image_id) ||
 		spacecraft_header_ != spacecraftHeader || width_ != info.width ||
 		height_ != info.height || quality_ != info.quality ||
-		replacedFirstPacket || restartCompletedSession;
+		replacedFirstPacket || packetCounterWrapped || formatChanged;
 
 	if (sessionChanged) {
 		packets_.clear();
+		crc_failed_packet_ids_.clear();
 		image_id_ = info.image_id;
 		width_ = info.width;
 		height_ = info.height;
 		quality_ = info.quality;
 		complete_ = false;
 		spacecraft_header_ = spacecraftHeader;
-		satellite_ = satelliteName(spacecraft_header_);
+		jamx_mode_ = packetJamxMode;
+		satellite_ = satelliteName(spacecraft_header_, jamx_mode_);
 		state_generation_ = generation;
 		image_path_ = QDir(session_directory_).filePath(
 			QStringLiteral("SSDV_%1_Pass%2_ID%3.jpg")
@@ -219,8 +305,11 @@ bool SsdvReceiver::processFrame(const QByteArray& frame,
 
 	if (duplicatePacket && !sessionChanged)
 		return false;
-
 	packets_[info.packet_id] = packet;
+	if (crcFailed)
+		crc_failed_packet_ids_.insert(info.packet_id);
+	else
+		crc_failed_packet_ids_.erase(info.packet_id);
 	complete_ = complete_ || info.eoi != 0;
 
 	return true;
@@ -303,9 +392,12 @@ bool SsdvReceiver::rebuildImage()
 	update.first_packet = first;
 	update.last_packet = last;
 	update.missing_packets = int(missingIds.size());
+	update.crc_failed_packets = int(crc_failed_packet_ids_.size());
 	update.received_packet_ids.reserve(packets_.size());
 	for (const auto& entry : packets_)
 		update.received_packet_ids.push_back(entry.first);
+	update.crc_failed_packet_ids.assign(crc_failed_packet_ids_.begin(),
+					    crc_failed_packet_ids_.end());
 	update.missing_packet_ids = std::move(missingIds);
 	update.complete = complete_;
 	if (image_callback_)
@@ -317,6 +409,7 @@ bool SsdvReceiver::rebuildImage()
 void SsdvReceiver::clearState(std::uint64_t generation)
 {
 	packets_.clear();
+	crc_failed_packet_ids_.clear();
 	image_path_.clear();
 	image_id_ = -1;
 	satellite_.clear();
@@ -326,4 +419,5 @@ void SsdvReceiver::clearState(std::uint64_t generation)
 	quality_ = 0;
 	state_generation_ = generation;
 	complete_ = false;
+	jamx_mode_ = false;
 }

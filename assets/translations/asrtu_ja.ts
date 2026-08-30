@@ -407,6 +407,10 @@
             <translation>受信済み</translation>
         </message>
         <message>
+            <source>CRC未通过</source>
+            <translation>CRC不一致</translation>
+        </message>
+        <message>
             <source>确认缺失</source>
             <translation>欠落確定</translation>
         </message>
@@ -451,12 +455,12 @@
             <translation>解像度 %1 × %2　·　品質 %3</translation>
         </message>
         <message>
-            <source>已接收 %1 / %2 包　·　缺失 %3 包　·　完整率 %4%</source>
-            <translation>受信 %1 / %2　·　欠落 %3　·　完全率 %4%</translation>
+            <source>已接收 %1 / %2 包　·　CRC未通过 %3 包　·　缺失 %4 包　·　完整率 %5%</source>
+            <translation>受信 %1 / %2　·　CRC不一致 %3　·　欠落 %4　·　完全率 %5%</translation>
         </message>
         <message>
-            <source>已接收 %1 包　·　确认缺失 %2 包　·　最新包序号 %3　·　总包数待确定</source>
-            <translation>受信 %1　·　欠落確定 %2　·　最新パケット %3　·　総数はEOI待ち</translation>
+            <source>已接收 %1 包　·　CRC未通过 %2 包　·　确认缺失 %3 包　·　最新包序号 %4　·　总包数待确定</source>
+            <translation>受信 %1　·　CRC不一致 %2　·　欠落確定 %3　·　最新パケット %4　·　総数はEOI待ち</translation>
         </message>
         <message>
             <source>完成</source>

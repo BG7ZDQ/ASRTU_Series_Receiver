@@ -407,6 +407,10 @@ Select ‘Mono Real 12 kHz Radio IF Input’ in the launcher.</translation>
             <translation>Received</translation>
         </message>
         <message>
+            <source>CRC未通过</source>
+            <translation>CRC failed</translation>
+        </message>
+        <message>
             <source>确认缺失</source>
             <translation>Confirmed missing</translation>
         </message>
@@ -451,12 +455,12 @@ Select ‘Mono Real 12 kHz Radio IF Input’ in the launcher.</translation>
             <translation>Resolution %1 × %2  ·  Quality %3</translation>
         </message>
         <message>
-            <source>已接收 %1 / %2 包　·　缺失 %3 包　·　完整率 %4%</source>
-            <translation>Received %1 / %2  ·  Missing %3  ·  Integrity %4%</translation>
+            <source>已接收 %1 / %2 包　·　CRC未通过 %3 包　·　缺失 %4 包　·　完整率 %5%</source>
+            <translation>Received %1 / %2  ·  CRC failed %3  ·  Missing %4  ·  Integrity %5%</translation>
         </message>
         <message>
-            <source>已接收 %1 包　·　确认缺失 %2 包　·　最新包序号 %3　·　总包数待确定</source>
-            <translation>Received %1  ·  Confirmed missing %2  ·  Latest packet %3  ·  Total pending EOI</translation>
+            <source>已接收 %1 包　·　CRC未通过 %2 包　·　确认缺失 %3 包　·　最新包序号 %4　·　总包数待确定</source>
+            <translation>Received %1  ·  CRC failed %2  ·  Confirmed missing %3  ·  Latest packet %4  ·  Total pending EOI</translation>
         </message>
         <message>
             <source>完成</source>

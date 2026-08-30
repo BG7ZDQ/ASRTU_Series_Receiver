@@ -79,8 +79,9 @@ QString kDangerButtonStyle = QStringLiteral(
 } // namespace
 
 // Packet reception map. It intentionally does not pretend that the final
-// packet count is known before EOI: blue is received, coral is a confirmed
-// hole inside the observed sequence, and the neutral track is still unknown.
+// packet count is known before EOI: blue passed CRC, yellow was retained for
+// local recovery despite failing the standard CRC, coral is a confirmed hole,
+// and the neutral track is still unknown.
 class SsdvProgressBar final : public QWidget
 {
 public:
@@ -91,11 +92,13 @@ public:
     }
 
     void setPackets(const std::vector<std::uint16_t>& received,
+                    const std::vector<std::uint16_t>& crcFailed,
                     const std::vector<std::uint16_t>& missing,
                     int lastPacket,
                     bool complete)
     {
         received_ = received;
+        crc_failed_ = crcFailed;
         missing_ = missing;
         last_packet_ = lastPacket;
         complete_ = complete;
@@ -130,12 +133,15 @@ protected:
         };
         for (const auto id : received_)
             paintPacket(id, QColor(43, 125, 233));
+        for (const auto id : crc_failed_)
+            paintPacket(id, QColor(234, 179, 8));
         for (const auto id : missing_)
             paintPacket(id, QColor(224, 82, 82));
     }
 
 private:
     std::vector<std::uint16_t> received_;
+    std::vector<std::uint16_t> crc_failed_;
     std::vector<std::uint16_t> missing_;
     int last_packet_ = -1;
     bool complete_ = false;
@@ -192,6 +198,7 @@ void SsdvImageWindow::buildUi()
         return item;
     };
     legendRow->addWidget(makeLegend(QColor(43, 125, 233), tr("已接收")));
+    legendRow->addWidget(makeLegend(QColor(234, 179, 8), tr("CRC未通过")));
     legendRow->addWidget(makeLegend(QColor(224, 82, 82), tr("确认缺失")));
     legendRow->addWidget(makeLegend(QColor(148, 163, 184), tr("尚未确定")));
     legendRow->addStretch(1);
@@ -365,6 +372,7 @@ void SsdvImageWindow::refreshMetadata()
             .arg(update.quality));
 
     progress_bar_->setPackets(update.received_packet_ids,
+                              update.crc_failed_packet_ids,
                               update.missing_packet_ids,
                               update.last_packet,
                               update.complete);
@@ -372,15 +380,17 @@ void SsdvImageWindow::refreshMetadata()
         const int totalPackets = std::max(1, update.last_packet + 1);
         const double integrity = 100.0 * update.received_packets / totalPackets;
         progress_label_->setText(
-            tr("已接收 %1 / %2 包　·　缺失 %3 包　·　完整率 %4%")
+            tr("已接收 %1 / %2 包　·　CRC未通过 %3 包　·　缺失 %4 包　·　完整率 %5%")
                 .arg(update.received_packets)
                 .arg(totalPackets)
+                .arg(update.crc_failed_packets)
                 .arg(update.missing_packets)
                 .arg(integrity, 0, 'f', 1));
     } else {
         progress_label_->setText(
-            tr("已接收 %1 包　·　确认缺失 %2 包　·　最新包序号 %3　·　总包数待确定")
+            tr("已接收 %1 包　·　CRC未通过 %2 包　·　确认缺失 %3 包　·　最新包序号 %4　·　总包数待确定")
                 .arg(update.received_packets)
+                .arg(update.crc_failed_packets)
                 .arg(update.missing_packets)
                 .arg(update.last_packet));
     }
@@ -415,7 +425,7 @@ void SsdvImageWindow::clearDisplay()
     placeholder_label_->show();
     title_label_->setText(tr("等待SSDV图像数据"));
     detail_label_->setText(tr("等待SSDV图像数据"));
-    progress_bar_->setPackets({}, {}, -1, false);
+    progress_bar_->setPackets({}, {}, {}, -1, false);
     progress_label_->setText(tr("尚未接收到数据包"));
     status_badge_->setText(tr("接收中"));
     status_badge_->setStyleSheet(kBadgeBaseStyle +
