@@ -107,7 +107,8 @@ else()
 endif()
 
 target_compile_definitions(ASRTU1_Demod_CQt PRIVATE
-    _USE_MATH_DEFINES HYACINTHSAT_GR_310)
+    _USE_MATH_DEFINES HYACINTHSAT_GR_310
+    ASRTU_VERSION="${PROJECT_VERSION}")
 if(WIN32)
     target_compile_definitions(ASRTU1_Demod_CQt PRIVATE
         NOMINMAX WIN32_LEAN_AND_MEAN)
@@ -198,6 +199,7 @@ endif()
 if(MSVC)
     target_compile_options(ASRTU1_Launcher PRIVATE /W4 /permissive- /utf-8)
 endif()
+target_compile_definitions(ASRTU1_Launcher PRIVATE ASRTU_VERSION="${PROJECT_VERSION}")
 asrtu_enable_strict_warnings(ASRTU1_Launcher)
 
 add_executable(ASRTU_Doppler
@@ -229,6 +231,7 @@ endif()
 if(MSVC)
     target_compile_options(ASRTU_Doppler PRIVATE /W4 /permissive- /utf-8)
 endif()
+target_compile_definitions(ASRTU_Doppler PRIVATE ASRTU_VERSION="${PROJECT_VERSION}")
 asrtu_enable_strict_warnings(ASRTU_Doppler)
 
 install(TARGETS ASRTU1_Launcher ASRTU_Doppler
