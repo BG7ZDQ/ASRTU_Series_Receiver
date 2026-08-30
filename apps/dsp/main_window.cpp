@@ -42,18 +42,27 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdio>
 #include <functional>
-#include <iostream>
 #include <stdexcept>
 #include <thread>
 
-#ifdef Q_OS_WIN
-#include <windows.h>
-#endif
-
 namespace {
 constexpr int kJamxSatnogsNoradId = 98248;
+
+// JAMX uploads SatNOGS directly from the decoder; the launcher shows a
+// dedicated console window that tails this status file in real time.
+void appendSatnogsStatus(const QString& message)
+{
+    const QString directory = asrtu::recordsDirectory();
+    QDir().mkpath(directory);
+    QFile status(QDir(directory).filePath(QStringLiteral("satnogs_status.txt")));
+    if (status.open(QIODevice::Append | QIODevice::Text)) {
+        QTextStream stream(&status);
+        stream << QDateTime::currentDateTime().toString(
+                      QStringLiteral("yyyy-MM-dd HH:mm:ss"))
+               << "  " << message << '\n';
+    }
+}
 
 class RightClickResetFilter final : public QObject
 {
@@ -928,41 +937,27 @@ void MainWindow::submitSatnogsFrame(const QByteArray& frame)
         if (reply->error() == QNetworkReply::NoError) {
             appendLog(QStringLiteral("SatNOGS upload accepted (HTTP %1)")
                           .arg(status));
-            // JAMX has no MMT proxy; the decoder is its only upload path, so
-            // surface successful SatNOGS deliveries in a dedicated console
-            // window instead of relying on the decoder log.
-            if (noradId == kJamxSatnogsNoradId)
-                showJamxSatnogsConsole();
+            // JAMX has no MMT proxy; the launcher shows a dedicated SatNOGS
+            // console window that tails this status file, so mirror every
+            // accepted delivery there.
+            if (noradId == kJamxSatnogsNoradId) {
+                appendSatnogsStatus(
+                    QStringLiteral("Frame accepted by SatNOGS (HTTP %1)")
+                        .arg(status));
+            }
         } else {
             appendLog(QStringLiteral("SatNOGS upload failed (HTTP %1): %2")
                           .arg(status)
                           .arg(reply->errorString()));
+            if (noradId == kJamxSatnogsNoradId) {
+                appendSatnogsStatus(
+                    QStringLiteral("Upload failed (HTTP %1): %2")
+                        .arg(status)
+                        .arg(reply->errorString()));
+            }
         }
         reply->deleteLater();
     });
-}
-
-void MainWindow::showJamxSatnogsConsole()
-{
-#ifdef Q_OS_WIN
-    if (!jamx_console_ready_) {
-        if (!AllocConsole())
-            return;
-        SetConsoleTitleW(L"SatNOGS Upload - JAMX");
-        FILE* stream = nullptr;
-        if (freopen_s(&stream, "CONOUT$", "w", stdout) != 0)
-            stream = nullptr;
-        setvbuf(stdout, nullptr, _IONBF, 0);
-        jamx_console_ready_ = true;
-        std::cout << "=== SatNOGS Upload (JAMX) ===\n";
-    }
-    std::cout << QDateTime::currentDateTime()
-                     .toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"))
-                     .toStdString()
-              << "  Frame accepted by SatNOGS\n";
-#else
-    (void)this;
-#endif
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)

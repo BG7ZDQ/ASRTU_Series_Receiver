@@ -337,6 +337,40 @@ bool processSurvivedStartup(qint64 processId, int timeoutMs, quint32* exitCode)
 #endif
 }
 
+bool startSatnogsStatusWindow(qint64* processId, QString* error)
+{
+#ifdef Q_OS_WIN
+    // JAMX has no MMT proxy, so the launcher opens a dedicated console window
+    // that tails the decoder's SatNOGS status file in real time. The console
+    // is created with CREATE_NEW_CONSOLE so it appears as its own taskbar
+    // window, exactly like the MMT proxy console for the other satellites.
+    const QString statusFile = QDir(recordsDirectory()).filePath(
+        QStringLiteral("satnogs_status.txt"));
+    const QString script = QStringLiteral(
+        "$p='%1';\n"
+        "Write-Host '=== SatNOGS Upload (JAMX) ===';\n"
+        "if (Test-Path -LiteralPath $p) { "
+        "Get-Content -LiteralPath $p -Wait -Tail 40 } "
+        "else { Write-Host 'Waiting for decoder...'; "
+        "while (-not (Test-Path -LiteralPath $p)) { Start-Sleep 1 }; "
+        "Get-Content -LiteralPath $p -Wait -Tail 40 }\n").arg(statusFile);
+    QString powershell =
+        QStringLiteral("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe");
+    if (!QFileInfo::exists(powershell))
+        powershell = QStringLiteral("powershell.exe");
+    return startProgram(powershell,
+                        {QStringLiteral("-NoProfile"),
+                         QStringLiteral("-ExecutionPolicy"),
+                         QStringLiteral("Bypass"),
+                         QStringLiteral("-Command"), script},
+                        recordsDirectory(), {}, true, processId, error);
+#else
+    (void)processId;
+    (void)error;
+    return true;
+#endif
+}
+
 bool startProxy(const QString& launchLog, qint64* processId, QString* error)
 {
 #ifdef Q_OS_WIN
@@ -787,6 +821,15 @@ public:
             // directly from the decoder; there is no proxy process to start.
             if (webSocketForSatellite(satellite).isEmpty()) {
                 if (satnogsEnabled) {
+                    QString error;
+                    qint64 processId = 0;
+                    if (!startSatnogsStatusWindow(&processId, &error)) {
+                        QMessageBox::critical(
+                            this,
+                            QCoreApplication::translate("ASRTU", "SatNOGS 上传窗口启动失败"),
+                            error);
+                        return;
+                    }
                     setStatusText(
                         QCoreApplication::translate("ASRTU", "已启用 SatNOGS 上传：%1")
                             .arg(satellite));
