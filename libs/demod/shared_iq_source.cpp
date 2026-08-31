@@ -19,16 +19,11 @@ constexpr std::uint32_t kCapacitySamples = 262144;
 constexpr std::uint32_t kComplexBytes = 8;
 constexpr std::uint64_t kMaximumLatencySamples = 5760; // 120 ms at 48 ksample/s
 constexpr auto kProducerTimeout = std::chrono::milliseconds(1000);
-// SDR# normally publishes fewer than one 1024-point FFT frame per callback.
-// Coalesce those short bursts before returning to GNU Radio so the Qt sinks
-// receive a steady stream instead of repeatedly starving between callbacks.
-constexpr std::uint32_t kPreferredBatchSamples = 1024;
-// Leave enough headroom for Windows' coarse default timer quantum. On systems
-// with a 1 ms multimedia timer this normally completes in about 20 ms; with a
-// 15.6 ms quantum it still collects a complete frame instead of returning a
-// half-filled burst.
-constexpr auto kBatchWaitBudget = std::chrono::milliseconds(60);
-constexpr auto kBatchPollInterval = std::chrono::milliseconds(1);
+// The producer (SDR#) publishes in short, irregular callbacks. The decoder
+// must stay non-blocking: waiting inside a GNU Radio source block stalls the
+// whole single-threaded flowgraph (FFT sinks and demodulator), which shows up
+// as a stuttering spectrum and starves the decoder. Return whatever is
+// available immediately; the Qt sinks accumulate through their update_time.
 constexpr std::size_t kMappingBytes =
     kHeaderBytes + std::size_t(kCapacitySamples) * kComplexBytes;
 
@@ -206,24 +201,16 @@ int SharedIqSource::work(int noutputItems,
         dropped_samples_.fetch_add(skipped, std::memory_order_relaxed);
     }
 
-    auto available = written - read_index_;
-    const auto preferred = std::min<std::uint64_t>(
-        kPreferredBatchSamples, std::uint64_t(noutputItems));
-    const auto waitUntil = std::chrono::steady_clock::now() + kBatchWaitBudget;
-    while (available < preferred && active &&
-           std::chrono::steady_clock::now() < waitUntil) {
-        std::this_thread::sleep_for(kBatchPollInterval);
-        written = writeIndex();
-        active = producerActive();
-        if (written < read_index_)
-            read_index_ = written;
-        available = written - read_index_;
-    }
+    const auto available = written - read_index_;
     if (available == 0) {
+        // Non-blocking: return quickly so the GNU Radio scheduler can keep
+        // the demodulator and the Qt sinks running. The short pause just
+        // avoids a busy loop while no samples are pending.
         if (!active) {
             producer_was_active_ = false;
             last_sample_time_ns_.store(0, std::memory_order_relaxed);
         }
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
         return 0;
     }
 

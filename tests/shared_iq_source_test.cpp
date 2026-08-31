@@ -56,41 +56,43 @@ int main()
     std::vector<gr_complex> output(1024);
     gr_vector_const_void_star inputs;
     gr_vector_void_star outputs{output.data()};
-    // Observe the producer before publishing the test burst; a newly attached
-    // consumer intentionally starts at the current write index.
-    source->work(int(output.size()), inputs, outputs);
-    auto* samples = reinterpret_cast<gr_complex*>(base + kHeaderBytes);
-
-    // SDR# publishes the post-decimation stream in short callbacks. The
-    // source should coalesce them into one FFT-sized batch rather than make
-    // GNU Radio repeatedly schedule a few hundred samples followed by zero.
-    std::thread publisher([base, samples] {
-        for (std::uint64_t end = 256; end <= 1024; end += 256) {
-            const auto begin = end - 256;
-            for (std::uint64_t index = begin; index < end; ++index)
-                samples[index] = gr_complex(float(index), -float(index));
-            LARGE_INTEGER publishedAt{};
-            QueryPerformanceCounter(&publishedAt);
-            InterlockedExchange64(reinterpret_cast<volatile LONG64*>(base + 48),
-                                  publishedAt.QuadPart);
-            InterlockedExchange64(reinterpret_cast<volatile LONG64*>(base + 24),
-                                  static_cast<LONG64>(end));
-            std::this_thread::sleep_for(std::chrono::milliseconds(3));
-        }
-    });
-    const int coalesced = source->work(int(output.size()), inputs, outputs);
-    publisher.join();
-    if (coalesced != int(output.size()) || output.front() != samples[0] ||
-        output.back() != samples[1023]) {
-        std::cerr << "shared IQ source did not coalesce short producer bursts: "
-                  << coalesced << " samples, first=" << output.front()
-                  << ", last=" << output.back() << '\n';
+    // A newly attached consumer intentionally starts at the current write
+    // index and must not block when nothing has been published yet.
+    if (source->work(int(output.size()), inputs, outputs) != 0) {
+        std::cerr << "shared IQ source returned data before any burst\n";
         source->stop();
         UnmapViewOfFile(base);
         CloseHandle(mapping);
         return 1;
     }
+    auto* samples = reinterpret_cast<gr_complex*>(base + kHeaderBytes);
 
+    // SDR# publishes the post-decimation stream in short callbacks. The source
+    // must forward each burst immediately without blocking the flowgraph.
+    for (std::uint64_t end = 256; end <= 1024; end += 256) {
+        const auto begin = end - 256;
+        for (std::uint64_t index = begin; index < end; ++index)
+            samples[index] = gr_complex(float(index), -float(index));
+        LARGE_INTEGER publishedAt{};
+        QueryPerformanceCounter(&publishedAt);
+        InterlockedExchange64(reinterpret_cast<volatile LONG64*>(base + 48),
+                              publishedAt.QuadPart);
+        InterlockedExchange64(reinterpret_cast<volatile LONG64*>(base + 24),
+                              static_cast<LONG64>(end));
+        const int produced = source->work(int(output.size()), inputs, outputs);
+        if (produced != 256 || output.front() != samples[begin] ||
+            output.back() != samples[end - 1]) {
+            std::cerr << "shared IQ source dropped or misaligned a burst: "
+                      << produced << " samples\n";
+            source->stop();
+            UnmapViewOfFile(base);
+            CloseHandle(mapping);
+            return 1;
+        }
+    }
+
+    // A stalled consumer accumulates backlog; the source skips data older than
+    // its 120 ms latency bound instead of emitting a stale block.
     for (std::uint64_t index = 1024; index < 11024; ++index)
         samples[index] = gr_complex(float(index), -float(index));
     QueryPerformanceCounter(&now);
@@ -99,9 +101,11 @@ int main()
     InterlockedExchange64(reinterpret_cast<volatile LONG64*>(base + 24), 11024);
 
     const int produced = source->work(int(output.size()), inputs, outputs);
+    // read_index=1024, backlog=10000 > 5760 -> skip 4240, resume at 5264.
     const bool ok = produced == int(output.size()) &&
                     source->droppedSamples() == 4240 &&
-                    output.front() == samples[5264];
+                    output.front() == samples[5264] &&
+                    output.back() == samples[6287];
     source->stop();
     UnmapViewOfFile(base);
     CloseHandle(mapping);
