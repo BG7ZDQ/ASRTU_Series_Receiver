@@ -229,24 +229,15 @@ jobs:
         shell: pwsh
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          $languageDir = "${env:ProgramFiles(x86)}\Inno Setup 6\Languages"
-          $requiredLanguages = @('ChineseSimplified.isl', 'Japanese.isl')
-          $missingLanguage = $requiredLanguages | Where-Object {
-            -not (Test-Path -LiteralPath (Join-Path $languageDir $_))
-          }
-          if (-not (Test-Path -LiteralPath $iscc) -or $missingLanguage) {
-            # The hosted image can contain a size-reduced Inno installation
-            # with ISCC but without user-contributed language files.
+
+          if (-not (Test-Path -LiteralPath $iscc)) {
+            # The hosted image can omit the compiler. The Chinese and Japanese
+            # wizard messages are pinned in the repository, so a size-reduced
+            # installation cannot break the multilingual installer.
             choco upgrade innosetup --yes --no-progress --force
           }
           if (-not (Test-Path -LiteralPath $iscc)) {
             throw "Inno Setup compiler not found after installation: $iscc"
-          }
-          foreach ($language in $requiredLanguages) {
-            $path = Join-Path $languageDir $language
-            if (-not (Test-Path -LiteralPath $path)) {
-              throw "Inno Setup language file not found after installation: $path"
-            }
           }
           "ASRTU_ISCC=$iscc" | Out-File `
             -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -256,7 +247,13 @@ jobs:
           .\build_installer.ps1 `
             -DecoderSource $env:ASRTU_PORTABLE `
             -InnoSetup $env:ASRTU_ISCC
-          $installer = "packaging/inno/dist/ASRTU_Series_Receiver_Setup.exe"
+          $versionLine = Select-String -LiteralPath 'CMakeLists.txt' `
+            -Pattern 'project\(ASRTU1Qt VERSION ([0-9.]+)' | Select-Object -First 1
+          if (-not $versionLine) {
+            throw 'Unable to read the application version from CMakeLists.txt'
+          }
+          $appVersion = $versionLine.Matches[0].Groups[1].Value
+          $installer = "packaging/inno/dist/ASRTU_Series_Receiver_Setup_${appVersion}.exe"
           if (-not (Test-Path -LiteralPath $installer)) {
             throw "Inno Setup installer was not created: $installer"
           }
@@ -269,7 +266,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: asrtu-windows-installer
-          path: packaging/inno/dist/ASRTU_Series_Receiver_Setup.exe
+          path: packaging/inno/dist/ASRTU_Series_Receiver_Setup_*.exe
           if-no-files-found: error
 
   packages:

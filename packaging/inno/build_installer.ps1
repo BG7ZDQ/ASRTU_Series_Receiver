@@ -102,6 +102,6 @@ $appVersion = $versionLine.Matches[0].Groups[1].Value
 & $InnoSetup "/DAppVersion=$appVersion" (Join-Path $PSScriptRoot 'ASRTU1_Receiver_Setup.iss')
 if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
 
-$installer = Join-Path $PSScriptRoot 'dist\ASRTU_Series_Receiver_Setup.exe'
+$installer = Join-Path $PSScriptRoot "dist\ASRTU_Series_Receiver_Setup_${appVersion}.exe"
 Write-Host "Installer: $installer"
 Get-Item -LiteralPath $installer | Select-Object FullName, Length, LastWriteTime

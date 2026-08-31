@@ -21,7 +21,7 @@ Contributors: **BG7ZDQ** **BI1NWO** **BG6HNY** **BG4QBF**
 
 ### 1. Installation and initial setup
 
-1. Run `ASRTU_Series_Receiver_Setup.exe` and choose whether to install the bundled SDR# telemetry preset.
+1. Run `ASRTU_Series_Receiver_Setup_<version>.exe` (for example `ASRTU_Series_Receiver_Setup_1.5.4.exe`) and choose whether to install the bundled SDR# telemetry preset.
 2. Open **ASRTU Series Satellite Launcher** from the desktop.
 3. Enter your callsign, longitude, latitude, and altitude. These coordinates are used for satellite tracking and Doppler calculation and are stored locally.
 4. Select an input appropriate for your receiving chain. The sound-card selector is shown only for sound-card modes.

@@ -20,7 +20,7 @@ Languages: **中文** · [English](README_EN.md) · [日本語](README_JA.md)
 
 ### 1. 安装与首次设置
 
-1. 运行 `ASRTU_Series_Receiver_Setup.exe`，按需求选择是否安装随包提供的 SDR# 遥测预设。
+1. 运行 `ASRTU_Series_Receiver_Setup_<版本号>.exe`（例如 `ASRTU_Series_Receiver_Setup_1.5.4.exe`），按需求选择是否安装随包提供的 SDR# 遥测预设。
 2. 从桌面打开 **ASRTU 系列卫星启动器**。
 3. 填写呼号、经度、纬度和海拔。坐标用于卫星跟踪与多普勒计算；启动器会在本机保存设置。
 4. 根据接收链路选择“输入”。只有声卡输入模式会显示“声卡”下拉框。

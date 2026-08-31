@@ -18,7 +18,7 @@ UninstallDisplayName={cm:ProgramGroup}
 UninstallDisplayIcon={app}\decoder\ASRTU1_Launcher.exe
 SetupIconFile=..\..\assets\branding\astro_series_launcher.ico
 OutputDir=dist
-OutputBaseFilename=ASRTU_Series_Receiver_Setup
+OutputBaseFilename=ASRTU_Series_Receiver_Setup_{#AppVersion}
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
@@ -34,8 +34,8 @@ LanguageDetectionMethod=none
 
 [Languages]
 Name: "english"; MessagesFile: "English.isl"
-Name: "chinesesimp"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
-Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"
+Name: "chinesesimp"; MessagesFile: "Languages\ChineseSimplified.isl"
+Name: "japanese"; MessagesFile: "Languages\Japanese.isl"
 
 [CustomMessages]
 english.ProgramGroup=ASRTU Series Satellite Receiver and Upload
