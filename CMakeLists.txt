@@ -49,6 +49,9 @@ if(NOT WIN32)
 endif()
 find_package(Gnuradio REQUIRED COMPONENTS ${ASRTU_GNURADIO_COMPONENTS})
 find_library(ASRTU_LILACSAT_LIBRARY NAMES gnuradio-lilacsat REQUIRED)
+find_path(ASRTU_LILACSAT_INCLUDE_DIR
+    NAMES gnuradio/lilacsat/vitfilt27_fb.h
+    REQUIRED)
 # GNU Radio's Qt GUI is built against Qt 5.  Some distributions expose the
 # Qt 6 build as the unversioned "qwt" library while keeping the Qt 5 build as
 # "qwt-qt5".  Prefer the explicit Qt 5 name so both variants are never loaded
@@ -137,7 +140,8 @@ endif()
 target_include_directories(ASRTU1_Demod_CQt PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/dsp
     ${CMAKE_CURRENT_SOURCE_DIR}/libs/demod
-    ${CMAKE_CURRENT_SOURCE_DIR}/libs/common)
+    ${CMAKE_CURRENT_SOURCE_DIR}/libs/common
+    ${ASRTU_LILACSAT_INCLUDE_DIR})
 
 target_link_libraries(ASRTU1_Demod_CQt PRIVATE
     Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network
@@ -376,7 +380,8 @@ if(WIN32)
         NOMINMAX WIN32_LEAN_AND_MEAN)
 endif()
 target_include_directories(ASRTU1_Benchmark PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/libs/demod)
+    ${CMAKE_CURRENT_SOURCE_DIR}/libs/demod
+    ${ASRTU_LILACSAT_INCLUDE_DIR})
 target_link_libraries(ASRTU1_Benchmark PRIVATE
     Qt5::Core Qt5::Gui Qt5::Widgets
     gnuradio::gnuradio-runtime
