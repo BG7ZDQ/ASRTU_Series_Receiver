@@ -320,26 +320,52 @@ bool SsdvReceiver::rebuildImage()
 		return false;
 
 	ssdv_t decoder{};
-	if (ssdv_dec_init(&decoder) != SSDV_OK)
-		return false;
-
-	if (ssdv_dec_set_buffer(&decoder, jpeg_buffer_.data(), jpeg_buffer_.size()) !=
-	    SSDV_OK)
-		return false;
-
-	for (const auto& entry : packets_) {
-		const auto* packet = reinterpret_cast<const std::uint8_t*>(
-			entry.second.data());
-		const char result = ssdv_dec_feed(&decoder, packet, ssdv_dslwp_mode);
-
-		if (result != SSDV_FEED_ME && result != SSDV_OK) {
-			if (log_callback_) {
-				log_callback_(QStringLiteral("SSDV decoder rejected packet %1")
-						  .arg(entry.first));
-			}
+	while (!packets_.empty()) {
+		decoder = {};
+		if (ssdv_dec_init(&decoder) != SSDV_OK)
 			return false;
+
+		if (ssdv_dec_set_buffer(&decoder, jpeg_buffer_.data(),
+					jpeg_buffer_.size()) != SSDV_OK)
+			return false;
+
+		bool rejected = false;
+		std::uint16_t rejectedPacketId = 0;
+		for (const auto& entry : packets_) {
+			const auto* packet = reinterpret_cast<const std::uint8_t*>(
+				entry.second.data());
+			const char result =
+				ssdv_dec_feed(&decoder, packet, ssdv_dslwp_mode);
+
+			if (result != SSDV_FEED_ME && result != SSDV_OK) {
+				rejected = true;
+				rejectedPacketId = entry.first;
+				break;
+			}
+		}
+		if (!rejected)
+			break;
+
+		packets_.erase(rejectedPacketId);
+		crc_failed_packet_ids_.erase(rejectedPacketId);
+		complete_ = false;
+		for (const auto& entry : packets_) {
+			ssdv_packet_info_t info{};
+			ssdv_dec_header(
+				&info,
+				reinterpret_cast<const std::uint8_t*>(
+					entry.second.constData()),
+				ssdv_dslwp_mode);
+			complete_ = complete_ || info.eoi != 0;
+		}
+		if (log_callback_) {
+			log_callback_(QStringLiteral(
+				"SSDV decoder discarded unusable packet %1 and restarted")
+					  .arg(rejectedPacketId));
 		}
 	}
+	if (packets_.empty())
+		return false;
 
 	std::uint8_t* jpeg = nullptr;
 	std::size_t jpegLength = 0;

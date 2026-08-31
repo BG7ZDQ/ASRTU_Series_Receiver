@@ -6,6 +6,7 @@
 #include <QFileInfo>
 #include <QTemporaryDir>
 
+#include <algorithm>
 #include <chrono>
 #include <condition_variable>
 #include <iostream>
@@ -186,6 +187,43 @@ int main(int argc, char* argv[])
             !last.crc_failed_packet_ids.empty()) {
             std::cerr << "Valid JAMX CRC packets were marked as failed\n";
             return 10;
+        }
+    }
+
+    // A best-effort packet may have a plausible header but contain an
+    // unusable JPEG entropy stream. It must not prevent later packets from
+    // contributing to the preview.
+    receiver.clear();
+    const QString damagedPath =
+        QFileInfo(QStringLiteral(ASRTU_TEST_FIXTURE)).dir().filePath(
+            QStringLiteral("by04_ssdv_bad_packet.b64"));
+    QFile damagedInput(damagedPath);
+    if (!damagedInput.open(QIODevice::ReadOnly))
+        return 11;
+    const QByteArray damaged =
+        QByteArray::fromBase64(damagedInput.readAll());
+    constexpr int frameSize = 223;
+    constexpr std::uint16_t damagedPacketId = 4;
+    if (damaged.size() != frameSize * 11)
+        return 11;
+    for (int offset = 0; offset < damaged.size(); offset += frameSize)
+        receiver.ingestFrame(damaged.mid(offset, frameSize));
+    {
+        std::unique_lock<std::mutex> lock(resultMutex);
+        const int expectedPackets = damaged.size() / frameSize - 1;
+        if (!resultReady.wait_for(lock, std::chrono::seconds(3), [&] {
+                return last.generation == 3 && !last.image.isNull() &&
+                       last.received_packets == expectedPackets &&
+                       last.last_packet == 10;
+            }) ||
+            std::find(last.missing_packet_ids.begin(),
+                      last.missing_packet_ids.end(), damagedPacketId) ==
+                last.missing_packet_ids.end()) {
+            std::cerr << "Unusable SSDV packet blocked later packets: generation="
+                      << last.generation << " received=" << last.received_packets
+                      << " last=" << last.last_packet
+                      << " imageNull=" << last.image.isNull() << '\n';
+            return 12;
         }
     }
     std::cout << "SSDV OK: " << result.path.toLocal8Bit().constData() << '\n';
