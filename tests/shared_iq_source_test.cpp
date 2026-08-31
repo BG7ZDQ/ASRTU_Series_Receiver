@@ -81,9 +81,13 @@ int main()
                               static_cast<LONG64>(end));
         const int produced = source->work(int(output.size()), inputs, outputs);
         if (produced != 256 || output.front() != samples[begin] ||
-            output.back() != samples[end - 1]) {
+            output[produced - 1] != samples[end - 1]) {
             std::cerr << "shared IQ source dropped or misaligned a burst: "
-                      << produced << " samples\n";
+                      << produced << " samples, first=" << output.front()
+                      << " expected=" << samples[begin]
+                      << ", last=" << output[produced - 1]
+                      << " expected=" << samples[end - 1]
+                      << ", writeIndex=" << end << '\n';
             source->stop();
             UnmapViewOfFile(base);
             CloseHandle(mapping);
@@ -105,12 +109,18 @@ int main()
     const bool ok = produced == int(output.size()) &&
                     source->droppedSamples() == 4240 &&
                     output.front() == samples[5264] &&
-                    output.back() == samples[6287];
+                    output[produced - 1] == samples[6287];
     source->stop();
     UnmapViewOfFile(base);
     CloseHandle(mapping);
     if (!ok) {
-        std::cerr << "shared IQ source did not enforce its latency bound\n";
+        std::cerr << "shared IQ source did not enforce its latency bound: "
+                  << "produced=" << produced
+                  << " dropped=" << source->droppedSamples()
+                  << " first=" << output.front() << " expected=" << samples[5264]
+                  << " last=" << output[produced - 1]
+                  << " expected=" << samples[6287]
+                  << '\n';
         return 1;
     }
     return 0;
