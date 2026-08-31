@@ -195,6 +195,70 @@ jobs:
           path: dist/windows/*.zip
           if-no-files-found: error
 
+  windows-installer:
+    name: Windows Inno Setup installer
+    needs: windows
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download tested Windows package
+        uses: actions/download-artifact@v4
+        with:
+          name: asrtu-windows-x64
+          path: dist/windows
+      - name: Prepare portable installer payload
+        shell: pwsh
+        run: |
+          $archive = "dist/windows/asrtu-windows-x64.zip"
+          $portable = Join-Path $env:RUNNER_TEMP "asrtu-portable"
+          if (-not (Test-Path -LiteralPath $archive)) {
+            throw "Windows portable archive not found: $archive"
+          }
+          Expand-Archive -LiteralPath $archive -DestinationPath $portable
+          foreach ($required in @(
+              'ASRTU1_Demod_CQt.exe',
+              'ASRTU1_Launcher.exe',
+              'ASRTU_SatnogsUploader.exe')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $portable $required))) {
+              throw "Portable installer input is incomplete: $required"
+            }
+          }
+          "ASRTU_PORTABLE=$portable" | Out-File `
+            -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Resolve Inno Setup compiler
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path -LiteralPath $iscc)) {
+            choco install innosetup --yes --no-progress
+          }
+          if (-not (Test-Path -LiteralPath $iscc)) {
+            throw "Inno Setup compiler not found after installation: $iscc"
+          }
+          "ASRTU_ISCC=$iscc" | Out-File `
+            -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Build and verify Inno Setup installer
+        shell: pwsh
+        run: |
+          .\build_installer.ps1 `
+            -DecoderSource $env:ASRTU_PORTABLE `
+            -InnoSetup $env:ASRTU_ISCC
+          $installer = "packaging/inno/dist/ASRTU_Series_Receiver_Setup.exe"
+          if (-not (Test-Path -LiteralPath $installer)) {
+            throw "Inno Setup installer was not created: $installer"
+          }
+          $item = Get-Item -LiteralPath $installer
+          if ($item.Length -lt 1MB) {
+            throw "Inno Setup installer is unexpectedly small: $($item.Length) bytes"
+          }
+          Get-FileHash -LiteralPath $installer -Algorithm SHA256
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: asrtu-windows-installer
+          path: packaging/inno/dist/ASRTU_Series_Receiver_Setup.exe
+          if-no-files-found: error
+
   packages:
     name: Linux packages
     runs-on: ubuntu-24.04
@@ -289,7 +353,7 @@ jobs:
   release:
     name: Publish tag artifacts
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [windows, packages]
+    needs: [windows, windows-installer, packages]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -304,6 +368,11 @@ jobs:
         with:
           name: asrtu-windows-x64
           path: dist/windows
+      - name: Download Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: asrtu-windows-installer
+          path: dist/windows-installer
       - name: Publish tag artifacts
         uses: softprops/action-gh-release@v2
         with:
@@ -312,6 +381,7 @@ jobs:
             dist/**/*.rpm
             dist/**/*.AppImage
             dist/**/*.zip
+            dist/**/*.exe
 
   arch-package:
     name: Arch PKGBUILD syntax
