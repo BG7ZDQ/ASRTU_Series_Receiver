@@ -18,6 +18,13 @@ its original axes. The lightweight Qt RSSI meter uses a smoothed adaptive range:
 large changes expand the scale immediately and stable readings contract it
 gradually.
 
+The Windows shared-memory source coalesces SDR#'s short post-decimation
+callbacks into batches of up to one 1024-sample FFT frame, waiting no longer
+than 60 ms. The wait normally lasts about 20 ms at 48 ksample/s; the larger
+bound also covers Windows' coarse default timer quantum. This keeps the input
+spectrum cadence consistent with live audio while preserving the bridge's
+120 ms maximum-latency bound.
+
 ## Build
 
 The development environment currently targets:

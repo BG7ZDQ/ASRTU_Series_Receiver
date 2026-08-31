@@ -3,9 +3,11 @@
 #include <gnuradio/gr_complex.h>
 #include <windows.h>
 
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -58,17 +60,48 @@ int main()
     // consumer intentionally starts at the current write index.
     source->work(int(output.size()), inputs, outputs);
     auto* samples = reinterpret_cast<gr_complex*>(base + kHeaderBytes);
-    for (std::uint64_t index = 0; index < 10000; ++index)
+
+    // SDR# publishes the post-decimation stream in short callbacks. The
+    // source should coalesce them into one FFT-sized batch rather than make
+    // GNU Radio repeatedly schedule a few hundred samples followed by zero.
+    std::thread publisher([base, samples] {
+        for (std::uint64_t end = 256; end <= 1024; end += 256) {
+            const auto begin = end - 256;
+            for (std::uint64_t index = begin; index < end; ++index)
+                samples[index] = gr_complex(float(index), -float(index));
+            LARGE_INTEGER publishedAt{};
+            QueryPerformanceCounter(&publishedAt);
+            InterlockedExchange64(reinterpret_cast<volatile LONG64*>(base + 48),
+                                  publishedAt.QuadPart);
+            InterlockedExchange64(reinterpret_cast<volatile LONG64*>(base + 24),
+                                  static_cast<LONG64>(end));
+            std::this_thread::sleep_for(std::chrono::milliseconds(3));
+        }
+    });
+    const int coalesced = source->work(int(output.size()), inputs, outputs);
+    publisher.join();
+    if (coalesced != int(output.size()) || output.front() != samples[0] ||
+        output.back() != samples[1023]) {
+        std::cerr << "shared IQ source did not coalesce short producer bursts: "
+                  << coalesced << " samples, first=" << output.front()
+                  << ", last=" << output.back() << '\n';
+        source->stop();
+        UnmapViewOfFile(base);
+        CloseHandle(mapping);
+        return 1;
+    }
+
+    for (std::uint64_t index = 1024; index < 11024; ++index)
         samples[index] = gr_complex(float(index), -float(index));
     QueryPerformanceCounter(&now);
     InterlockedExchange64(reinterpret_cast<volatile LONG64*>(base + 48),
                           now.QuadPart);
-    InterlockedExchange64(reinterpret_cast<volatile LONG64*>(base + 24), 10000);
+    InterlockedExchange64(reinterpret_cast<volatile LONG64*>(base + 24), 11024);
 
     const int produced = source->work(int(output.size()), inputs, outputs);
     const bool ok = produced == int(output.size()) &&
                     source->droppedSamples() == 4240 &&
-                    output.front() == samples[4240];
+                    output.front() == samples[5264];
     source->stop();
     UnmapViewOfFile(base);
     CloseHandle(mapping);
