@@ -40,6 +40,10 @@ if ($RebuildDsp) {
     if ($LASTEXITCODE -ne 0) { throw 'DSP/launcher build failed.' }
     $DecoderSource = Join-Path $dspProject 'portable\ASRTU1_Demod_CQt'
 }
+if (-not (Test-Path -LiteralPath (
+        Join-Path $DecoderSource 'ASRTU_SatnogsUploader.exe'))) {
+    throw "SatNOGS uploader not found in decoder payload: $DecoderSource"
+}
 
 # Rebuild the legacy SDR# bridge using Roslyn from Visual Studio Build Tools.
 & $iqBridgeBuild -SdrSharpApiRoot $SdrSharpApiRoot -Configuration Release

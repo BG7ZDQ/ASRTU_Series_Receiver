@@ -8,6 +8,7 @@ $ErrorActionPreference = 'Stop'
 $exe = Join-Path $BuildDir 'ASRTU1_Demod_CQt.exe'
 $launcher = Join-Path $BuildDir 'ASRTU1_Launcher.exe'
 $doppler = Join-Path $BuildDir 'ASRTU_Doppler.exe'
+$satnogsUploader = Join-Path $BuildDir 'ASRTU_SatnogsUploader.exe'
 $runtimeBin = Join-Path $RuntimeRoot 'Library\bin'
 $plugins = Join-Path $RuntimeRoot 'Library\plugins'
 $objdump = (Get-Command 'objdump.exe' -ErrorAction Stop).Source
@@ -15,9 +16,38 @@ $objdump = (Get-Command 'objdump.exe' -ErrorAction Stop).Source
 if (-not (Test-Path -LiteralPath $exe)) { throw "EXE not found: $exe" }
 if (-not (Test-Path -LiteralPath $runtimeBin)) { throw "Runtime bin not found: $runtimeBin" }
 
+$resolvedOutput = [IO.Path]::GetFullPath($OutputDir)
+$resolvedRoot = [IO.Path]::GetPathRoot($resolvedOutput).TrimEnd('\')
+if ($resolvedOutput.TrimEnd('\') -eq $resolvedRoot) {
+    throw "Unsafe portable output directory: $resolvedOutput"
+}
+$repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$portableRoot = [IO.Path]::GetFullPath(
+    (Join-Path $repoRoot 'portable')).TrimEnd('\') + '\'
+$payloadRoot = [IO.Path]::GetFullPath(
+    (Join-Path $PSScriptRoot 'payload')).TrimEnd('\') + '\'
+$safeRoots = @($portableRoot, $payloadRoot)
+$insideManagedRoot = $false
+foreach ($safeRoot in $safeRoots) {
+    if ($resolvedOutput.StartsWith(
+            $safeRoot, [StringComparison]::OrdinalIgnoreCase)) {
+        $insideManagedRoot = $true
+        break
+    }
+}
+$externalMarker = "$resolvedOutput.asrtu-portable-output"
+if (Test-Path -LiteralPath $resolvedOutput) {
+    if (-not $insideManagedRoot -and
+        -not (Test-Path -LiteralPath $externalMarker -PathType Leaf)) {
+        throw "Refusing to clean unmarked output directory outside managed roots: $resolvedOutput"
+    }
+    Remove-Item -LiteralPath $resolvedOutput -Recurse -Force
+}
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
-$oldLog = Join-Path $OutputDir 'ASRTU1_Demod.log'
-if (Test-Path -LiteralPath $oldLog) { Remove-Item -LiteralPath $oldLog -Force }
+if (-not $insideManagedRoot) {
+    Set-Content -LiteralPath $externalMarker `
+        -Value 'Managed by ASRTU package_portable.ps1' -Encoding Ascii
+}
 Copy-Item -LiteralPath $exe -Destination (Join-Path $OutputDir 'ASRTU1_Demod_CQt.exe') -Force
 if (Test-Path -LiteralPath $launcher) {
     Copy-Item -LiteralPath $launcher -Destination (Join-Path $OutputDir 'ASRTU1_Launcher.exe') -Force
@@ -25,6 +55,11 @@ if (Test-Path -LiteralPath $launcher) {
 if (Test-Path -LiteralPath $doppler) {
     Copy-Item -LiteralPath $doppler -Destination (Join-Path $OutputDir 'ASRTU_Doppler.exe') -Force
 }
+if (-not (Test-Path -LiteralPath $satnogsUploader)) {
+    throw "SatNOGS uploader not found: $satnogsUploader"
+}
+Copy-Item -LiteralPath $satnogsUploader `
+    -Destination (Join-Path $OutputDir 'ASRTU_SatnogsUploader.exe') -Force
 $converter = Join-Path $runtimeBin 'sndfile-convert.exe'
 if (-not (Test-Path -LiteralPath $converter)) { throw "Audio converter not found: $converter" }
 Copy-Item -LiteralPath $converter -Destination (Join-Path $OutputDir 'sndfile-convert.exe') -Force
@@ -57,6 +92,7 @@ $queue = [System.Collections.Generic.Queue[string]]::new()
 $queue.Enqueue((Join-Path $OutputDir 'ASRTU1_Demod_CQt.exe'))
 $queue.Enqueue((Join-Path $OutputDir 'ASRTU1_Launcher.exe'))
 $queue.Enqueue((Join-Path $OutputDir 'ASRTU_Doppler.exe'))
+$queue.Enqueue((Join-Path $OutputDir 'ASRTU_SatnogsUploader.exe'))
 $queue.Enqueue((Join-Path $OutputDir 'sndfile-convert.exe'))
 
 function Get-Dependencies([string]$binary) {
@@ -80,8 +116,7 @@ while ($queue.Count -gt 0) {
         $source = Find-RuntimeDll $dependency
         if ($source) {
             # Always refresh runtime DLLs. Keeping an existing file made
-            # incremental packages silently retain stale OOT modules after a
-            # local rebuild (notably gnuradio-hyacinthsat.dll).
+            # incremental packages silently retain stale runtime modules.
             Copy-Item -LiteralPath $source -Destination $destination -Force
         } elseif (-not (Test-Path -LiteralPath $destination)) {
                 Write-Warning "Dependency not found in radioconda (assumed system): $dependency"
@@ -137,6 +172,7 @@ Set-Content -LiteralPath (Join-Path $OutputDir 'README.txt') -Encoding UTF8 -Val
     'The application has no console window. Runtime and FEC messages are written to ASRTU1_Demod.log next to the EXE.',
     'TCP PDU output: 127.0.0.1:9985',
     'ZeroMQ PUB output: tcp://127.0.0.1:5555',
+    'ASRTU_SatnogsUploader.exe provides the Windows/Linux SatNOGS frame, station and server-status window.',
     '',
     'This package contains GNU Radio, GPL-licensed OOT modules, the OpenHoshimi ASRTU soundmodem core and the DSLWP-compatible SSDV decoder.',
     'OpenHoshimi decoder credits: BG6HNY / Hyacinth Satellite Team and the upstream HIT LilacSat soundmodem authors.',

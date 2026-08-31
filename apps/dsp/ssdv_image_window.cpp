@@ -336,10 +336,10 @@ void SsdvImageWindow::updateImage(const SsdvImageUpdate& update)
         showGalleryImage(index);
     else
         showGalleryImage(gallery_index_);
-    if (!isVisible())
+    if (!isVisible()) {
         show();
-    raise();
-    activateWindow();
+        raise();
+    }
 }
 
 
@@ -350,6 +350,7 @@ void SsdvImageWindow::showGalleryImage(int index)
     gallery_index_ = index;
     const auto& update = gallery_.at(index);
     image_ = update.image;
+    image_complete_ = update.complete;
     image_path_ = update.path;
     refreshMetadata();
     refreshPixmap();
@@ -417,6 +418,7 @@ void SsdvImageWindow::clearDisplay()
 {
     ++minimum_generation_;
     image_ = {};
+    image_complete_ = false;
     image_path_.clear();
     gallery_.clear();
     gallery_index_ = -1;
@@ -455,5 +457,6 @@ void SsdvImageWindow::refreshPixmap()
     image_label_->show();
     const QSize target = image_label_->size().expandedTo(QSize(160, 120));
     image_label_->setPixmap(QPixmap::fromImage(image_).scaled(
-        target, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        target, Qt::KeepAspectRatio,
+        image_complete_ ? Qt::SmoothTransformation : Qt::FastTransformation));
 }

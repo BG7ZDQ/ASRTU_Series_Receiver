@@ -6,6 +6,9 @@
 #include <QFont>
 #include <QGuiApplication>
 #include <QIcon>
+#include <QDir>
+#include <QLockFile>
+#include <QLocalSocket>
 #include <QMessageBox>
 #include <QTimer>
 #include <QTranslator>
@@ -45,13 +48,40 @@ int main(int argc, char* argv[])
     QCoreApplication::setOrganizationName(QStringLiteral("ASRTU"));
     QCoreApplication::setApplicationName(QStringLiteral("ASRTU1_Demod_CQt"));
 
+    const QStringList arguments = QCoreApplication::arguments();
+    QLockFile liveReceiverLock(QDir::temp().filePath(
+        QStringLiteral("asrtu-live-demodulator.lock")));
+    // Live receivers commonly run for hours. Disable age-based expiry while
+    // retaining QLockFile's dead-owner detection after an abnormal exit.
+    liveReceiverLock.setStaleLockTime(0);
+    if (!arguments.contains(QStringLiteral("--wav")) &&
+        !liveReceiverLock.tryLock(100)) {
+        return 3;
+    }
+
     try {
         MainWindow window;
-        const QStringList arguments = QCoreApplication::arguments();
         if (arguments.contains(QStringLiteral("--windowed")))
             window.show();
         else
             window.showMaximized();
+        const int readyIndex = arguments.indexOf(
+            QStringLiteral("--ready-server"));
+        if (readyIndex >= 0 && readyIndex + 1 < arguments.size()) {
+            QLocalSocket readySocket;
+            readySocket.connectToServer(arguments.at(readyIndex + 1),
+                                        QIODevice::WriteOnly);
+            if (!readySocket.waitForConnected(3000)) {
+                std::cerr << "Unable to signal decoder readiness\n";
+                return EXIT_FAILURE;
+            }
+            readySocket.write(QByteArrayLiteral("ready"));
+            if (!readySocket.waitForBytesWritten(1000)) {
+                std::cerr << "Unable to write decoder readiness\n";
+                return EXIT_FAILURE;
+            }
+            readySocket.disconnectFromServer();
+        }
         if (argc >= 3 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--screenshot")) {
             const QString screenshotPath = QString::fromLocal8Bit(argv[2]);
             QTimer::singleShot(1500, &window, [&app, &window, screenshotPath] {

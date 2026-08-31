@@ -408,7 +408,7 @@
         </message>
         <message>
             <source>CRC未通过</source>
-            <translation>CRC不一致</translation>
+            <translation>CRC失敗</translation>
         </message>
         <message>
             <source>确认缺失</source>
@@ -456,11 +456,11 @@
         </message>
         <message>
             <source>已接收 %1 / %2 包　·　CRC未通过 %3 包　·　缺失 %4 包　·　完整率 %5%</source>
-            <translation>受信 %1 / %2　·　CRC不一致 %3　·　欠落 %4　·　完全率 %5%</translation>
+            <translation>受信 %1 / %2　·　CRC失敗 %3　·　欠落 %4　·　完全率 %5%</translation>
         </message>
         <message>
             <source>已接收 %1 包　·　CRC未通过 %2 包　·　确认缺失 %3 包　·　最新包序号 %4　·　总包数待确定</source>
-            <translation>受信 %1　·　CRC不一致 %2　·　欠落確定 %3　·　最新パケット %4　·　総数はEOI待ち</translation>
+            <translation>受信 %1　·　CRC失敗 %2　·　欠落確定 %3　·　最新パケット %4　·　総数はEOI待ち</translation>
         </message>
         <message>
             <source>完成</source>
@@ -469,6 +469,174 @@
         <message>
             <source>保存路径：%1</source>
             <translation>保存先：%1</translation>
+        </message>
+        <message>
+            <source>无法按当前模式打开音频输入设备。
+
+“立体声零中频 RAW 模式 I/Q 输入”必须由声卡提供两个录音声道；若你的电台或麦克风只有一个声道，请在启动器中选择“单声道实数域 12KHz 电台 IF 输入”。
+
+底层错误：%1</source>
+            <translation>現在のモードで音声入力デバイスを開けません。
+
+「ステレオ・ゼロIF RAW I/Q入力」には2つの録音チャンネルが必要です。無線機またはマイクが1チャンネルの場合は、ランチャーで「モノラル実数12 kHz無線機IF入力」を選択してください。
+
+内部エラー：%1</translation>
+        </message>
+        <message>
+            <source>SatNOGS 上传程序启动后立即退出（代码 %1）。</source>
+            <translation>SatNOGSアップローダーが起動直後に終了しました（コード %1）。</translation>
+        </message>
+        <message>
+            <source>SatNOGS 上传程序启动失败</source>
+            <translation>SatNOGSアップローダーを起動できません</translation>
+        </message>
+        <message>
+            <source>SatNOGS 上传程序已启动：%1（PID %2）</source>
+            <translation>SatNOGSアップローダーを起動しました：%1（PID %2）</translation>
+        </message>
+        <message>
+            <source>SatNOGS 上传配置无效</source>
+            <translation>SatNOGSアップロード設定が無効です</translation>
+        </message>
+        <message>
+            <source>SatNOGS NORAD ID 无效。</source>
+            <translation>SatNOGS NORAD IDが無効です。</translation>
+        </message>
+        <message>
+            <source>地面站呼号或昵称不能为空。</source>
+            <translation>地上局のコールサインまたはニックネームを入力してください。</translation>
+        </message>
+        <message>
+            <source>地面站经纬度超出有效范围。</source>
+            <translation>地上局の緯度または経度が有効範囲外です。</translation>
+        </message>
+        <message>
+            <source>ZMQ 地址必须使用 tcp://。</source>
+            <translation>ZMQアドレスにはtcp://を使用してください。</translation>
+        </message>
+        <message>
+            <source>SatNOGS API 地址无效。</source>
+            <translation>SatNOGS APIアドレスが無効です。</translation>
+        </message>
+        <message>
+            <source>等待遥测帧…</source>
+            <translation>テレメトリーフレームを待機中…</translation>
+        </message>
+        <message>
+            <source>长度：%1 字节
+</source>
+            <translation>長さ：%1バイト
+</translation>
+        </message>
+        <message>
+            <source>ASRTU SatNOGS 遥测上传</source>
+            <translation>ASRTU SatNOGSテレメトリーアップローダー</translation>
+        </message>
+        <message>
+            <source>站点与上传配置</source>
+            <translation>地上局・アップロード設定</translation>
+        </message>
+        <message>
+            <source>服务器反馈</source>
+            <translation>サーバー応答</translation>
+        </message>
+        <message>
+            <source>Configuration:
+ZMQ Address:
+  %1
+SatNOGS API:
+  %2
+Satellite Name: %3
+NORAD ID: %4
+Ground Station: %5
+Longitude: %6
+Altitude: %7 m
+Latitude: %8</source>
+            <translation>設定：
+ZMQアドレス：
+  %1
+SatNOGS API：
+  %2
+衛星名：%3
+NORAD ID：%4
+地上局：%5
+経度：%6
+標高：%7 m
+緯度：%8</translation>
+        </message>
+        <message>
+            <source>无法创建 ZeroMQ 上下文：%1</source>
+            <translation>ZeroMQコンテキストを作成できません：%1</translation>
+        </message>
+        <message>
+            <source>无法创建 ZeroMQ 订阅套接字：%1</source>
+            <translation>ZeroMQ購読ソケットを作成できません：%1</translation>
+        </message>
+        <message>
+            <source>无法连接到 %1：%2</source>
+            <translation>%1に接続できません：%2</translation>
+        </message>
+        <message>
+            <source>已连接 ZeroMQ 订阅端，等待解码器帧。</source>
+            <translation>ZeroMQ購読端に接続しました。デコーダーフレームを待機しています。</translation>
+        </message>
+        <message>
+            <source>SatNOGS HTTPS 上传已就绪。</source>
+            <translation>SatNOGS HTTPSアップロードの準備ができました。</translation>
+        </message>
+        <message>
+            <source>预览模式：已载入示例遥测帧。</source>
+            <translation>プレビューモード：サンプルテレメトリーフレームを読み込みました。</translation>
+        </message>
+        <message>
+            <source>ZeroMQ 接收失败：%1</source>
+            <translation>ZeroMQ受信に失敗しました：%1</translation>
+        </message>
+        <message>
+            <source>已丢弃超长 ZeroMQ 消息（%1 字节）。</source>
+            <translation>大きすぎるZeroMQメッセージを破棄しました（%1バイト）。</translation>
+        </message>
+        <message>
+            <source>已丢弃无效遥测 PDU：%1</source>
+            <translation>無効なテレメトリーPDUを破棄しました：%1</translation>
+        </message>
+        <message>
+            <source>接收序号：%1
+接收时间：%2 UTC
+
+</source>
+            <translation>受信番号：%1
+受信時刻：%2 UTC
+
+</translation>
+        </message>
+        <message>
+            <source>上传队列已满，已丢弃最旧的一帧。</source>
+            <translation>アップロードキューが満杯のため、最も古いフレームを破棄しました。</translation>
+        </message>
+        <message>
+            <source>收到遥测帧 #%1（%2 字节），加入上传队列。</source>
+            <translation>テレメトリーフレーム#%1（%2バイト）を受信し、アップロードキューに追加しました。</translation>
+        </message>
+        <message>
+            <source>SatNOGS 接受 %1 字节帧（HTTP %2）。</source>
+            <translation>SatNOGSが%1バイトのフレームを受理しました（HTTP %2）。</translation>
+        </message>
+        <message>
+            <source>SatNOGS 上传失败（HTTP %1）：%2</source>
+            <translation>SatNOGSアップロードに失敗しました（HTTP %1）：%2</translation>
+        </message>
+        <message>
+            <source>服务器响应：%1</source>
+            <translation>サーバー応答：%1</translation>
+        </message>
+        <message>
+            <source>遥测帧内容</source>
+            <translation>テレメトリーフレームデータ</translation>
+        </message>
+        <message>
+            <source>MMT 与 SatNOGS 上传均已启动（PID %1 / %2）</source>
+            <translation>MMTとSatNOGSのアップローダーを起動しました（PID %1 / %2）</translation>
         </message>
     </context>
 </TS>

@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="/icons">
+    <file alias="win98_proxy.png">../../assets/icons/win98_proxy.png</file>
+  </qresource>
+</RCC>

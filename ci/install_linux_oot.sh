@@ -31,5 +31,3 @@ build_module()
 mkdir -p "$prefix" "$workdir"
 build_module gr-lilacsat "$LILACSAT_REPOSITORY" "$LILACSAT_REVISION" \
 	-DENABLE_PYTHON=OFF -DENABLE_DOXYGEN=OFF
-build_module gr-hyacinth "$HYACINTH_REPOSITORY" "$HYACINTH_REVISION" \
-	-DHYACINTHSAT_ENABLE_PYTHON=OFF -DENABLE_DOXYGEN=OFF

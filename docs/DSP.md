@@ -24,7 +24,7 @@ The development environment currently targets:
 
 - Visual Studio 2022 x64
 - Qt 5 from `C:\ProgramData\radioconda`
-- GNU Radio 3.10 plus `gr-lilacsat` and `gr-hyacinth` (the compatibility ABI is still named `hyacinthsat`)
+- GNU Radio 3.10 plus `gr-lilacsat`; live audio and WAV input are implemented locally so capture behavior is versioned with this application
 
 Configure with `CMAKE_PREFIX_PATH`, `CMAKE_INCLUDE_PATH` and
 `CMAKE_LIBRARY_PATH` pointing at `C:\ProgramData\radioconda\Library`, then

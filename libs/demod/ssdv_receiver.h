@@ -78,6 +78,7 @@ private:
 	std::uint64_t session_serial_ = 0;
 	bool complete_ = false;
 	bool jamx_mode_ = false;
+	std::vector<std::uint8_t> jpeg_buffer_;
 
 	std::mutex queue_mutex_;
 	std::condition_variable queue_cv_;

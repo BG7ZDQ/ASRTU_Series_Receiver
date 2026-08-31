@@ -15,7 +15,7 @@
 更新源字符串后，使用 Qt 5 的 `lupdate` 重新扫描，再运行映射脚本和 `lrelease`：
 
 ```powershell
-lupdate apps\dsp\*.cpp apps\dsp\*.h apps\launcher\*.cpp apps\doppler\*.cpp -ts assets\translations\asrtu_en.ts assets\translations\asrtu_ja.ts
+lupdate apps\dsp\*.cpp apps\dsp\*.h apps\launcher\*.cpp apps\doppler\*.cpp apps\satnogs-uploader\*.cpp apps\satnogs-uploader\*.h -ts assets\translations\asrtu_en.ts assets\translations\asrtu_ja.ts
 python tools\fill_asrtu_en.py
 python tools\fill_asrtu_ja.py
 lrelease assets\translations\asrtu_en.ts -qm assets\translations\asrtu_en.qm

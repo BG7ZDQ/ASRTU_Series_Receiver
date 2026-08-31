@@ -12,6 +12,7 @@ set_source_files_properties(
     apps/launcher/launcher.rc
     apps/doppler/doppler.rc
     apps/proxy-wrapper/proxy_wrapper.rc
+    apps/satnogs-uploader/satnogs_uploader.rc
     PROPERTIES COMPILE_DEFINITIONS
     "ASRTU_VERSION_COMMA=${ASRTU_VERSION_COMMA};ASRTU_VERSION_STRING=\"${PROJECT_VERSION}\"")
 
@@ -47,10 +48,7 @@ if(NOT WIN32)
     list(APPEND ASRTU_GNURADIO_COMPONENTS audio)
 endif()
 find_package(Gnuradio REQUIRED COMPONENTS ${ASRTU_GNURADIO_COMPONENTS})
-find_path(ASRTU_OOT_INCLUDE_DIR hyacinthsat/stereo_iq_source.h
-    PATH_SUFFIXES include REQUIRED)
 find_library(ASRTU_LILACSAT_LIBRARY NAMES gnuradio-lilacsat REQUIRED)
-find_library(ASRTU_HYACINTHSAT_LIBRARY NAMES gnuradio-hyacinthsat REQUIRED)
 # GNU Radio's Qt GUI is built against Qt 5.  Some distributions expose the
 # Qt 6 build as the unversioned "qwt" library while keeping the Qt 5 build as
 # "qwt-qt5".  Prefer the explicit Qt 5 name so both variants are never loaded
@@ -97,6 +95,10 @@ set(ASRTU_DEMOD_SOURCES
     apps/dsp/ssdv_image_window.h
     libs/demod/shared_iq_source.cpp
     libs/demod/shared_iq_source.h
+    libs/demod/wav_iq_source.cpp
+    libs/demod/wav_iq_source.h
+    libs/demod/async_wav_recorder_sink.cpp
+    libs/demod/async_wav_recorder_sink.h
     libs/demod/flowgraph.cpp
     libs/demod/flowgraph.h
     libs/demod/frame_monitor.cpp
@@ -113,6 +115,11 @@ set(ASRTU_DEMOD_SOURCES
     libs/common/runtime_paths.h
     apps/dsp/application_icons.qrc
 )
+if(WIN32)
+    list(APPEND ASRTU_DEMOD_SOURCES
+        libs/demod/winmm_iq_source.cpp
+        libs/demod/winmm_iq_source.h)
+endif()
 
 if(WIN32)
     add_executable(ASRTU1_Demod_CQt WIN32 ${ASRTU_DEMOD_SOURCES} apps/dsp/demod.rc)
@@ -121,14 +128,13 @@ else()
 endif()
 
 target_compile_definitions(ASRTU1_Demod_CQt PRIVATE
-    _USE_MATH_DEFINES HYACINTHSAT_GR_310
+    _USE_MATH_DEFINES
     ASRTU_VERSION="${PROJECT_VERSION}")
 if(WIN32)
     target_compile_definitions(ASRTU1_Demod_CQt PRIVATE
         NOMINMAX WIN32_LEAN_AND_MEAN)
 endif()
 target_include_directories(ASRTU1_Demod_CQt PRIVATE
-    ${ASRTU_OOT_INCLUDE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/dsp
     ${CMAKE_CURRENT_SOURCE_DIR}/libs/demod
     ${CMAKE_CURRENT_SOURCE_DIR}/libs/common)
@@ -146,7 +152,6 @@ target_link_libraries(ASRTU1_Demod_CQt PRIVATE
     gnuradio::gnuradio-zeromq
     ${ASRTU_QWT_QT5_LIBRARY}
     ${ASRTU_LILACSAT_LIBRARY}
-    ${ASRTU_HYACINTHSAT_LIBRARY}
     openhoshimi_soundmodem
     ssdv_dslwp
 )
@@ -155,7 +160,7 @@ if(NOT WIN32)
         gnuradio::gnuradio-audio)
 endif()
 if(WIN32)
-    target_link_libraries(ASRTU1_Demod_CQt PRIVATE Qt5::WinMain)
+    target_link_libraries(ASRTU1_Demod_CQt PRIVATE Qt5::WinMain winmm)
 endif()
 
 if(MSVC)
@@ -256,6 +261,55 @@ install(DIRECTORY assets/translations/
     DESTINATION ${CMAKE_INSTALL_BINDIR}/translations
     FILES_MATCHING PATTERN "*.qm")
 
+# The SatNOGS-only upload path is a native Qt window on every platform. It
+# subscribes to the same local PMT/ZMQ stream as the legacy MMT proxy, but
+# submits frames directly to the SatNOGS HTTPS telemetry endpoint.
+if(WIN32)
+    find_path(ASRTU_ZMQ_INCLUDE_DIR zmq.h REQUIRED)
+    find_library(ASRTU_ZMQ_LIBRARY NAMES libzmq REQUIRED)
+    set(ASRTU_ZMQ_LINK ${ASRTU_ZMQ_LIBRARY})
+else()
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(ASRTU_ZMQ REQUIRED IMPORTED_TARGET libzmq)
+    set(ASRTU_ZMQ_LINK PkgConfig::ASRTU_ZMQ)
+endif()
+
+add_executable(ASRTU_SatnogsUploader
+    apps/satnogs-uploader/main.cpp
+    apps/satnogs-uploader/satnogs_uploader_window.cpp
+    apps/satnogs-uploader/satnogs_uploader_window.h
+    libs/proxy/pmt_frame_decoder.cpp
+    libs/proxy/pmt_frame_decoder.h
+    libs/common/translation.cpp
+    libs/common/translation.h
+    apps/satnogs-uploader/satnogs_uploader_resources.qrc)
+target_include_directories(ASRTU_SatnogsUploader PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/satnogs-uploader
+    ${CMAKE_CURRENT_SOURCE_DIR}/libs/proxy
+    ${CMAKE_CURRENT_SOURCE_DIR}/libs/common
+    ${ASRTU_ZMQ_INCLUDE_DIR})
+target_link_libraries(ASRTU_SatnogsUploader PRIVATE
+    Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network
+    gnuradio::gnuradio-runtime ${ASRTU_ZMQ_LINK})
+target_compile_definitions(ASRTU_SatnogsUploader PRIVATE
+    ASRTU_VERSION="${PROJECT_VERSION}")
+if(WIN32)
+    set_target_properties(ASRTU_SatnogsUploader PROPERTIES
+        WIN32_EXECUTABLE TRUE)
+    target_sources(ASRTU_SatnogsUploader PRIVATE
+        apps/satnogs-uploader/satnogs_uploader.rc)
+    target_link_libraries(ASRTU_SatnogsUploader PRIVATE Qt5::WinMain)
+    target_compile_definitions(ASRTU_SatnogsUploader PRIVATE
+        NOMINMAX WIN32_LEAN_AND_MEAN)
+endif()
+if(MSVC)
+    target_compile_options(ASRTU_SatnogsUploader PRIVATE
+        /W4 /permissive- /utf-8 /EHsc)
+endif()
+asrtu_enable_strict_warnings(ASRTU_SatnogsUploader)
+install(TARGETS ASRTU_SatnogsUploader
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
 if(WIN32)
     add_executable(ASRTU_Proxy
         apps/proxy-wrapper/proxy_wrapper.cpp
@@ -269,8 +323,6 @@ if(WIN32)
     endif()
     asrtu_enable_strict_warnings(ASRTU_Proxy)
 else()
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(ASRTU_ZMQ REQUIRED IMPORTED_TARGET libzmq)
     add_executable(ASRTU_UploadProxy
         apps/proxy/main.cpp
         apps/proxy/proxy_config.cpp
@@ -299,6 +351,10 @@ add_executable(ASRTU1_Benchmark
     tests/benchmark_main.cpp
     libs/demod/shared_iq_source.cpp
     libs/demod/shared_iq_source.h
+    libs/demod/wav_iq_source.cpp
+    libs/demod/wav_iq_source.h
+    libs/demod/async_wav_recorder_sink.cpp
+    libs/demod/async_wav_recorder_sink.h
     libs/demod/flowgraph.cpp
     libs/demod/flowgraph.h
     libs/demod/frame_monitor.cpp
@@ -308,14 +364,18 @@ add_executable(ASRTU1_Benchmark
     libs/demod/openhoshimi_decoder_sink.cpp
     libs/demod/openhoshimi_decoder_sink.h
 )
+if(WIN32)
+    target_sources(ASRTU1_Benchmark PRIVATE
+        libs/demod/winmm_iq_source.cpp
+        libs/demod/winmm_iq_source.h)
+endif()
 target_compile_definitions(ASRTU1_Benchmark PRIVATE
-    _USE_MATH_DEFINES HYACINTHSAT_GR_310)
+    _USE_MATH_DEFINES)
 if(WIN32)
     target_compile_definitions(ASRTU1_Benchmark PRIVATE
         NOMINMAX WIN32_LEAN_AND_MEAN)
 endif()
 target_include_directories(ASRTU1_Benchmark PRIVATE
-    ${ASRTU_OOT_INCLUDE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/libs/demod)
 target_link_libraries(ASRTU1_Benchmark PRIVATE
     Qt5::Core Qt5::Gui Qt5::Widgets
@@ -329,11 +389,10 @@ target_link_libraries(ASRTU1_Benchmark PRIVATE
     gnuradio::gnuradio-qtgui
     gnuradio::gnuradio-zeromq
     ${ASRTU_LILACSAT_LIBRARY}
-    ${ASRTU_HYACINTHSAT_LIBRARY}
     openhoshimi_soundmodem
 )
 if(WIN32)
-    target_link_libraries(ASRTU1_Benchmark PRIVATE Psapi)
+    target_link_libraries(ASRTU1_Benchmark PRIVATE Psapi winmm)
 endif()
 if(MSVC)
     target_compile_options(ASRTU1_Benchmark PRIVATE /W4 /permissive- /utf-8)
@@ -392,6 +451,38 @@ if(BUILD_TESTING)
         tests/ssdv_receiver_test.cpp
         libs/demod/ssdv_receiver.cpp
         libs/demod/ssdv_receiver.h)
+
+    add_executable(ASRTU1_SatnogsUploaderTest
+        tests/satnogs_uploader_test.cpp
+        apps/satnogs-uploader/satnogs_uploader_window.cpp
+        apps/satnogs-uploader/satnogs_uploader_window.h
+        libs/proxy/pmt_frame_decoder.cpp
+        libs/proxy/pmt_frame_decoder.h)
+    add_executable(ASRTU1_AsyncWavRecorderTest
+        tests/async_wav_recorder_test.cpp
+        libs/demod/async_wav_recorder_sink.cpp
+        libs/demod/async_wav_recorder_sink.h)
+    if(WIN32)
+        add_executable(ASRTU1_SharedIqSourceTest
+            tests/shared_iq_source_test.cpp
+            libs/demod/shared_iq_source.cpp
+            libs/demod/shared_iq_source.h)
+        target_include_directories(ASRTU1_SharedIqSourceTest PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/libs/demod)
+        target_link_libraries(ASRTU1_SharedIqSourceTest PRIVATE
+            gnuradio::gnuradio-runtime)
+    endif()
+    target_include_directories(ASRTU1_SatnogsUploaderTest PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/apps/satnogs-uploader
+        ${CMAKE_CURRENT_SOURCE_DIR}/libs/proxy
+        ${ASRTU_ZMQ_INCLUDE_DIR})
+    target_link_libraries(ASRTU1_SatnogsUploaderTest PRIVATE
+        Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network
+        gnuradio::gnuradio-runtime ${ASRTU_ZMQ_LINK})
+    target_include_directories(ASRTU1_AsyncWavRecorderTest PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/libs/demod)
+    target_link_libraries(ASRTU1_AsyncWavRecorderTest PRIVATE
+        Qt5::Core gnuradio::gnuradio-runtime)
     target_include_directories(ASRTU1_SsdvTest PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/libs/demod)
     target_link_libraries(ASRTU1_SsdvTest PRIVATE
@@ -405,15 +496,36 @@ if(BUILD_TESTING)
             /W4 /permissive- /utf-8)
         target_compile_options(ASRTU1_SsdvTest PRIVATE
             /W4 /permissive- /utf-8)
+        target_compile_options(ASRTU1_SatnogsUploaderTest PRIVATE
+            /W4 /permissive- /utf-8 /EHsc)
+        target_compile_options(ASRTU1_AsyncWavRecorderTest PRIVATE
+            /W4 /permissive- /utf-8)
+        target_compile_options(ASRTU1_SharedIqSourceTest PRIVATE
+            /W4 /permissive- /utf-8)
     endif()
     asrtu_enable_strict_warnings(ASRTU1_FrameMonitorTest)
     asrtu_enable_strict_warnings(ASRTU1_PmtFrameDecoderTest)
     asrtu_enable_strict_warnings(ASRTU1_SsdvTest)
+    asrtu_enable_strict_warnings(ASRTU1_SatnogsUploaderTest)
+    asrtu_enable_strict_warnings(ASRTU1_AsyncWavRecorderTest)
+    if(WIN32)
+        asrtu_enable_strict_warnings(ASRTU1_SharedIqSourceTest)
+    endif()
     add_test(NAME frame_monitor COMMAND ASRTU1_FrameMonitorTest)
     add_test(NAME pmt_frame_decoder COMMAND ASRTU1_PmtFrameDecoderTest)
     add_test(NAME ssdv_receiver COMMAND ASRTU1_SsdvTest)
-    set_tests_properties(ssdv_receiver PROPERTIES ENVIRONMENT_MODIFICATION
+    add_test(NAME satnogs_uploader COMMAND ASRTU1_SatnogsUploaderTest)
+    add_test(NAME async_wav_recorder COMMAND ASRTU1_AsyncWavRecorderTest)
+    if(WIN32)
+        add_test(NAME shared_iq_source COMMAND ASRTU1_SharedIqSourceTest)
+    endif()
+    set_tests_properties(frame_monitor pmt_frame_decoder ssdv_receiver
+        satnogs_uploader async_wav_recorder PROPERTIES ENVIRONMENT_MODIFICATION
         "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt5::Core>;QT_PLUGIN_PATH=set:$<TARGET_FILE_DIR:Qt5::Core>/../plugins")
+    if(WIN32)
+        set_tests_properties(shared_iq_source PROPERTIES ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt5::Core>")
+    endif()
 endif()
 
 set(CPACK_PACKAGE_NAME "asrtu-series-receiver")

@@ -171,6 +171,23 @@ jobs:
           } else {
             Write-Host "Demod smoke screenshot not produced on this runner (process ran successfully)"
           }
+          # The standalone SatNOGS uploader is required by the JAMX path. Its
+          # preview mode validates the packaged Qt/ZMQ runtime and renders the
+          # frame/configuration/server-feedback layout without sending data.
+          $satnogsShot = Join-Path $env:RUNNER_TEMP "asrtu-satnogs-smoke.png"
+          $satnogs = Join-Path $portable "ASRTU_SatnogsUploader.exe"
+          $process = Start-Process -FilePath $satnogs -ArgumentList @(
+            '--satellite', 'JAMX', '--norad-id', '98248',
+            '--source', 'CI-TEST', '--longitude', '0', '--latitude', '0',
+            '--altitude', '0', '--screenshot', $satnogsShot) -PassThru
+          if (-not $process.WaitForExit(30000)) {
+            $process.Kill()
+            throw "SatNOGS uploader smoke test timed out after 30 seconds"
+          }
+          if ($process.ExitCode -ne 0 -or
+              -not (Test-Path -LiteralPath $satnogsShot)) {
+            throw "SatNOGS uploader smoke test failed"
+          }
       - name: Upload Windows binaries
         uses: actions/upload-artifact@v4
         with:
@@ -229,6 +246,16 @@ jobs:
         run: |
           appimage=$(find dist/appimage -maxdepth 1 -name '*.AppImage' -print -quit)
           test -n "$appimage"
+          appdir=dist/appimage/AppDir
+          uploader_shot="$RUNNER_TEMP/asrtu-linux-satnogs.png"
+          LD_LIBRARY_PATH="$appdir/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+            QT_PLUGIN_PATH="$appdir/usr/plugins" \
+            timeout 30 xvfb-run --auto-servernum \
+            "$appdir/usr/bin/ASRTU_SatnogsUploader" \
+            --satellite JAMX --norad-id 98248 --source CI-TEST \
+            --longitude 0 --latitude 0 --altitude 0 \
+            --screenshot "$uploader_shot"
+          test -s "$uploader_shot"
           XDG_CONFIG_HOME="$RUNNER_TEMP/asrtu-config" \
             XDG_DATA_HOME="$RUNNER_TEMP/asrtu-data" \
             timeout 30 xvfb-run --auto-servernum "$appimage" \

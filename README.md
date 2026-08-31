@@ -14,7 +14,7 @@ Languages: **中文** · [English](README_EN.md) · [日本語](README_JA.md)
 - 可选 WAV 自动录制，完整帧、SVR 和运行日志按会话保存
 - 多 TLE 源下载、卫星选择、频率预设、SGP4 跟踪和 SDR# 自动多普勒控制
 - 遥测上传代理及地面站呼号、经纬度配置
-- 可选将实时解码的 FEC 帧直接上传至 SatNOGS（录音回放不会上传）
+- 独立的跨平台 SatNOGS 上传窗口，可查看帧内容、站点信息和服务器反馈（录音回放不会上传）
 
 ## 使用教程
 
@@ -62,9 +62,11 @@ Languages: **中文** · [English](README_EN.md) · [日本語](README_JA.md)
 
 1. 确认呼号和地面站坐标填写正确。
 2. 点击 **启动上传代理**，在弹出的列表中选择本次要上传的卫星。
-3. Linux 原生代理会先用 PMT 库解析 ZMQ PDU，再上传其中的 223 字节遥测；
-   Windows 使用随安装包提供的旧代理。启动接收与启动代理互相独立，可以只进行本地解码。
-4. 收到 FEC 帧后，检查代理窗口是否显示连接成功和数据转发记录。
+3. 有 MMT 服务器的卫星继续使用原代理；JAMX 没有 MMT 服务器，因此 SatNOGS
+   会被强制启用，并启动新的跨平台 `ASRTU_SatnogsUploader` 窗口。
+4. SatNOGS 窗口会安全解析 ZMQ PMT PDU，只接受 223 字节遥测帧；左上显示
+   十六进制帧内容，右侧显示站点信息，下方显示 HTTPS 服务器反馈。
+5. 启动接收与启动上传互相独立；录音回放不会向 ZMQ 发布帧，也不会上传。
 
 ### 7. 卫星跟踪与自动多普勒
 
@@ -125,6 +127,6 @@ Languages: **中文** · [English](README_EN.md) · [日本語](README_JA.md)
 
 本项目由 BG7ZDQ 以 [MIT License](LICENSE) 开源。第三方组件仍分别适用各自上游许可证，详见 [THIRD_PARTY.md](THIRD_PARTY.md)；MIT 许可不替代、修改或扩大任何第三方授权。
 
-GNU Radio 3.x、`gr-lilacsat` 和 `gr-hyacinth` 属 GPL 系依赖。MIT 源码可以与 GPL 组件配合使用，但包含和链接这些组件的完整二进制发行物还必须满足相应 GPL 源码、许可证和版权告知义务。SDR# 与另行提供的 Windows 旧上传代理不属于本项目 MIT 授权范围；该说明不适用于仓库内的 Linux 原生代理源码。
+GNU Radio 3.x 和 `gr-lilacsat` 属 GPL 系依赖。MIT 源码可以与 GPL 组件配合使用，但包含和链接这些组件的完整二进制发行物还必须满足相应 GPL 源码、许可证和版权告知义务。SDR# 与另行提供的 Windows 旧上传代理不属于本项目 MIT 授权范围；该说明不适用于仓库内的 Linux 原生代理源码。
 
 本项目与 SDR#、GNU Radio 及所支持卫星的原作者或运营方不存在官方隶属或背书关系，除非相应权利方另有书面说明。

@@ -52,5 +52,6 @@ private:
     QVector<SsdvImageUpdate> gallery_;
     std::uint64_t minimum_generation_ = 0;
     int gallery_index_ = -1;
+    bool image_complete_ = false;
     std::function<void()> clear_callback_;
 };

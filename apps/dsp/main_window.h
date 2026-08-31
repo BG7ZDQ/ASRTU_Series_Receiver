@@ -4,13 +4,13 @@
 #include <QElapsedTimer>
 #include <QMainWindow>
 #include <QByteArray>
+#include <cstdint>
 #include <memory>
 
 class AsrtuFlowgraph;
 class QLabel;
 class RssiMeter;
 class QTimer;
-class QNetworkAccessManager;
 class QLocalServer;
 class QLocalSocket;
 class SnrPlot;
@@ -31,18 +31,17 @@ private:
     void buildUi();
     void appendLog(const QString& text);
     void setSyncDisplay(bool synced);
-    void submitSatnogsFrame(const QByteArray& frame);
     void setupControlServer();
     void handleControlSocket(QLocalSocket* socket);
-    void switchAudioDevice(int deviceId);
+    void switchAudioDevice(int deviceId, bool forceRestart = false);
     void finishAudioDeviceSwitch(AsrtuFlowgraph* stoppedFlowgraph,
                                  int deviceId, int oldDeviceId,
                                  const QString& stopError);
-    void handleDecodedFrame(const QByteArray& frame);
     std::unique_ptr<AsrtuFlowgraph> createFlowgraph(int deviceId,
                                                     const QString& recordingPath);
 
     std::unique_ptr<AsrtuFlowgraph> flowgraph_;
+    AsrtuFlowgraph* unsafe_flowgraph_ = nullptr;
     SnrPlot* snr_plot_ = nullptr;
     RssiMeter* rssi_meter_ = nullptr;
     QLabel* snr_label_ = nullptr;
@@ -59,7 +58,6 @@ private:
     qint64 last_snr_log_ms_ = -1000;
     int iq_mismatch_ticks_ = 0;
     bool iq_mismatch_warned_ = false;
-    QNetworkAccessManager* satnogs_network_ = nullptr;
     QLocalServer* control_server_ = nullptr;
     QString playback_path_;
     bool fast_playback_ = false;
@@ -67,6 +65,13 @@ private:
     bool shared_iq_bridge_ = false;
     bool recording_enabled_ = false;
     bool audio_switch_in_progress_ = false;
+    bool closing_ = false;
+    int input_inactive_ticks_ = 0;
+    int input_active_ticks_ = 0;
+    int audio_restart_attempts_ = 0;
+    std::uint64_t last_input_drops_ = 0;
+    std::uint64_t last_recording_drops_ = 0;
+    bool recording_failure_reported_ = false;
     int audio_device_id_ = -1;
     int pending_audio_device_id_ = -1;
     int recording_segment_ = 1;

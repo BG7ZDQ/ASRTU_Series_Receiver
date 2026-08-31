@@ -7,6 +7,7 @@ FILES = [
     ROOT / "apps" / "launcher" / "suite_launcher.cpp",
     ROOT / "apps" / "doppler" / "satellite_tracker_dialog.cpp",
     ROOT / "apps" / "dsp" / "main_window.cpp",
+    ROOT / "apps" / "satnogs-uploader" / "satnogs_uploader_window.cpp",
 ]
 CALL = re.compile(r'QStringLiteral\("((?:\\.|[^"\\])*)"\)')
 CHINESE = re.compile(r"[\u3400-\u9fff]")

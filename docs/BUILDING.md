@@ -8,7 +8,7 @@
 - Visual Studio 2022 Build Tools（MSVC）
 - CMake 3.20+
 - Qt 5、Qwt、GNU Radio 3.10
-- `gr-lilacsat`、`gr-hyacinth`（兼容 ABI 名称仍为 `hyacinthsat`）
+- `gr-lilacsat`（固定到 CI/发行脚本记录的提交）
 - radioconda（默认路径为 `C:\ProgramData\radioconda`）
 
 ```powershell
@@ -44,7 +44,8 @@ job 中把同一份最新便携包组装为 Inno Setup 安装器。
 ## Linux
 
 Linux 可以构建 `ASRTU1_Launcher`、`ASRTU1_Demod_CQt`、
-`ASRTU_Doppler` 和 `ASRTU_UploadProxy`。Windows 代理包装器、SDR# 插件和
+`ASRTU_Doppler`、`ASRTU_UploadProxy` 和跨平台的
+`ASRTU_SatnogsUploader`。Windows 代理包装器、SDR# 插件和
 Inno Setup 安装器不会生成。Linux 原生上传代理会反序列化 GNU Radio PMT
 PDU，并拒绝非 223 字节的遥测帧；它不使用 Windows 旧代理的固定头偏移。
 建议使用 GNU Radio 3.10、Qt 5 和同一 ABI/编译器构建全部 OOT 模块。
@@ -59,8 +60,8 @@ sudo apt install build-essential cmake ninja-build pkg-config \
   libsndfile1-dev libzmq3-dev
 ```
 
-此外必须先从源码安装与 GNU Radio 3.10 兼容的 `gr-lilacsat` 和
-`gr-hyacinth`。若它们安装在非系统前缀，请把该前缀加入
+此外必须先从源码安装与 GNU Radio 3.10 兼容的 `gr-lilacsat`。
+若它安装在非系统前缀，请把该前缀加入
 `CMAKE_PREFIX_PATH`、`CMAKE_INCLUDE_PATH` 和 `CMAKE_LIBRARY_PATH`。
 
 ```bash
@@ -85,12 +86,11 @@ Linux 当前范围与限制：
 - 录音文件、GNU Radio DSP、FEC、Qt图形、TCP/ZMQ输出可作为主要移植路径。
 - Linux 默认把录音和日志写入当前用户的 XDG 数据目录，不会写入 AppImage
   挂载点或 `/usr` 等系统安装目录。
-- Linux 启动器当前使用系统默认音频输入。数字设备选择仍需与
-  `gr-hyacinth` 的 ALSA 设备编号保持一致后再开放。
+- Linux 启动器当前使用系统默认音频输入；数字设备选择会映射为
+  ALSA `plughw:<编号>,0`，仍需在目标发行版上核对设备枚举。
 - Doppler 窗口可以在 Linux 计算并显示跟踪结果；自动控制 SDR# 的共享内存
   发布仍是 Windows 专用功能。
-- 实时声卡能否工作取决于本机 GNU Radio 音频后端和 `gr-hyacinth` 的
-  `stereo_iq_source` 实现，需要在目标发行版实测。
+- Linux 实时声卡使用 GNU Radio 音频后端，需要在目标发行版实测。
 - SDR# 本地共享内存桥使用 Windows named mapping；Linux 构建中不提供该
   输入，需要改用声卡/录音，或另行实现跨平台共享传输。
 - Linux CI 会执行严格编译、单元测试、Cppcheck、Clang-Tidy、ASan、UBSan

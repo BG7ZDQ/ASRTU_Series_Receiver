@@ -23,6 +23,7 @@ public:
     bool start() override;
     bool stop() override;
     bool hasRecentSamples(std::chrono::milliseconds timeout) const;
+    std::uint64_t droppedSamples() const noexcept;
     int work(int noutputItems,
              gr_vector_const_void_star& inputItems,
              gr_vector_void_star& outputItems) override;
@@ -31,11 +32,14 @@ private:
     bool openMapping();
     void closeMapping();
     std::uint64_t writeIndex() const;
+    bool producerActive() const;
 
 #ifdef _WIN32
     HANDLE mapping_ = nullptr;
 #endif
     const std::uint8_t* base_ = nullptr;
     std::uint64_t read_index_ = 0;
+    bool producer_was_active_ = false;
     std::atomic<std::int64_t> last_sample_time_ns_{0};
+    std::atomic<std::uint64_t> dropped_samples_{0};
 };

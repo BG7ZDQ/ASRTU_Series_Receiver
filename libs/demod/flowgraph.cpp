@@ -1,7 +1,12 @@
 #include "flowgraph.h"
+#include "async_wav_recorder_sink.h"
 #include "fec_candidate_sink.h"
 #include "openhoshimi_decoder_sink.h"
 #include "shared_iq_source.h"
+#include "wav_iq_source.h"
+#ifdef _WIN32
+#include "winmm_iq_source.h"
+#endif
 
 #include <gnuradio/analog/feedforward_agc_cc.h>
 #include <gnuradio/analog/sig_source.h>
@@ -22,7 +27,6 @@
 #include <gnuradio/blocks/sub.h>
 #include <gnuradio/blocks/throttle.h>
 #include <gnuradio/blocks/unpack_k_bits_bb.h>
-#include <gnuradio/blocks/wavfile_sink.h>
 #include <gnuradio/digital/adaptive_algorithm.h>
 #include <gnuradio/digital/constellation.h>
 #include <gnuradio/digital/costas_loop_cc.h>
@@ -46,8 +50,6 @@
 #include <gnuradio/qtgui/waterfall_sink_c.h>
 #include <gnuradio/qtgui/waterfall_sink_f.h>
 #include <gnuradio/zeromq/pub_msg_sink.h>
-#include <hyacinthsat/stereo_iq_source.h>
-#include <hyacinthsat/wav_iq_source.h>
 
 #include <QWidget>
 #include <algorithm>
@@ -300,7 +302,7 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
     // unthrottled replay that makes an already-decoded file appear to crawl at
     // 1x. Use a much shorter gate so the history and its time axis advance at
     // the visibly accelerated replay rate.
-    const double waterfallUpdateSeconds = options.fast_playback ? 0.01 : 0.10;
+    const double waterfallUpdateSeconds = options.fast_playback ? 0.01 : 0.05;
     expects_stereo_iq_ = !options.shared_iq_bridge && !options.real_if_12khz;
     monitors_live_audio_ = options.wav_path.empty() && !options.shared_iq_bridge;
     tb_ = gr::make_top_block("Astro-series satellite C++/Qt demodulator", true);
@@ -315,29 +317,20 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
         complexSource = source;
     } else if (options.wav_path.empty()) {
 #ifdef _WIN32
-	    source = gr::hyacinthsat::stereo_iq_source::make(
-		48000, options.audio_device_id, false);
-	    sourceHasSecondOutput = true;
+	    winmm_iq_source_ = WinmmIqSource::make(
+		48000, options.audio_device_id,
+		options.real_if_12khz ? 1 : 2, false);
+	    source = winmm_iq_source_;
+	    sourceHasSecondOutput = !options.real_if_12khz;
 #else
-	    if (options.real_if_12khz) {
-		    const std::string device =
-			options.audio_device_id < 0
-			    ? std::string{}
-			    : "plughw:" +
-				  std::to_string(options.audio_device_id) +
-				  ",0";
-		    // A real-IF input needs only one channel. Asking ALSA for
-		    // two channels makes valid mono radios and microphones fail
-		    // topology validation before the flowgraph can start.
-		    source = gr::audio::source::make(48000, device, true);
-	    } else {
-		    source = gr::hyacinthsat::stereo_iq_source::make(
-			48000, options.audio_device_id, false);
-		    sourceHasSecondOutput = true;
-	    }
+	    const std::string device = options.audio_device_id < 0
+					   ? std::string{}
+					   : "plughw:" + std::to_string(options.audio_device_id) + ",0";
+	    source = gr::audio::source::make(48000, device, true);
+	    sourceHasSecondOutput = !options.real_if_12khz;
 #endif
     } else {
-	    source = gr::hyacinthsat::wav_iq_source::make(
+	    source = WavIqSource::make(
 		options.wav_path, 48000, false,
 		options.enable_gui && !options.fast_playback);
 	    sourceHasSecondOutput = true;
@@ -422,7 +415,7 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
             if (options.fast_playback)
                 input_spectrum_real_->set_frequency_range(
                     kRealIfDisplayCenterHz, kIfRate / 2);
-            input_spectrum_real_->set_update_time(0.10);
+            input_spectrum_real_->set_update_time(0.05);
             input_spectrum_real_->set_y_axis(-140, 10);
             input_spectrum_real_->disable_legend();
 
@@ -438,7 +431,7 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
             input_spectrum_ = gr::qtgui::freq_sink_c::make(
                 1024, gr::fft::window::WIN_BLACKMAN_hARRIS, 0.0, kIfRate,
                 "Input spectrum", 1, nullptr);
-            input_spectrum_->set_update_time(0.10);
+            input_spectrum_->set_update_time(0.05);
             if (options.fast_playback)
                 input_spectrum_->set_frequency_range(0.0, kIfRate / 2);
             input_spectrum_->set_y_axis(-140, 10);
@@ -455,7 +448,7 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
         loop_spectrum_ = gr::qtgui::freq_sink_c::make(
             1024, gr::fft::window::WIN_BLACKMAN_hARRIS, 0.0, kIfRate,
             "Loop spectrum", 2, nullptr);
-        loop_spectrum_->set_update_time(0.10);
+        loop_spectrum_->set_update_time(0.05);
         if (options.fast_playback)
             loop_spectrum_->set_frequency_range(0.0, kIfRate / 2);
         loop_spectrum_->set_y_axis(-100, 0);
@@ -467,7 +460,7 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
 
         constellation_sink_ = gr::qtgui::const_sink_c::make(
             1024, "BPSK constellation", 1, nullptr);
-        constellation_sink_->set_update_time(0.10);
+        constellation_sink_->set_update_time(0.05);
         constellation_sink_->set_x_axis(-2.0, 2.0);
         constellation_sink_->set_y_axis(-2.0, 2.0);
         constellation_sink_->disable_legend();
@@ -495,22 +488,21 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
     } else if (!options.shared_iq_bridge) {
         tb_->connect(source, 1, to_complex, 1);
     }
-    if (!options.record_wav_path.empty()) {
+    if (!options.record_wav_path.isEmpty()) {
         if (!options.wav_path.empty())
             throw std::invalid_argument("WAV playback and live recording cannot be enabled together");
         const int recordingChannels = options.real_if_12khz ? 1 : 2;
-        const auto recorder = gr::blocks::wavfile_sink::make(
-            options.record_wav_path.c_str(), recordingChannels, unsigned(kIfRate),
-            gr::blocks::FORMAT_WAV, gr::blocks::FORMAT_PCM_16, false);
+        recorder_ = AsyncWavRecorderSink::make(
+            options.record_wav_path, recordingChannels, unsigned(kIfRate));
         if (options.shared_iq_bridge) {
             const auto splitIq = gr::blocks::complex_to_float::make(1);
             tb_->connect(complexSource, 0, splitIq, 0);
-            tb_->connect(splitIq, 0, recorder, 0);
-            tb_->connect(splitIq, 1, recorder, 1);
+            tb_->connect(splitIq, 0, recorder_, 0);
+            tb_->connect(splitIq, 1, recorder_, 1);
         } else {
-            tb_->connect(source, 0, recorder, 0);
+            tb_->connect(source, 0, recorder_, 0);
             if (!options.real_if_12khz)
-                tb_->connect(source, 1, recorder, 1);
+                tb_->connect(source, 1, recorder_, 1);
         }
     }
     gr::basic_block_sptr monitoredSource = complexSource;
@@ -715,6 +707,35 @@ std::uint64_t AsrtuFlowgraph::openHoshimiFrameCount() const
 std::uint64_t AsrtuFlowgraph::suppressedDuplicateCount() const
 {
     return frame_monitor_->suppressedDuplicateCount();
+}
+
+std::uint64_t AsrtuFlowgraph::inputDroppedSamples() const noexcept
+{
+    std::uint64_t result = shared_iq_source_ ? shared_iq_source_->droppedSamples() : 0;
+#ifdef _WIN32
+    if (winmm_iq_source_)
+        result += winmm_iq_source_->droppedFrames();
+#endif
+    return result;
+}
+
+int AsrtuFlowgraph::audioCaptureError() const noexcept
+{
+#ifdef _WIN32
+    return winmm_iq_source_ ? winmm_iq_source_->captureError() : 0;
+#else
+    return 0;
+#endif
+}
+
+std::uint64_t AsrtuFlowgraph::recordingDroppedFrames() const noexcept
+{
+    return recorder_ ? recorder_->droppedFrames() : 0;
+}
+
+bool AsrtuFlowgraph::recordingWriteFailed() const noexcept
+{
+    return recorder_ && recorder_->writeFailed();
 }
 QWidget* AsrtuFlowgraph::inputSpectrumWidget() const
 {
