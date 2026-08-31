@@ -4,7 +4,7 @@
 
 - [x] 项目本体采用 MIT License
 - [x] 补充 `LICENSE` 和 BG7ZDQ 版权信息
-- [ ] 确认 `gr-lilacsat`、`gr-hyacinth`、Qt、Qwt、GNU Radio 和 SGP4 的声明完整
+- [ ] 确认 `gr-lilacsat`、Qt、Qwt、GNU Radio 和 SGP4 的声明完整
 - [x] `packaging/payload/` 中的第三方运行组件保留第三方告知，且不纳入本项目 MIT 再授权
 - [ ] 不提交 `config.cfg`、呼号、经纬度、WebSocket 凭证、录音和日志
 - [ ] 不提交 `build*`、`portable`、`stage`、`dist`、`bin`、`obj`、`outputs` 和 `work`

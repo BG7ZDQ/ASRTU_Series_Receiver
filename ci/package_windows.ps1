@@ -119,17 +119,39 @@ $knownSystem = [System.Collections.Generic.HashSet[string]]::new(
     'MSVCRT.dll','NTDLL.dll'
 ) | ForEach-Object { [void]$knownSystem.Add($_) }
 
-# Reset the portable output.
-if (Test-Path -LiteralPath $OutputDir) {
-    Remove-Item -LiteralPath $OutputDir -Recurse -Force
+# Reset only a managed portable output. CI normally writes below
+# dist/windows; manual callers must opt an external directory in once by
+# retaining the marker created on the first successful package operation.
+$resolvedOutput = [IO.Path]::GetFullPath($OutputDir)
+$resolvedRoot = [IO.Path]::GetPathRoot($resolvedOutput).TrimEnd('\')
+if ($resolvedOutput.TrimEnd('\') -eq $resolvedRoot) {
+    throw "Unsafe Windows package output directory: $resolvedOutput"
 }
-New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
+$managedRoot = [IO.Path]::GetFullPath(
+    (Join-Path $RepoRoot 'dist\windows')).TrimEnd('\') + '\'
+$insideManagedRoot = $resolvedOutput.StartsWith(
+    $managedRoot, [StringComparison]::OrdinalIgnoreCase)
+$externalMarker = "$resolvedOutput.asrtu-windows-package-output"
+if (Test-Path -LiteralPath $resolvedOutput) {
+    if (-not $insideManagedRoot -and
+        -not (Test-Path -LiteralPath $externalMarker -PathType Leaf)) {
+        throw "Refusing to clean unmarked output directory outside ${managedRoot}: $resolvedOutput"
+    }
+    Remove-Item -LiteralPath $resolvedOutput -Recurse -Force
+}
+New-Item -ItemType Directory -Force -Path $resolvedOutput | Out-Null
+if (-not $insideManagedRoot) {
+    Set-Content -LiteralPath $externalMarker -Encoding Ascii `
+        -Value 'Managed by ASRTU ci/package_windows.ps1'
+}
+$OutputDir = $resolvedOutput
 
 $processed = [System.Collections.Generic.HashSet[string]]::new(
     [System.StringComparer]::OrdinalIgnoreCase)
 $queue = [System.Collections.Generic.Queue[string]]::new()
 
-foreach ($exe in @('ASRTU1_Demod_CQt.exe', 'ASRTU1_Launcher.exe', 'ASRTU_Doppler.exe')) {
+foreach ($exe in @('ASRTU1_Demod_CQt.exe', 'ASRTU1_Launcher.exe',
+                    'ASRTU_Doppler.exe', 'ASRTU_SatnogsUploader.exe')) {
     $source = Join-Path $BuildDir $exe
     if (-not (Test-Path -LiteralPath $source)) {
         throw "Application executable not found: $source"

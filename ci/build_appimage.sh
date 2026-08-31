@@ -41,7 +41,6 @@ copy_oot_library()
 }
 
 copy_oot_library libgnuradio-lilacsat.so
-copy_oot_library libgnuradio-hyacinthsat.so
 oot_library_dirs=$(find "$oot_prefix" -type f -name 'libgnuradio-*.so*' \
 	-printf '%h\n' | sort -u | paste -sd:)
 
@@ -56,10 +55,10 @@ NO_STRIP=1 ARCH=x86_64 "$linuxdeploy" \
 	--executable "$appdir/usr/bin/ASRTU1_Demod_CQt" \
 	--executable "$appdir/usr/bin/ASRTU_Doppler" \
 	--executable "$appdir/usr/bin/ASRTU_UploadProxy" \
+	--executable "$appdir/usr/bin/ASRTU_SatnogsUploader" \
 	--desktop-file "$appdir/usr/share/applications/asrtu-series-receiver.desktop" \
 	--icon-file "$appdir/usr/share/icons/hicolor/512x512/apps/asrtu-series-receiver.png" \
 	--library "$appdir/usr/lib/libgnuradio-lilacsat.so" \
-	--library "$appdir/usr/lib/libgnuradio-hyacinthsat.so" \
 	--plugin qt \
 	--output appimage
 popd >/dev/null

@@ -23,9 +23,6 @@
 #include <QMessageBox>
 #include <QMetaObject>
 #include <QMouseEvent>
-#include <QNetworkAccessManager>
-#include <QNetworkReply>
-#include <QNetworkRequest>
 #include <QPointer>
 #include <QResizeEvent>
 #include <QSettings>
@@ -33,7 +30,6 @@
 #include <QSplitter>
 #include <QTextStream>
 #include <QTimer>
-#include <QUrlQuery>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -41,12 +37,28 @@
 #include <qwt_text.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <cstdlib>
 #include <functional>
 #include <stdexcept>
 #include <thread>
 
 namespace {
+struct FlowgraphStopOperation {
+    std::atomic<bool> delivered{false};
+};
+
+// Calling a noreturn CRT function directly from a Qt functor makes MSVC emit
+// C4702 inside Qt's callable wrapper under /WX. Keep the call indirect so the
+// emergency path remains warning-clean in strict CI builds.
+void emergencyExit(int code) noexcept
+{
+    using ExitFunction = void (*)(int);
+    volatile ExitFunction exitFunction = &std::_Exit;
+    exitFunction(code);
+}
+
 class RightClickResetFilter final : public QObject
 {
 public:
@@ -385,7 +397,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
     status_timer_ = new QTimer(this);
     connect(status_timer_, &QTimer::timeout, this, &MainWindow::updateStatus);
-    status_timer_->start(200);
+    status_timer_->start(100);
     snr_log_timer_.start();
     updateStatus();
     setupControlServer();
@@ -572,13 +584,48 @@ void MainWindow::updateStatus()
         } else if (!iq_mismatch_warned_) {
             iq_mismatch_ticks_ = 0;
         }
+        const auto inputDrops = flowgraph_->inputDroppedSamples();
+        if (inputDrops != last_input_drops_) {
+            appendLog(QStringLiteral("Real-time input discarded %1 stale samples (total %2)")
+                          .arg(inputDrops - last_input_drops_)
+                          .arg(inputDrops));
+            last_input_drops_ = inputDrops;
+        }
+        const auto recordingDrops = flowgraph_->recordingDroppedFrames();
+        if (recordingDrops != last_recording_drops_) {
+            appendLog(QStringLiteral("Recording writer discarded %1 frames (total %2)")
+                          .arg(recordingDrops - last_recording_drops_)
+                          .arg(recordingDrops));
+            last_recording_drops_ = recordingDrops;
+        }
+        if (!recording_failure_reported_ && flowgraph_->recordingWriteFailed()) {
+            recording_failure_reported_ = true;
+            appendLog(QStringLiteral("WAV recording stopped accepting data after a disk write failure"));
+        }
         if (!flowgraph_->inputActive(0.5)) {
+            input_active_ticks_ = 0;
+            ++input_inactive_ticks_;
             snr_plot_->addGap();
             snr_label_->setText(QStringLiteral("SNR: -- dB"));
             frequency_label_->setText(QStringLiteral("Loop df: -- Hz"));
             setSyncDisplay(false);
+            if (playback_path_.isEmpty() && !shared_iq_bridge_ &&
+                !audio_switch_in_progress_ && input_inactive_ticks_ >= 20 &&
+                audio_restart_attempts_ < 3) {
+                ++audio_restart_attempts_;
+                input_inactive_ticks_ = 0;
+                appendLog(QStringLiteral("Audio input stalled; automatic restart %1/3 (capture error %2)")
+                              .arg(audio_restart_attempts_)
+                              .arg(flowgraph_->audioCaptureError()));
+                QTimer::singleShot(0, this, [this] {
+                    switchAudioDevice(audio_device_id_, true);
+                });
+            }
             return;
         }
+        input_inactive_ticks_ = 0;
+        if (++input_active_ticks_ >= 50)
+            audio_restart_attempts_ = 0;
         const double snr = flowgraph_->snr();
         if (std::isfinite(snr)) {
             snr_plot_->addValue(snr); // starts immediately, independent of frames
@@ -641,7 +688,7 @@ std::unique_ptr<AsrtuFlowgraph> MainWindow::createFlowgraph(
     if (!playback_path_.isEmpty())
         options.wav_path = QFile::encodeName(playback_path_).constData();
     if (!recordingPath.isEmpty())
-        options.record_wav_path = QFile::encodeName(recordingPath).constData();
+        options.record_wav_path = recordingPath;
     options.real_if_12khz = real_if_12khz_;
     options.shared_iq_bridge = shared_iq_bridge_;
     options.fast_playback = fast_playback_;
@@ -653,9 +700,6 @@ std::unique_ptr<AsrtuFlowgraph> MainWindow::createFlowgraph(
                                int(payload.size()));
         if (ssdv_receiver_)
             ssdv_receiver_->ingestFrame(frame);
-        QMetaObject::invokeMethod(
-            this, [this, frame] { handleDecodedFrame(frame); },
-            Qt::QueuedConnection);
     };
     options.local_candidate_callback = [this](const std::vector<std::uint8_t>& payload) {
         const QByteArray frame(reinterpret_cast<const char*>(payload.data()),
@@ -670,14 +714,6 @@ std::unique_ptr<AsrtuFlowgraph> MainWindow::createFlowgraph(
         QMetaObject::invokeMethod(this, [this, text] { appendLog(text); },
                                   Qt::QueuedConnection);
     }, options);
-}
-
-void MainWindow::handleDecodedFrame(const QByteArray& frame)
-{
-    // Replayed recordings may be decoded locally, but must never be uploaded
-    // again because telemetry frames do not contain a trustworthy timestamp.
-    if (playback_path_.isEmpty())
-        submitSatnogsFrame(frame);
 }
 
 void MainWindow::setupControlServer()
@@ -723,11 +759,14 @@ void MainWindow::handleControlSocket(QLocalSocket* socket)
         switchAudioDevice(deviceId);
 }
 
-void MainWindow::switchAudioDevice(int deviceId)
+void MainWindow::switchAudioDevice(int deviceId, bool forceRestart)
 {
     if (!playback_path_.isEmpty() || shared_iq_bridge_ ||
-        (deviceId == audio_device_id_ && flowgraph_))
+        (!forceRestart && deviceId == audio_device_id_ && flowgraph_))
         return;
+
+    if (!forceRestart)
+        audio_restart_attempts_ = 0;
 
     if (audio_switch_in_progress_) {
         pending_audio_device_id_ = deviceId;
@@ -754,7 +793,8 @@ void MainWindow::switchAudioDevice(int deviceId)
     // that wait on Qt's GUI thread. The plots remain visible but inactive
     // until the worker reports completion.
     const QPointer<MainWindow> self(this);
-    std::thread([self, stoppingFlowgraph, deviceId, oldDeviceId] {
+    const auto operation = std::make_shared<FlowgraphStopOperation>();
+    std::thread([self, operation, stoppingFlowgraph, deviceId, oldDeviceId] {
         QString stopError;
         try {
             stoppingFlowgraph->stop();
@@ -763,8 +803,16 @@ void MainWindow::switchAudioDevice(int deviceId)
         } catch (...) {
             stopError = QStringLiteral("Unknown error while stopping audio input");
         }
-        if (!self)
+        if (operation->delivered.exchange(true, std::memory_order_acq_rel)) {
+            if (stopError.isEmpty())
+                delete stoppingFlowgraph;
             return;
+        }
+        if (!self) {
+            if (stopError.isEmpty())
+                delete stoppingFlowgraph;
+            return;
+        }
         QMetaObject::invokeMethod(
             self,
             [self, stoppingFlowgraph, deviceId, oldDeviceId, stopError] {
@@ -774,21 +822,36 @@ void MainWindow::switchAudioDevice(int deviceId)
             },
             Qt::QueuedConnection);
     }).detach();
+    QTimer::singleShot(3000, this,
+                       [self, operation] {
+        if (!self || operation->delivered.load(std::memory_order_acquire))
+            return;
+        self->appendLog(QStringLiteral(
+            "Audio driver is still stopping after 3 seconds; keeping the old display alive until shutdown completes"));
+    });
 }
 
 void MainWindow::finishAudioDeviceSwitch(AsrtuFlowgraph* stoppedFlowgraph,
                                          int deviceId, int oldDeviceId,
                                          const QString& stopError)
 {
-    QWidget* oldCentral = takeCentralWidget();
-    if (stopError.isEmpty()) {
-        delete stoppedFlowgraph;
-    } else {
-        // Do not risk repeating a failed driver shutdown on the GUI thread.
-        // The abandoned graph is reclaimed when the process exits.
+    if (!stopError.isEmpty()) {
+        // A throwing stop leaves the scheduler and its QtGUI widgets in an
+        // unknown state. Keep both the graph and its existing central widget
+        // alive; destroying either could race a still-running sink.
         appendLog(QStringLiteral("Audio input stop failed; old graph abandoned: %1")
                       .arg(stopError));
+        unsafe_flowgraph_ = stoppedFlowgraph;
+        audio_switch_in_progress_ = false;
+        QMessageBox::critical(
+            this, QCoreApplication::translate("ASRTU", "声卡停止失败"),
+            QCoreApplication::translate(
+                "ASRTU", "旧声卡驱动未能安全停止。为避免解码器崩溃，当前界面已保留；请关闭并重新启动接收程序。\n%1")
+                .arg(stopError));
+        return;
     }
+    delete stoppedFlowgraph;
+    QWidget* oldCentral = takeCentralWidget();
     delete oldCentral;
     oldCentral = nullptr;
     try {
@@ -818,7 +881,7 @@ void MainWindow::finishAudioDeviceSwitch(AsrtuFlowgraph* stoppedFlowgraph,
                 "ASRTU", "无法切换到所选声卡。请重新选择可用设备或重新启动接收。\n%1")
                 .arg(QString::fromUtf8(error.what())));
         try {
-            // Never reopen a closed WAV segment: wavfile_sink creates the
+            // Never reopen a closed WAV segment: the recorder creates the
             // target with truncation, so using the pre-switch path here would
             // destroy the recording captured before the device change.
             if (recording_enabled_) {
@@ -858,8 +921,13 @@ void MainWindow::finishAudioDeviceSwitch(AsrtuFlowgraph* stoppedFlowgraph,
     rssi_range_ready_ = false;
     iq_mismatch_ticks_ = 0;
     iq_mismatch_warned_ = false;
+    input_inactive_ticks_ = 0;
+    input_active_ticks_ = 0;
+    last_input_drops_ = 0;
+    last_recording_drops_ = 0;
+    recording_failure_reported_ = false;
     audio_switch_in_progress_ = false;
-    status_timer_->start(200);
+    status_timer_->start(100);
     updateStatus();
     const int queuedDevice = pending_audio_device_id_;
     pending_audio_device_id_ = -1;
@@ -868,74 +936,73 @@ void MainWindow::finishAudioDeviceSwitch(AsrtuFlowgraph* stoppedFlowgraph,
                            [this, queuedDevice] { switchAudioDevice(queuedDevice); });
 }
 
-void MainWindow::submitSatnogsFrame(const QByteArray& frame)
-{
-    if (frame.isEmpty())
-        return;
-
-    QSettings settings(QStringLiteral("ASRTU"), QStringLiteral("AstroSeriesLauncher"));
-    if (!settings.value(QStringLiteral("satnogs_enabled"), false).toBool())
-        return;
-    const int noradId = settings.value(QStringLiteral("satnogs_norad_id"), 0).toInt();
-    const QString source = settings.value(QStringLiteral("satnogs_source")).toString().trimmed();
-    const double longitude = settings.value(QStringLiteral("satnogs_longitude"), 0.0).toDouble();
-    const double latitude = settings.value(QStringLiteral("satnogs_latitude"), 0.0).toDouble();
-    if (noradId <= 0 || source.isEmpty())
-        return;
-    if (!satnogs_network_)
-        satnogs_network_ = new QNetworkAccessManager(this);
-
-    const auto coordinate = [](double value, QChar positive, QChar negative) {
-        return QStringLiteral("%1%2")
-            .arg(std::abs(value), 0, 'f', 6)
-            .arg(value >= 0.0 ? positive : negative);
-    };
-    QUrlQuery form;
-    form.addQueryItem(QStringLiteral("noradID"),
-                      QString::number(noradId));
-    form.addQueryItem(QStringLiteral("source"), source);
-    form.addQueryItem(QStringLiteral("locator"), QStringLiteral("longLat"));
-    form.addQueryItem(QStringLiteral("longitude"),
-                      coordinate(longitude, QLatin1Char('E'),
-                                 QLatin1Char('W')));
-    form.addQueryItem(QStringLiteral("latitude"),
-                      coordinate(latitude, QLatin1Char('N'),
-                                 QLatin1Char('S')));
-    form.addQueryItem(QStringLiteral("version"), QStringLiteral("1.6.6"));
-    form.addQueryItem(QStringLiteral("frame"),
-                      QString::fromLatin1(frame.toHex().toUpper()));
-    form.addQueryItem(QStringLiteral("timestamp"),
-                      QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs));
-
-    QUrl endpoint(QStringLiteral("https://db.satnogs.org/api/telemetry/"));
-    endpoint.setQuery(form);
-    QNetworkRequest request(endpoint);
-    request.setHeader(QNetworkRequest::ContentTypeHeader,
-                      QStringLiteral("application/x-www-form-urlencoded"));
-    QNetworkReply* reply = satnogs_network_->post(
-        request, form.query(QUrl::FullyEncoded).toUtf8());
-    connect(reply, &QNetworkReply::finished, this, [this, reply] {
-        const int status = reply->attribute(
-            QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        if (reply->error() == QNetworkReply::NoError) {
-            appendLog(QStringLiteral("SatNOGS upload accepted (HTTP %1)")
-                          .arg(status));
-        } else {
-            appendLog(QStringLiteral("SatNOGS upload failed (HTTP %1): %2")
-                          .arg(status)
-                          .arg(reply->errorString()));
-        }
-        reply->deleteLater();
-    });
-}
-
 void MainWindow::closeEvent(QCloseEvent* event)
 {
-    if (status_timer_)
-        status_timer_->stop();
-    if (flowgraph_)
-        flowgraph_->stop();
     QSettings settings(QStringLiteral("ASRTU"), QStringLiteral("ASRTU1_Demod_CQt_v3"));
     settings.setValue(QStringLiteral("geometry"), saveGeometry());
-    event->accept();
+    if (closing_) {
+        event->ignore();
+        return;
+    }
+    if (status_timer_)
+        status_timer_->stop();
+    if (unsafe_flowgraph_) {
+        // Its stop operation already threw, so normal QWidget destruction is
+        // not safe while QtGUI sinks may still reference the current UI.
+        closing_ = true;
+        event->ignore();
+        hide();
+        QTimer::singleShot(0, this, [] { emergencyExit(EXIT_FAILURE); });
+        return;
+    }
+    if (audio_switch_in_progress_) {
+        // switchAudioDevice() transfers the graph to a detached stop worker,
+        // so flowgraph_ is temporarily null even though GNU Radio QtGUI sinks
+        // may still reference our central widget. Normal QObject destruction
+        // would therefore race the worker. Exit without running destructors,
+        // just like the bounded timeout for a blocking driver shutdown.
+        closing_ = true;
+        event->ignore();
+        hide();
+        QTimer::singleShot(0, this, [] { emergencyExit(EXIT_SUCCESS); });
+        return;
+    }
+    if (!flowgraph_) {
+        event->accept();
+        return;
+    }
+
+    // Some sound drivers block indefinitely during reset. Hide immediately,
+    // stop the graph away from the GUI thread, and retain a bounded shutdown
+    // path so closing the application never looks frozen.
+    closing_ = true;
+    event->ignore();
+    hide();
+    AsrtuFlowgraph* stoppingFlowgraph = flowgraph_.release();
+    const QPointer<MainWindow> self(this);
+    std::thread([self, stoppingFlowgraph] {
+        bool stoppedSafely = false;
+        try {
+            stoppingFlowgraph->stop();
+            delete stoppingFlowgraph;
+            stoppedSafely = true;
+        } catch (...) {
+            // Re-entering a failed driver shutdown from the destructor can
+            // deadlock. The operating system reclaims this graph on exit.
+        }
+        if (self) {
+            QMetaObject::invokeMethod(
+                self, [stoppedSafely] {
+                    if (stoppedSafely)
+                        QCoreApplication::quit();
+                    else
+                        emergencyExit(EXIT_FAILURE);
+                }, Qt::QueuedConnection);
+        }
+    }).detach();
+    // If a driver never returns, normal Qt destruction would free plot
+    // widgets while the GNU Radio scheduler still uses them. End the process
+    // without running destructors after the grace period; settings and logs
+    // were flushed before the worker was started.
+    QTimer::singleShot(3000, this, [] { emergencyExit(EXIT_SUCCESS); });
 }

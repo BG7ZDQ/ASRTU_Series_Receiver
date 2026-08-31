@@ -6,7 +6,7 @@
 
 ## 安装器
 
-安装器使用 Inno Setup 6，版本号当前为 1.5.3。全新 Windows 环境只需安装 Visual Studio 2022 Build Tools 和 Inno Setup 6，然后运行：
+安装器使用 Inno Setup 6，版本号当前为 1.5.4。全新 Windows 环境只需安装 Visual Studio 2022 Build Tools 和 Inno Setup 6，然后运行：
 
 ```powershell
 .\build_installer.ps1
@@ -20,7 +20,7 @@
 .\packaging\inno\build_installer.ps1 -RebuildDsp
 ```
 
-此路径另外要求安装 radioconda/GNU Radio、Qt、Qwt、`gr-lilacsat` 和 `gr-hyacinth` 开发环境。
+此路径另外要求安装 radioconda/GNU Radio、Qt、Qwt 和 `gr-lilacsat` 开发环境。
 
 ## 第三方再分发
 

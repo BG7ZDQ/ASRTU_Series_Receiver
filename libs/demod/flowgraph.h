@@ -4,12 +4,17 @@
 
 #include <gnuradio/blocks/probe_signal.h>
 #include <gnuradio/top_block.h>
+#include <QString>
 #include <atomic>
 #include <memory>
 #include <string>
 
 class QWidget;
 class SharedIqSource;
+class AsyncWavRecorderSink;
+#ifdef _WIN32
+class WinmmIqSource;
+#endif
 
 namespace gr {
 namespace digital {
@@ -33,7 +38,7 @@ public:
     using LogCallback = FrameMonitor::Callback;
     struct Options {
         std::string wav_path;
-        std::string record_wav_path;
+        QString record_wav_path;
         double input_frequency_hz = 0.0;
         int audio_device_id = -1;
         bool real_if_12khz = false;
@@ -70,6 +75,10 @@ public:
     std::uint64_t primaryFrameCount() const;
     std::uint64_t openHoshimiFrameCount() const;
     std::uint64_t suppressedDuplicateCount() const;
+    std::uint64_t inputDroppedSamples() const noexcept;
+    int audioCaptureError() const noexcept;
+    std::uint64_t recordingDroppedFrames() const noexcept;
+    bool recordingWriteFailed() const noexcept;
 
     QWidget* inputSpectrumWidget() const;
     QWidget* waterfallWidget() const;
@@ -91,6 +100,10 @@ private:
     gr::top_block_sptr tb_;
     std::shared_ptr<gr::digital::probe_mpsk_snr_est_c> snr_probe_;
     std::shared_ptr<SharedIqSource> shared_iq_source_;
+#ifdef _WIN32
+    std::shared_ptr<WinmmIqSource> winmm_iq_source_;
+#endif
+    std::shared_ptr<AsyncWavRecorderSink> recorder_;
     std::shared_ptr<gr::blocks::probe_signal_f> rssi_probe_;
     std::shared_ptr<gr::blocks::probe_signal_f> i_rms_probe_;
     std::shared_ptr<gr::blocks::probe_signal_f> q_rms_probe_;

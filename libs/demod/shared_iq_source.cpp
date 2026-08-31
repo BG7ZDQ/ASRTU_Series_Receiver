@@ -17,6 +17,8 @@ constexpr std::uint32_t kVersion = 1;
 constexpr std::size_t kHeaderBytes = 64;
 constexpr std::uint32_t kCapacitySamples = 262144;
 constexpr std::uint32_t kComplexBytes = 8;
+constexpr std::uint64_t kMaximumLatencySamples = 5760; // 120 ms at 48 ksample/s
+constexpr auto kProducerTimeout = std::chrono::milliseconds(1000);
 constexpr std::size_t kMappingBytes =
     kHeaderBytes + std::size_t(kCapacitySamples) * kComplexBytes;
 
@@ -112,6 +114,9 @@ void SharedIqSource::closeMapping()
 #else
     base_ = nullptr;
 #endif
+    read_index_ = 0;
+    producer_was_active_ = false;
+    last_sample_time_ns_.store(0, std::memory_order_relaxed);
 }
 
 std::uint64_t SharedIqSource::writeIndex() const
@@ -119,9 +124,46 @@ std::uint64_t SharedIqSource::writeIndex() const
     if (!base_)
         return 0;
 #ifdef _WIN32
+    const auto* address = reinterpret_cast<const volatile LONG64*>(base_ + 24);
+    // The view is deliberately read-only. InterlockedCompareExchange64 is a
+    // read-modify-write operation even when both operands are zero and faults
+    // on FILE_MAP_READ mappings. The decoder is x64 and this field is aligned,
+    // so a volatile 64-bit load is atomic; the barrier supplies acquire
+    // ordering for the sample data published before the index.
+    const LONG64 value = *address;
     MemoryBarrier();
-#endif
+    return static_cast<std::uint64_t>(value);
+#else
     return readValue<std::uint64_t>(base_, 24);
+#endif
+}
+
+bool SharedIqSource::producerActive() const
+{
+#ifdef _WIN32
+    if (!base_)
+        return false;
+    const auto* enabledAddress =
+        reinterpret_cast<const volatile LONG*>(base_ + 40);
+    const LONG enabled = *enabledAddress;
+    MemoryBarrier();
+    if (enabled == 0)
+        return false;
+    const auto* timestampAddress =
+        reinterpret_cast<const volatile LONG64*>(base_ + 48);
+    const LONGLONG writtenAt = *timestampAddress;
+    MemoryBarrier();
+    LARGE_INTEGER now{};
+    LARGE_INTEGER frequency{};
+    if (writtenAt <= 0 || !QueryPerformanceCounter(&now) ||
+        !QueryPerformanceFrequency(&frequency) || frequency.QuadPart <= 0)
+        return false;
+    const auto ageTicks = std::max<LONGLONG>(0, now.QuadPart - writtenAt);
+    const auto ageMs = ageTicks * 1000 / frequency.QuadPart;
+    return ageMs <= kProducerTimeout.count();
+#else
+    return false;
+#endif
 }
 
 int SharedIqSource::work(int noutputItems,
@@ -134,10 +176,25 @@ int SharedIqSource::work(int noutputItems,
     }
 
     const std::uint64_t written = writeIndex();
+    const bool active = producerActive();
+    if (!active) {
+        producer_was_active_ = false;
+        last_sample_time_ns_.store(0, std::memory_order_relaxed);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        return 0;
+    }
+    if (!producer_was_active_) {
+        read_index_ = written;
+        producer_was_active_ = true;
+    }
     if (written < read_index_)
         read_index_ = written;
-    if (written - read_index_ > kCapacitySamples)
-        read_index_ = written - kCapacitySamples;
+    const std::uint64_t backlog = written - read_index_;
+    if (backlog > kMaximumLatencySamples) {
+        const auto skipped = backlog - kMaximumLatencySamples;
+        read_index_ += skipped;
+        dropped_samples_.fetch_add(skipped, std::memory_order_relaxed);
+    }
 
     const auto available = written - read_index_;
     if (available == 0) {
@@ -158,10 +215,29 @@ int SharedIqSource::work(int noutputItems,
         std::memcpy(output + first, data,
                     std::size_t(count - first) * kComplexBytes);
     }
+    // If the producer managed to lap this read despite the low-latency skip,
+    // discard the torn block and resume from a recent position next time.
+    const std::uint64_t afterCopy = writeIndex();
+    if (afterCopy < read_index_) {
+        read_index_ = afterCopy;
+        producer_was_active_ = false;
+        return 0;
+    }
+    if (afterCopy - read_index_ > kCapacitySamples) {
+        const auto skipped = afterCopy - read_index_;
+        read_index_ = afterCopy;
+        dropped_samples_.fetch_add(skipped, std::memory_order_relaxed);
+        return 0;
+    }
     read_index_ += count;
     last_sample_time_ns_.store(
         std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::steady_clock::now().time_since_epoch()).count(),
         std::memory_order_relaxed);
     return static_cast<int>(count);
+}
+
+std::uint64_t SharedIqSource::droppedSamples() const noexcept
+{
+    return dropped_samples_.load(std::memory_order_relaxed);
 }

@@ -15,7 +15,7 @@ Contributors: **BG7ZDQ** **BI1NWO** **BG6HNY** **BG4QBF**
 - Multiple TLE sources, satellite selection, frequency presets, SGP4 tracking, and automatic SDR# Doppler control
 - Telemetry upload proxy with ground-station callsign and location configuration
 - Automatic Chinese, Japanese, or English UI selection from the operating-system language
-- Optional direct submission of live decoded FEC frames to SatNOGS; recording playback is never submitted
+- A standalone cross-platform SatNOGS window showing frame data, station details, and server responses; recording playback is never submitted
 
 ## Usage
 
@@ -63,8 +63,8 @@ After choosing the mode and sound card, click **Start Receiver**. Enable **Autom
 
 The two upload paths are optional and independent of local decoding:
 
-- **Start Upload Proxy** opens the platform upload proxy. The native Linux proxy safely deserializes GNU Radio PMT PDUs before uploading their 223-byte telemetry payload. Select the destination satellite in the dialog shown before launch.
-- **Also upload to SatNOGS** submits each newly decoded live FEC frame directly to the SatNOGS telemetry API using the selected satellite, callsign, and station coordinates.
+- **Start Upload Proxy** opens the selected satellite's upload path. Satellites with an MMT server keep using the existing proxy.
+- JAMX has no MMT destination, so SatNOGS is mandatory for that selection. The launcher opens the cross-platform `ASRTU_SatnogsUploader`, which validates GNU Radio PMT PDUs, displays the hexadecimal 223-byte frame and station details, and reports every HTTPS response.
 
 Keep the computer clock, callsign, and coordinates accurate. SatNOGS submission is disabled during file playback so historical recordings are not reported as current observations.
 
@@ -119,6 +119,6 @@ See [docs/BUILDING.md](docs/BUILDING.md) for the complete environment, current L
 
 BG7ZDQ publishes this project under the [MIT License](LICENSE). Third-party components remain under their respective upstream licenses; see [THIRD_PARTY.md](THIRD_PARTY.md). The MIT license does not replace, modify, or extend any third-party grant.
 
-GNU Radio 3.x, `gr-lilacsat`, and `gr-hyacinth` are GPL-family dependencies. MIT-licensed source may interoperate with them, but binary distributions containing or linking them must also satisfy the applicable GPL source, license, and attribution obligations. SDR# and the separately supplied legacy Windows upload proxy are outside this project's MIT grant; that statement does not apply to the native Linux proxy source in this repository.
+GNU Radio 3.x and `gr-lilacsat` are GPL-family dependencies. MIT-licensed source may interoperate with them, but binary distributions containing or linking them must also satisfy the applicable GPL source, license, and attribution obligations. SDR# and the separately supplied legacy Windows upload proxy are outside this project's MIT grant; that statement does not apply to the native Linux proxy source in this repository.
 
 This project is not officially affiliated with or endorsed by SDR#, GNU Radio, or the authors and operators of supported satellites unless separately stated in writing by the relevant rights holder.

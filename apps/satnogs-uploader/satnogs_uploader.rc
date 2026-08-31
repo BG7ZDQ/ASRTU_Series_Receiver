@@ -23,11 +23,11 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "CompanyName", "BG7ZDQ"
-            VALUE "FileDescription", "ASRTU Series Receiver upload proxy"
+            VALUE "FileDescription", "ASRTU SatNOGS telemetry uploader"
             VALUE "FileVersion", ASRTU_VERSION_STRING
-            VALUE "InternalName", "ASRTU_Proxy.exe"
+            VALUE "InternalName", "ASRTU_SatnogsUploader"
             VALUE "LegalCopyright", "By BG7ZDQ"
-            VALUE "OriginalFilename", "ASRTU_Proxy.exe"
+            VALUE "OriginalFilename", "ASRTU_SatnogsUploader.exe"
             VALUE "ProductName", "ASRTU Series Receiver"
             VALUE "ProductVersion", ASRTU_VERSION_STRING
         END

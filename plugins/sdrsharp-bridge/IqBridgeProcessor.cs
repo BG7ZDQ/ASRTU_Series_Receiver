@@ -20,6 +20,7 @@ namespace SDRSharp.AstroSeriesBridge
 
         private readonly MemoryMappedFile _mapping;
         private readonly MemoryMappedViewAccessor _view;
+        private readonly object _stateLock = new object();
         private byte* _base;
         private bool _disposed;
         private bool _enabled = true;
@@ -43,12 +44,15 @@ namespace SDRSharp.AstroSeriesBridge
 
         public bool Enabled
         {
-            get { return _enabled; }
+            get { return Volatile.Read(ref _enabled); }
             set
             {
-                _enabled = value;
-                if (_base != null)
-                    Volatile.Write(ref *(int*)(_base + 40), value ? 1 : 0);
+                lock (_stateLock)
+                {
+                    Volatile.Write(ref _enabled, value);
+                    if (_base != null)
+                        Volatile.Write(ref *(int*)(_base + 40), value ? 1 : 0);
+                }
             }
         }
 
@@ -56,73 +60,93 @@ namespace SDRSharp.AstroSeriesBridge
         {
             set
             {
-                if (value <= 0)
+                if (double.IsNaN(value) || double.IsInfinity(value) ||
+                    value < 8000.0 || value > 20000000.0)
                     return;
-                _inputSampleRate = value;
-                _inputCount = 0;
-                _nextOutputPosition = 0;
-                _havePreviousSample = false;
-                if (_base != null)
-                    *(double*)(_base + 32) = value;
+                lock (_stateLock)
+                {
+                    _inputSampleRate = value;
+                    _inputCount = 0;
+                    _nextOutputPosition = 0;
+                    _havePreviousSample = false;
+                    if (_base != null)
+                        *(double*)(_base + 32) = value;
+                }
             }
         }
 
-        public double CurrentSampleRate { get { return _inputSampleRate; } }
+        public double CurrentSampleRate
+        {
+            get { lock (_stateLock) { return _inputSampleRate; } }
+        }
         public double BridgeSampleRate { get { return OutputSampleRate; } }
         public long SamplesWritten
         {
-            get { return _base == null ? 0 : Volatile.Read(ref *(long*)(_base + 24)); }
+            get
+            {
+                lock (_stateLock)
+                {
+                    return _base == null ? 0 :
+                        Volatile.Read(ref *(long*)(_base + 24));
+                }
+            }
         }
 
         public void Process(Complex* buffer, int length)
         {
-            if (!_enabled || _disposed || buffer == null || length <= 0)
+            if (!Volatile.Read(ref _enabled) || Volatile.Read(ref _disposed) ||
+                buffer == null || length <= 0)
                 return;
 
-            ulong writeIndex = (ulong)Volatile.Read(ref *(long*)(_base + 24));
-            byte* data = _base + HeaderBytes;
-            if (!_havePreviousSample)
+            lock (_stateLock)
             {
-                _previousSample = buffer[0];
-                _havePreviousSample = true;
-                _nextOutputPosition = 0;
-            }
-
-            long blockStart = _inputCount;
-            long blockEnd = blockStart + length - 1;
-            double step = _inputSampleRate / OutputSampleRate;
-            while (_nextOutputPosition <= blockEnd)
-            {
-                long lowerGlobal = (long)Math.Floor(_nextOutputPosition);
-                float fraction = (float)(_nextOutputPosition - lowerGlobal);
-                Complex lower;
-                Complex upper;
-                if (lowerGlobal < blockStart)
+                if (Volatile.Read(ref _disposed) || _base == null)
+                    return;
+                ulong writeIndex = (ulong)Volatile.Read(ref *(long*)(_base + 24));
+                byte* data = _base + HeaderBytes;
+                if (!_havePreviousSample)
                 {
-                    lower = _previousSample;
-                    upper = buffer[0];
-                }
-                else
-                {
-                    int lowerOffset = (int)(lowerGlobal - blockStart);
-                    int upperOffset = Math.Min(lowerOffset + 1, length - 1);
-                    lower = buffer[lowerOffset];
-                    upper = buffer[upperOffset];
+                    _previousSample = buffer[0];
+                    _havePreviousSample = true;
+                    _nextOutputPosition = 0;
                 }
 
-                int ringOffset = (int)(writeIndex % CapacitySamples);
-                float* destination = (float*)(data + (long)ringOffset * ComplexBytes);
-                destination[0] = lower.Real + (upper.Real - lower.Real) * fraction;
-                destination[1] = lower.Imag + (upper.Imag - lower.Imag) * fraction;
-                writeIndex++;
-                _nextOutputPosition += step;
-            }
+                long blockStart = _inputCount;
+                long blockEnd = blockStart + length - 1;
+                double step = _inputSampleRate / OutputSampleRate;
+                while (_nextOutputPosition <= blockEnd)
+                {
+                    long lowerGlobal = (long)Math.Floor(_nextOutputPosition);
+                    float fraction = (float)(_nextOutputPosition - lowerGlobal);
+                    Complex lower;
+                    Complex upper;
+                    if (lowerGlobal < blockStart)
+                    {
+                        lower = _previousSample;
+                        upper = buffer[0];
+                    }
+                    else
+                    {
+                        int lowerOffset = (int)(lowerGlobal - blockStart);
+                        int upperOffset = Math.Min(lowerOffset + 1, length - 1);
+                        lower = buffer[lowerOffset];
+                        upper = buffer[upperOffset];
+                    }
 
-            _previousSample = buffer[length - 1];
-            _inputCount += length;
-            Thread.MemoryBarrier();
-            Volatile.Write(ref *(long*)(_base + 24), (long)writeIndex);
-            Volatile.Write(ref *(long*)(_base + 48), Stopwatch.GetTimestamp());
+                    int ringOffset = (int)(writeIndex % CapacitySamples);
+                    float* destination = (float*)(data + (long)ringOffset * ComplexBytes);
+                    destination[0] = lower.Real + (upper.Real - lower.Real) * fraction;
+                    destination[1] = lower.Imag + (upper.Imag - lower.Imag) * fraction;
+                    writeIndex++;
+                    _nextOutputPosition += step;
+                }
+
+                _previousSample = buffer[length - 1];
+                _inputCount += length;
+                Thread.MemoryBarrier();
+                Volatile.Write(ref *(long*)(_base + 24), (long)writeIndex);
+                Volatile.Write(ref *(long*)(_base + 48), Stopwatch.GetTimestamp());
+            }
         }
 
         private void InitializeHeader()
@@ -143,14 +167,17 @@ namespace SDRSharp.AstroSeriesBridge
 
         public void Dispose()
         {
-            if (_disposed)
-                return;
-            _disposed = true;
-            if (_base != null)
+            lock (_stateLock)
             {
-                Volatile.Write(ref *(int*)(_base + 40), 0);
-                _view.SafeMemoryMappedViewHandle.ReleasePointer();
-                _base = null;
+                if (Volatile.Read(ref _disposed))
+                    return;
+                Volatile.Write(ref _disposed, true);
+                if (_base != null)
+                {
+                    Volatile.Write(ref *(int*)(_base + 40), 0);
+                    _view.SafeMemoryMappedViewHandle.ReleasePointer();
+                    _base = null;
+                }
             }
             _view.Dispose();
             _mapping.Dispose();

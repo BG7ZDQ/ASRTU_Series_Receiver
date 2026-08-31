@@ -470,5 +470,173 @@ Select ‘Mono Real 12 kHz Radio IF Input’ in the launcher.</translation>
             <source>保存路径：%1</source>
             <translation>Saved to: %1</translation>
         </message>
+        <message>
+            <source>无法按当前模式打开音频输入设备。
+
+“立体声零中频 RAW 模式 I/Q 输入”必须由声卡提供两个录音声道；若你的电台或麦克风只有一个声道，请在启动器中选择“单声道实数域 12KHz 电台 IF 输入”。
+
+底层错误：%1</source>
+            <translation>Unable to open the audio input device in the current mode.
+
+‘Stereo Zero-IF RAW I/Q Input’ requires two recording channels. If your radio or microphone has only one channel, select ‘Mono Real 12 kHz Radio IF Input’ in the launcher.
+
+Underlying error: %1</translation>
+        </message>
+        <message>
+            <source>SatNOGS 上传程序启动后立即退出（代码 %1）。</source>
+            <translation>The SatNOGS uploader exited immediately after launch (code %1).</translation>
+        </message>
+        <message>
+            <source>SatNOGS 上传程序启动失败</source>
+            <translation>Unable to Start SatNOGS Uploader</translation>
+        </message>
+        <message>
+            <source>SatNOGS 上传程序已启动：%1（PID %2）</source>
+            <translation>SatNOGS uploader started: %1 (PID %2)</translation>
+        </message>
+        <message>
+            <source>SatNOGS 上传配置无效</source>
+            <translation>Invalid SatNOGS Upload Configuration</translation>
+        </message>
+        <message>
+            <source>SatNOGS NORAD ID 无效。</source>
+            <translation>The SatNOGS NORAD ID is invalid.</translation>
+        </message>
+        <message>
+            <source>地面站呼号或昵称不能为空。</source>
+            <translation>The ground-station callsign or nickname cannot be empty.</translation>
+        </message>
+        <message>
+            <source>地面站经纬度超出有效范围。</source>
+            <translation>The ground-station coordinates are outside the valid range.</translation>
+        </message>
+        <message>
+            <source>ZMQ 地址必须使用 tcp://。</source>
+            <translation>The ZMQ address must use tcp://.</translation>
+        </message>
+        <message>
+            <source>SatNOGS API 地址无效。</source>
+            <translation>The SatNOGS API address is invalid.</translation>
+        </message>
+        <message>
+            <source>等待遥测帧…</source>
+            <translation>Waiting for telemetry frames…</translation>
+        </message>
+        <message>
+            <source>长度：%1 字节
+</source>
+            <translation>Length: %1 bytes
+</translation>
+        </message>
+        <message>
+            <source>ASRTU SatNOGS 遥测上传</source>
+            <translation>ASRTU SatNOGS Telemetry Uploader</translation>
+        </message>
+        <message>
+            <source>站点与上传配置</source>
+            <translation>Station and Upload Configuration</translation>
+        </message>
+        <message>
+            <source>服务器反馈</source>
+            <translation>Server Feedback</translation>
+        </message>
+        <message>
+            <source>Configuration:
+ZMQ Address:
+  %1
+SatNOGS API:
+  %2
+Satellite Name: %3
+NORAD ID: %4
+Ground Station: %5
+Longitude: %6
+Altitude: %7 m
+Latitude: %8</source>
+            <translation>Configuration:
+ZMQ Address:
+  %1
+SatNOGS API:
+  %2
+Satellite Name: %3
+NORAD ID: %4
+Ground Station: %5
+Longitude: %6
+Altitude: %7 m
+Latitude: %8</translation>
+        </message>
+        <message>
+            <source>无法创建 ZeroMQ 上下文：%1</source>
+            <translation>Unable to create the ZeroMQ context: %1</translation>
+        </message>
+        <message>
+            <source>无法创建 ZeroMQ 订阅套接字：%1</source>
+            <translation>Unable to create the ZeroMQ subscriber socket: %1</translation>
+        </message>
+        <message>
+            <source>无法连接到 %1：%2</source>
+            <translation>Unable to connect to %1: %2</translation>
+        </message>
+        <message>
+            <source>已连接 ZeroMQ 订阅端，等待解码器帧。</source>
+            <translation>ZeroMQ subscriber connected; waiting for decoder frames.</translation>
+        </message>
+        <message>
+            <source>SatNOGS HTTPS 上传已就绪。</source>
+            <translation>SatNOGS HTTPS upload is ready.</translation>
+        </message>
+        <message>
+            <source>预览模式：已载入示例遥测帧。</source>
+            <translation>Preview mode: sample telemetry frame loaded.</translation>
+        </message>
+        <message>
+            <source>ZeroMQ 接收失败：%1</source>
+            <translation>ZeroMQ receive failed: %1</translation>
+        </message>
+        <message>
+            <source>已丢弃超长 ZeroMQ 消息（%1 字节）。</source>
+            <translation>Discarded an oversized ZeroMQ message (%1 bytes).</translation>
+        </message>
+        <message>
+            <source>已丢弃无效遥测 PDU：%1</source>
+            <translation>Discarded an invalid telemetry PDU: %1</translation>
+        </message>
+        <message>
+            <source>接收序号：%1
+接收时间：%2 UTC
+
+</source>
+            <translation>Sequence: %1
+Received: %2 UTC
+
+</translation>
+        </message>
+        <message>
+            <source>上传队列已满，已丢弃最旧的一帧。</source>
+            <translation>The upload queue is full; the oldest frame was discarded.</translation>
+        </message>
+        <message>
+            <source>收到遥测帧 #%1（%2 字节），加入上传队列。</source>
+            <translation>Telemetry frame #%1 received (%2 bytes) and queued for upload.</translation>
+        </message>
+        <message>
+            <source>SatNOGS 接受 %1 字节帧（HTTP %2）。</source>
+            <translation>SatNOGS accepted the %1-byte frame (HTTP %2).</translation>
+        </message>
+        <message>
+            <source>SatNOGS 上传失败（HTTP %1）：%2</source>
+            <translation>SatNOGS upload failed (HTTP %1): %2</translation>
+        </message>
+        <message>
+            <source>服务器响应：%1</source>
+            <translation>Server response: %1</translation>
+        </message>
+        <message>
+            <source>遥测帧内容</source>
+            <translation>Telemetry Frame Data</translation>
+        </message>
+        <message>
+            <source>MMT 与 SatNOGS 上传均已启动（PID %1 / %2）</source>
+            <translation>MMT and SatNOGS uploaders started (PID %1 / %2)</translation>
+        </message>
     </context>
 </TS>

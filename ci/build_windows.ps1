@@ -64,10 +64,6 @@ New-Item -ItemType Directory -Path $ootPrefix, $ootSource -Force | Out-Null
 Build-Oot 'gr-lilacsat' $dependencies.LILACSAT_REPOSITORY `
     $dependencies.LILACSAT_REVISION @(
         '-DENABLE_PYTHON=OFF', '-DENABLE_DOXYGEN=OFF')
-Build-Oot 'gr-hyacinth' $dependencies.HYACINTH_REPOSITORY `
-    $dependencies.HYACINTH_REVISION @(
-        '-DHYACINTHSAT_ENABLE_PYTHON=OFF', '-DENABLE_DOXYGEN=OFF')
-
 $env:PATH = "$ootPrefix\bin;$ootPrefix\lib;$runtimePrefix\bin;$env:PATH"
 $buildDir = Join-Path $repoRoot 'build-windows'
 Invoke-Cmake @('-S', $repoRoot, '-B', $buildDir, '-G', 'Ninja',

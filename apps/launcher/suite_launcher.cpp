@@ -23,6 +23,7 @@
 #include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
+#include <QLocalServer>
 #include <QLocalSocket>
 #include <QMessageBox>
 #include <QProcess>
@@ -42,6 +43,7 @@
 #include <QTimer>
 #include <QTranslator>
 #include <QUrl>
+#include <QUuid>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -129,7 +131,10 @@ QList<SatelliteProfile> satelliteProfiles()
 {
     return {
         {QStringLiteral("ASRTU-1"), QStringLiteral("ws://1.92.100.130"), 61781},
-        {QStringLiteral("BY-04uv"), QStringLiteral("ws://119.45.229.166"), 98247}
+        {QStringLiteral("BY-04uv"), QStringLiteral("ws://119.45.229.166"), 98247},
+        // JAMX has no MMT upload server; telemetry is submitted by the native
+        // SatNOGS uploader, so the WebSocket target stays empty.
+        {QStringLiteral("JAMX"), QString(), 98248}
     };
 }
 
@@ -316,6 +321,13 @@ bool processSurvivedStartup(qint64 processId, int timeoutMs, quint32* exitCode)
         *exitCode = quint32(nativeExitCode);
     return waitResult == WAIT_TIMEOUT;
 #else
+	if (timeoutMs <= 0) {
+		const bool running = processId > 0 &&
+			(::kill(static_cast<pid_t>(processId), 0) == 0 || errno != ESRCH);
+		if (exitCode)
+			*exitCode = running ? 0U : 1U;
+		return running;
+	}
 	QElapsedTimer timer;
 	timer.start();
 	while (timer.elapsed() < timeoutMs) {
@@ -332,6 +344,64 @@ bool processSurvivedStartup(qint64 processId, int timeoutMs, quint32* exitCode)
         *exitCode = 0;
     return true;
 #endif
+}
+
+void terminateDetachedProcess(qint64 processId)
+{
+    if (processId <= 0)
+        return;
+#ifdef Q_OS_WIN
+    HANDLE process = OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE,
+                                 FALSE, DWORD(processId));
+    if (!process)
+        return;
+    TerminateProcess(process, ERROR_CANCELLED);
+    WaitForSingleObject(process, 2000);
+    CloseHandle(process);
+#else
+    const pid_t pid = static_cast<pid_t>(processId);
+    if (::kill(pid, SIGTERM) != 0 && errno == ESRCH)
+        return;
+    for (int attempt = 0; attempt < 40; ++attempt) {
+        if (::kill(pid, 0) != 0 && errno == ESRCH)
+            return;
+        QThread::msleep(25);
+    }
+    ::kill(pid, SIGKILL);
+#endif
+}
+
+bool startSatnogsUploader(const QString& satellite, int noradId,
+                          const QString& source, double longitude,
+                          double latitude, double altitude,
+                          qint64* processId, QString* error)
+{
+    const QString uploader = QDir(decoderDirectory()).filePath(
+        executableName(QStringLiteral("ASRTU_SatnogsUploader")));
+    const QStringList arguments{
+        QStringLiteral("--satellite"), satellite,
+        QStringLiteral("--norad-id"), QString::number(noradId),
+        QStringLiteral("--source"), source,
+        QStringLiteral("--longitude"), QString::number(longitude, 'f', 6),
+        QStringLiteral("--latitude"), QString::number(latitude, 'f', 6),
+        QStringLiteral("--altitude"), QString::number(altitude, 'f', 2)};
+    qint64 uploaderPid = 0;
+    if (!startProgram(uploader, arguments, decoderDirectory(), {}, false,
+                      &uploaderPid, error)) {
+        return false;
+    }
+    quint32 exitCode = 0;
+    if (!processSurvivedStartup(uploaderPid, 1200, &exitCode)) {
+        *error = exitCode == 3
+                     ? QCoreApplication::translate(
+                           "ASRTU", "SatNOGS 上传程序已在运行；不会重复启动。")
+                     : QCoreApplication::translate(
+                           "ASRTU", "SatNOGS 上传程序启动后立即退出（代码 %1）。")
+                           .arg(exitCode);
+        return false;
+    }
+    *processId = uploaderPid;
+    return true;
 }
 
 bool startProxy(const QString& launchLog, qint64* processId, QString* error)
@@ -467,8 +537,22 @@ bool startSuite(bool enableProxy, int inputMode, const QString &wavPath,
 			return false;
 	}
 	qint64 decoderPid = 0;
+	const QString readyServerName =
+	    QStringLiteral("ASRTU_DSP_READY_%1")
+		.arg(QUuid::createUuid().toString(QUuid::Id128));
+	QLocalServer readyServer;
+	if (!readyServer.listen(readyServerName)) {
+		if (proxyPid > 0)
+			terminateDetachedProcess(proxyPid);
+		*error = QCoreApplication::translate(
+		    "ASRTU", "无法创建解码器启动确认通道：%1")
+			.arg(readyServer.errorString());
+		return false;
+	}
 	QStringList decoderArguments{QStringLiteral("--session-dir"),
-				     *sessionDirectory};
+				     *sessionDirectory,
+				     QStringLiteral("--ready-server"),
+				     readyServerName};
 	if (!playbackPath.isEmpty())
 		decoderArguments << QStringLiteral("--wav") << playbackPath;
 	if (!playbackPath.isEmpty() && fastPlayback)
@@ -483,8 +567,48 @@ bool startSuite(bool enableProxy, int inputMode, const QString &wavPath,
 		decoderArguments << QStringLiteral("--audio-device")
 				 << QString::number(audioDeviceId);
 	if (!startProgram(decoder, decoderArguments, decoderDirectory(), {},
-			  false, &decoderPid, error))
+			  false, &decoderPid, error)) {
+		if (proxyPid > 0)
+			terminateDetachedProcess(proxyPid);
 		return false;
+	}
+	QElapsedTimer readyTimer;
+	readyTimer.start();
+	bool decoderReady = false;
+	quint32 decoderExitCode = 0;
+	while (readyTimer.elapsed() < 15000) {
+		if (readyServer.waitForNewConnection(100)) {
+			decoderReady = true;
+			break;
+		}
+		if (!processSurvivedStartup(decoderPid, 0, &decoderExitCode))
+			break;
+	}
+	if (!decoderReady) {
+		terminateDetachedProcess(decoderPid);
+		if (proxyPid > 0)
+			terminateDetachedProcess(proxyPid);
+		*error = decoderExitCode == 3
+			     ? QCoreApplication::translate(
+				   "ASRTU", "实时解码器已在运行；不会重复启动。")
+			     : QCoreApplication::translate(
+				   "ASRTU", "解码器未在 15 秒内完成初始化；已回滚本次启动。");
+		return false;
+	}
+	QLocalSocket* readySocket = readyServer.nextPendingConnection();
+	if (!readySocket ||
+	    (!readySocket->bytesAvailable() && !readySocket->waitForReadyRead(1000)) ||
+	    readySocket->readAll() != QByteArrayLiteral("ready")) {
+		if (readySocket)
+			delete readySocket;
+		terminateDetachedProcess(decoderPid);
+		if (proxyPid > 0)
+			terminateDetachedProcess(proxyPid);
+		*error = QCoreApplication::translate(
+		    "ASRTU", "解码器启动确认无效；已回滚本次启动。");
+		return false;
+	}
+	delete readySocket;
 	*proxyProcessId = proxyPid;
 	return true;
 }
@@ -780,14 +904,47 @@ public:
             settings.setValue(QStringLiteral("satnogs_longitude"), longitude_->value());
             settings.setValue(QStringLiteral("satnogs_latitude"), latitude_->value());
             settings.sync();
+            qint64 satnogsProcessId = 0;
+            if (satnogsEnabled) {
+                QString error;
+                if (!startSatnogsUploader(
+                        satellite, noradForSatellite(satellite),
+                        nickname_->text().trimmed(), longitude_->value(),
+                        latitude_->value(), altitude_->value(),
+                        &satnogsProcessId, &error)) {
+                    QMessageBox::critical(
+                        this,
+                        QCoreApplication::translate(
+                            "ASRTU", "SatNOGS 上传程序启动失败"),
+                        error);
+                    return;
+                }
+            }
+            // Satellites without an MMT server use SatNOGS as their mandatory
+            // and only upload path. MMT-backed satellites may run both paths.
+            if (webSocketForSatellite(satellite).isEmpty()) {
+                setStatusText(
+                    QCoreApplication::translate(
+                        "ASRTU", "SatNOGS 上传程序已启动：%1（PID %2）")
+                        .arg(satellite)
+                        .arg(satnogsProcessId));
+                return;
+            }
             QString error;
             qint64 processId = 0;
             if (!startProxy({}, &processId, &error)) {
+                if (satnogsProcessId > 0)
+                    terminateDetachedProcess(satnogsProcessId);
                 QMessageBox::critical(this, QCoreApplication::translate("ASRTU", "上传代理启动失败"), error);
                 return;
             }
-            setStatusText(
-                QCoreApplication::translate("ASRTU", "上传代理已启动（PID %1）").arg(processId));
+            setStatusText(satnogsEnabled
+                ? QCoreApplication::translate(
+                      "ASRTU", "MMT 与 SatNOGS 上传均已启动（PID %1 / %2）")
+                      .arg(processId)
+                      .arg(satnogsProcessId)
+                : QCoreApplication::translate(
+                      "ASRTU", "上传代理已启动（PID %1）").arg(processId));
         });
         connect(start, &QPushButton::clicked, this, [this] {
             const int inputMode = input_mode_->currentData().toInt();
@@ -1032,6 +1189,18 @@ private:
         auto* satnogs = new QCheckBox(
             QCoreApplication::translate("ASRTU", "同时上传至 SatNOGS"), &dialog);
         satnogs->setChecked(false);
+        // Satellites without an MMT server only have the SatNOGS path. Keep
+        // that path mandatory so accepting the dialog can never leave the
+        // selected satellite without an upload destination.
+        const auto refreshSatnogsDefault = [satnogs, satellite] {
+            const QString name = satellite->currentText();
+            const bool satnogsOnly = webSocketForSatellite(name).isEmpty();
+            satnogs->setChecked(satnogsOnly);
+            satnogs->setEnabled(!satnogsOnly);
+        };
+        refreshSatnogsDefault();
+        connect(satellite, qOverload<int>(&QComboBox::currentIndexChanged), this,
+                [refreshSatnogsDefault](int) { refreshSatnogsDefault(); });
         layout->addWidget(satnogs);
         auto* box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
                                          &dialog);
@@ -1063,7 +1232,8 @@ private:
         // Recording is deliberately opt-in for every launcher session so an
         // old preference cannot silently start filling the records folder.
         recording_enabled_->setChecked(false);
-        // SatNOGS is explicitly opt-in for every upload-proxy launch.
+        // Reset the optional choice for MMT-backed satellites. JAMX enforces
+        // SatNOGS when the upload dialog is opened.
         settings.setValue(QStringLiteral("satnogs_enabled"), false);
         const QString savedAudio = settings.value(
             QStringLiteral("audio_device_name"),

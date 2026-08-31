@@ -19,7 +19,7 @@ constexpr int kDslwpPacketSize = 218;
 constexpr int kDslwpCrcDataSize = kDslwpPacketSize - 4;
 constexpr std::size_t kImageBufferSize = 32 * 1024 * 1024;
 constexpr std::size_t kMaxQueuedFrames = 4096;
-constexpr auto kPreviewRefreshInterval = std::chrono::milliseconds(100);
+constexpr auto kPreviewRefreshInterval = std::chrono::milliseconds(250);
 constexpr std::uint32_t kJamxCrcInitialValue = 0x6AAAC1C5U;
 
 std::uint32_t ssdvCrc32(const char* data, std::size_t length,
@@ -91,7 +91,8 @@ SsdvReceiver::SsdvReceiver(QString sessionDirectory,
 			   LogCallback logCallback)
 	: session_directory_(std::move(sessionDirectory)),
 	  image_callback_(std::move(imageCallback)),
-	  log_callback_(std::move(logCallback))
+	  log_callback_(std::move(logCallback)),
+	  jpeg_buffer_(kImageBufferSize)
 {
 	worker_ = std::thread([this] { workerLoop(); });
 }
@@ -322,8 +323,7 @@ bool SsdvReceiver::rebuildImage()
 	if (ssdv_dec_init(&decoder) != SSDV_OK)
 		return false;
 
-	std::vector<std::uint8_t> jpegBuffer(kImageBufferSize);
-	if (ssdv_dec_set_buffer(&decoder, jpegBuffer.data(), jpegBuffer.size()) !=
+	if (ssdv_dec_set_buffer(&decoder, jpeg_buffer_.data(), jpeg_buffer_.size()) !=
 	    SSDV_OK)
 		return false;
 
