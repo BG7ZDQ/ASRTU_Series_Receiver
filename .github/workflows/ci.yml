@@ -289,7 +289,7 @@ jobs:
   release:
     name: Publish tag artifacts
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: packages
+    needs: [windows, packages]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -298,7 +298,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: asrtu-linux-packages
-          path: dist
+          path: dist/linux
+      - name: Download Windows package
+        uses: actions/download-artifact@v4
+        with:
+          name: asrtu-windows-x64
+          path: dist/windows
       - name: Publish tag artifacts
         uses: softprops/action-gh-release@v2
         with:
@@ -306,6 +311,7 @@ jobs:
             dist/**/*.deb
             dist/**/*.rpm
             dist/**/*.AppImage
+            dist/**/*.zip
 
   arch-package:
     name: Arch PKGBUILD syntax
