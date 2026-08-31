@@ -22,7 +22,7 @@ TRANSLATIONS = {
     "ZMQ 地址必须使用 tcp://。": "The ZMQ address must use tcp://.",
     "SatNOGS API 地址无效。": "The SatNOGS API address is invalid.",
     "等待遥测帧…": "Waiting for telemetry frames…",
-    "长度：%1 字节\n": "Length: %1 bytes\n",
+    "已接收一帧遥测数据\n长度：%1 字节": "Telemetry frame received\nLength: %1 bytes",
     "ASRTU SatNOGS 遥测上传": "ASRTU SatNOGS Telemetry Uploader",
     "遥测帧内容": "Telemetry Frame Data",
     "站点与上传配置": "Station and Upload Configuration",

@@ -523,10 +523,10 @@
             <translation>テレメトリーフレームを待機中…</translation>
         </message>
         <message>
-            <source>长度：%1 字节
-</source>
-            <translation>長さ：%1バイト
-</translation>
+            <source>已接收一帧遥测数据
+长度：%1 字节</source>
+            <translation>テレメトリーフレームを受信しました
+長さ：%1バイト</translation>
         </message>
         <message>
             <source>ASRTU SatNOGS 遥测上传</source>

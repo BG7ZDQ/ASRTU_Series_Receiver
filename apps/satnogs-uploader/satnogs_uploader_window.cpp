@@ -118,9 +118,22 @@ QString formatTelemetryFrame(const QByteArray& frame)
 {
     if (frame.isEmpty())
         return QCoreApplication::translate("ASRTU", "等待遥测帧…");
-    return QCoreApplication::translate(
-               "ASRTU", "已接收一帧遥测数据\n长度：%1 字节\n内容不在界面中展示。")
-        .arg(frame.size());
+
+    QString dump = QCoreApplication::translate(
+                       "ASRTU", "已接收一帧遥测数据\n长度：%1 字节")
+                       .arg(frame.size());
+    constexpr qsizetype kBytesPerLine = 16;
+    for (qsizetype offset = 0; offset < frame.size();
+         offset += kBytesPerLine) {
+        const QByteArray hex =
+            frame.mid(offset, kBytesPerLine).toHex(' ').toUpper();
+        dump += QStringLiteral("\n%1: %2")
+                    .arg(static_cast<qulonglong>(offset), 4, 16,
+                         QLatin1Char('0'))
+                    .arg(QString::fromLatin1(hex))
+                    .toUpper();
+    }
+    return dump;
 }
 
 bool isRetriableSatnogsUpload(int networkError, int httpStatus)

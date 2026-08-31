@@ -523,10 +523,10 @@ Underlying error: %1</translation>
             <translation>Waiting for telemetry frames…</translation>
         </message>
         <message>
-            <source>长度：%1 字节
-</source>
-            <translation>Length: %1 bytes
-</translation>
+            <source>已接收一帧遥测数据
+长度：%1 字节</source>
+            <translation>Telemetry frame received
+Length: %1 bytes</translation>
         </message>
         <message>
             <source>ASRTU SatNOGS 遥测上传</source>

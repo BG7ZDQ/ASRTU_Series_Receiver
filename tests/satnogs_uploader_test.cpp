@@ -41,12 +41,16 @@ int main()
                 "unsupported ZMQ transport was accepted"))
         return 1;
 
-    const QByteArray frame = QByteArray::fromHex("00A55AFF");
+    const QByteArray frame = QByteArray::fromHex(
+        "00A55AFF0102030405060708090A0B0C0D0E0F10");
     const QString dump = asrtu::formatTelemetryFrame(frame);
-    if (!expect(dump.contains(QStringLiteral("4")),
+    if (!expect(dump.contains(QStringLiteral("长度：20 字节")),
                 "frame summary is missing the byte count") ||
-        !expect(!dump.contains(QStringLiteral("00 A5 5A FF")),
-                "frame summary unexpectedly exposes frame bytes")) {
+        !expect(dump.contains(QStringLiteral(
+                    "0000: 00 A5 5A FF 01 02 03 04 05 06 07 08 09 0A 0B 0C")),
+                "frame dump is missing the first hexadecimal row") ||
+        !expect(dump.contains(QStringLiteral("0010: 0D 0E 0F 10")),
+                "frame dump is missing the second hexadecimal row")) {
         return 1;
     }
     if (!expect(asrtu::isRetriableSatnogsUpload(
