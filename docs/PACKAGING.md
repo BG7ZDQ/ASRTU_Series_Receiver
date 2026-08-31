@@ -14,7 +14,7 @@
 
 该默认路径会重新编译 SDR# 桥接插件，从 `packaging/payload/` 创建干净的 staging，并生成 `packaging/inno/dist/ASRTU_Series_Receiver_Setup.exe`。安装器启动时始终由用户从简体中文、English、日本語中选择安装向导语言。
 
-GitHub Actions 的 `windows-installer` job 会下载已经通过启动冒烟测试的 Windows 便携包，在 `windows-2022` runner 上调用 Inno Setup 6 生成同一安装器，并校验文件大小和 SHA-256。正式版本标签的发布任务同时上传安装器 EXE、便携 ZIP、DEB、RPM 和 AppImage；若 runner 镜像未预装 Inno Setup，工作流会通过 Chocolatey 安装后再构建。
+GitHub Actions 的 `windows-installer` job 会下载已经通过启动冒烟测试的 Windows 便携包，在 `windows-2022` runner 上调用 Inno Setup 6 生成同一安装器，并校验文件大小和 SHA-256。正式版本标签的发布任务同时上传安装器 EXE、便携 ZIP、DEB、RPM 和 AppImage；若 runner 镜像未预装 Inno Setup，或预装版本缺少简中/日文语言文件，工作流会通过 Chocolatey 重新安装完整版本后再构建。
 
 若还要重编 DSP、启动器和代理包装器：
 
