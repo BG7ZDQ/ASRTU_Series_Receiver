@@ -228,6 +228,21 @@ Set-Content -LiteralPath (Join-Path $OutputDir 'qt.conf') -Encoding ASCII -Value
     'Plugins=.'
 )
 
+# The GNU Radio qtgui module links a Qt 5 build of Qwt. Reject a Qt 6 qwt.dll
+# here because its QwtColorMap::colorTable256 export (QList<unsigned int>)
+# cannot satisfy the Qt 5 symbol (QVector<unsigned int>) that the qtgui module
+# imports, which breaks program startup with "entry point not found".
+$qwtPath = Join-Path $OutputDir 'qwt.dll'
+if (Test-Path -LiteralPath $qwtPath) {
+    $qwtDeps = Get-Dependencies $qwtPath
+    if ($qwtDeps -contains 'Qt6Core.dll') {
+        throw ('qwt.dll is a Qt 6 build; GNU Radio qtgui expects the Qt 5 ' +
+            'variant. Pin qwt to a qt-main build, for example ' +
+            'qwt=6.3.0=h9417a65_0.')
+    }
+}
+
+
 # Zip the whole folder for the CI artifact.
 $zipDir = Split-Path -Parent $OutputDir
 New-Item -ItemType Directory -Force -Path $zipDir | Out-Null

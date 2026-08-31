@@ -128,7 +128,7 @@ jobs:
         with:
           environment-name: asrtu
           create-args: >-
-            python=3.11 cmake ninja pkg-config gnuradio=3.10 qt-main=5 qwt
+            python=3.11 cmake ninja pkg-config gnuradio=3.10 qt-main=5 qwt=6.3.0=h9417a65_0
             boost-cpp fftw libsndfile zeromq m2w64-binutils -c conda-forge
           cache-environment: true
       - name: Build OOT dependencies and ASRTU
