@@ -114,6 +114,48 @@ int main(int argc, char* argv[])
         return 5;
     }
 
+    const QString firstBase = result.path.left(result.path.size() - 4);
+    QFile packetBin(firstBase + QStringLiteral(".bin"));
+    QFile rawFrames(QDir(outputPath).filePath(
+        QStringLiteral("SSDV_received_frames223.bin")));
+    if (!packetBin.open(QIODevice::ReadOnly) ||
+        !rawFrames.open(QIODevice::ReadOnly)) {
+        std::cerr << "SSDV packet capture files are missing\n";
+        return 13;
+    }
+    const QByteArray packetData = packetBin.readAll();
+    const QByteArray rawData = rawFrames.readAll();
+    if (packetData.size() != result.received_packets * 218 ||
+        rawData != data) {
+        std::cerr << "SSDV packet capture format is incorrect\n";
+        return 13;
+    }
+    for (int offset = 0; offset < packetData.size(); offset += 218) {
+        if (!rawData.contains(packetData.mid(offset, 218))) {
+            std::cerr << "SSDV 218-byte capture differs from received frames\n";
+            return 13;
+        }
+    }
+    packetBin.close();
+    rawFrames.close();
+
+    // A repeated frame remains in the raw capture, while the 218-byte file
+    // keeps one selected packet per ID.
+    const QByteArray duplicateFrame = rawData.right(223);
+    receiver.ingestFrame(duplicateFrame);
+    for (int attempt = 0; attempt < 100; ++attempt) {
+        if (QFileInfo(rawFrames.fileName()).size() >= rawData.size() + 223)
+            break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    if (!rawFrames.open(QIODevice::ReadOnly) ||
+        rawFrames.readAll() != rawData + duplicateFrame ||
+        QFileInfo(packetBin.fileName()).size() != packetData.size()) {
+        std::cerr << "SSDV duplicate frame was not preserved verbatim\n";
+        return 14;
+    }
+    rawFrames.close();
+
     // The fixture begins at packet 34 and ends at packet 59. Replaying it
     // exercises a non-zero counter regression (59 -> 34): this must create a
     // fresh image even though its image ID and packet contents are unchanged.
@@ -225,6 +267,21 @@ int main(int argc, char* argv[])
                       << " imageNull=" << last.image.isNull() << '\n';
             return 12;
         }
+    }
+    QString damagedBase;
+    {
+        std::lock_guard<std::mutex> lock(resultMutex);
+        damagedBase = last.path.left(last.path.size() - 4);
+    }
+    QFile damagedBin(damagedBase + QStringLiteral(".bin"));
+    QFile damagedRaw(QDir(outputPath).filePath(
+        QStringLiteral("SSDV_received_frames223.bin")));
+    if (!damagedBin.open(QIODevice::ReadOnly) ||
+        !damagedRaw.open(QIODevice::ReadOnly) ||
+        !damagedBin.readAll().contains(damaged.mid(4 * 223 + 5, 218)) ||
+        !damagedRaw.readAll().contains(damaged.mid(4 * 223, 223))) {
+        std::cerr << "SSDV damaged frame was lost from the capture\n";
+        return 15;
     }
     std::cout << "SSDV OK: " << result.path.toLocal8Bit().constData() << '\n';
     return 0;

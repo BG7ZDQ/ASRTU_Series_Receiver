@@ -59,16 +59,20 @@ private:
 	void workerLoop();
 	bool processFrame(const QByteArray& frame, std::uint64_t generation);
 	bool rebuildImage();
+	bool savePacketBin();
+	void appendRawFrame(const QByteArray& frame);
 	void clearState(std::uint64_t generation);
 	bool isCurrentGeneration(std::uint64_t generation);
 
 	QString session_directory_;
 	QString image_path_;
+	QString packet_bin_path_;
 	QString satellite_;
 	std::uint16_t spacecraft_header_ = 0;
 	ImageCallback image_callback_;
 	LogCallback log_callback_;
 	std::map<std::uint16_t, QByteArray> packets_;
+	std::map<std::uint16_t, QByteArray> bin_packets_;
 	std::set<std::uint16_t> crc_failed_packet_ids_;
 	int image_id_ = -1;
 	int width_ = 0;
@@ -78,6 +82,7 @@ private:
 	std::uint64_t session_serial_ = 0;
 	bool complete_ = false;
 	bool jamx_mode_ = false;
+	bool bin_dirty_ = false;
 	std::vector<std::uint8_t> jpeg_buffer_;
 
 	std::mutex queue_mutex_;

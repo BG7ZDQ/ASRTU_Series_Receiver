@@ -6,6 +6,7 @@ extern "C" {
 
 #include <QDateTime>
 #include <QDir>
+#include <QFile>
 #include <QSaveFile>
 
 #include <chrono>
@@ -149,9 +150,10 @@ void SsdvReceiver::workerLoop()
 
 	while (true) {
 		std::deque<QueuedFrame> batch;
-		std::uint64_t generation;
-		std::size_t droppedFrames;
-		bool clearNow;
+		std::uint64_t generation = 0;
+		std::size_t droppedFrames = 0;
+		bool clearNow = false;
+		bool stopNow = false;
 
 		{
 			std::unique_lock<std::mutex> lock(queue_mutex_);
@@ -166,17 +168,23 @@ void SsdvReceiver::workerLoop()
 					       !frame_queue_.empty();
 				});
 			}
-			if (stop_requested_)
-				break;
-			clearNow = clear_requested_;
-			clear_requested_ = false;
-			generation = queue_generation_;
-			droppedFrames = dropped_frames_;
-			dropped_frames_ = 0;
-			batch.swap(frame_queue_);
+			stopNow = stop_requested_;
+			if (!stopNow) {
+				clearNow = clear_requested_;
+				clear_requested_ = false;
+				generation = queue_generation_;
+				droppedFrames = dropped_frames_;
+				dropped_frames_ = 0;
+				batch.swap(frame_queue_);
+			}
+		}
+		if (stopNow) {
+			savePacketBin();
+			break;
 		}
 
 		if (clearNow) {
+			savePacketBin();
 			clearState(generation);
 			dirty = false;
 			nextRefresh = std::chrono::steady_clock::now();
@@ -198,6 +206,7 @@ void SsdvReceiver::workerLoop()
 
 		const auto now = std::chrono::steady_clock::now();
 		if (dirty && (urgent || now >= nextRefresh)) {
+			savePacketBin();
 			rebuildImage();
 			dirty = false;
 			nextRefresh = std::chrono::steady_clock::now() +
@@ -209,7 +218,13 @@ void SsdvReceiver::workerLoop()
 bool SsdvReceiver::processFrame(const QByteArray& frame,
 				std::uint64_t generation)
 {
-	if (frame.size() != kCcsdsFrameSize || virtualChannelId(frame) != 1)
+	if (frame.size() != kCcsdsFrameSize)
+		return false;
+	// Archive each received CCSDS frame before SSDV/CRC checks. Frames with
+	// damaged image headers cannot be assigned to a specific image, but remain
+	// available for offline repair.
+	appendRawFrame(frame);
+	if (virtualChannelId(frame) != 1)
 		return false;
 
 	const auto spacecraftHeader =
@@ -239,11 +254,6 @@ bool SsdvReceiver::processFrame(const QByteArray& frame,
 	// Only packets that fail both checks are accepted as best-effort recovery
 	// data and shown as CRC-failed in the UI.
 	const bool crcFailed = !crcValid && !jamxCrcValid;
-	// Never let an unverified copy overwrite a packet that already passed a
-	// recognized CRC. A later verified copy may still upgrade a yellow packet.
-	if (existing != packets_.end() && !existingCrcFailed && crcFailed)
-		return false;
-
 	// A packet with neither known CRC is useful only after a validated packet
 	// has established the image identity. This permits damaged packets to
 	// improve a local preview without allowing arbitrary VC1 telemetry to
@@ -279,8 +289,11 @@ bool SsdvReceiver::processFrame(const QByteArray& frame,
 		replacedFirstPacket || packetCounterRegressed || formatChanged;
 
 	if (sessionChanged) {
+		savePacketBin();
 		packets_.clear();
+		bin_packets_.clear();
 		crc_failed_packet_ids_.clear();
+		bin_dirty_ = false;
 		image_id_ = info.image_id;
 		width_ = info.width;
 		height_ = info.height;
@@ -296,21 +309,72 @@ bool SsdvReceiver::processFrame(const QByteArray& frame,
 					QStringLiteral("yyyyMMdd_HHmmss_zzz")))
 				.arg(++session_serial_)
 				.arg(image_id_));
+		const QString basePath = image_path_.left(image_path_.size() - 4);
+		packet_bin_path_ = basePath + QStringLiteral(".bin");
 		if (log_callback_) {
 			log_callback_(QStringLiteral("SSDV image started: ID %1, %2x%3, quality %4")
 					  .arg(image_id_).arg(width_).arg(height_).arg(quality_));
 		}
 	}
 
+	// Never let an unverified copy overwrite a packet that already passed a
+	// recognized CRC. A later verified copy may still upgrade a yellow packet.
+	if (existing != packets_.end() && !existingCrcFailed && crcFailed)
+		return false;
 	if (duplicatePacket && !sessionChanged)
 		return false;
 	packets_[info.packet_id] = packet;
+	bin_packets_[info.packet_id] = packet;
+	bin_dirty_ = true;
 	if (crcFailed)
 		crc_failed_packet_ids_.insert(info.packet_id);
 	else
 		crc_failed_packet_ids_.erase(info.packet_id);
 	complete_ = complete_ || info.eoi != 0;
 
+	return true;
+}
+
+void SsdvReceiver::appendRawFrame(const QByteArray& frame)
+{
+	const QString path = QDir(session_directory_).filePath(
+		QStringLiteral("SSDV_received_frames223.bin"));
+	QFile output(path);
+	if (!output.open(QIODevice::WriteOnly | QIODevice::Append) ||
+	    output.write(frame) != frame.size()) {
+		if (log_callback_)
+			log_callback_(QStringLiteral("Unable to save SSDV raw frames: %1")
+					  .arg(path));
+	}
+}
+
+bool SsdvReceiver::savePacketBin()
+{
+	if (!bin_dirty_ || bin_packets_.empty())
+		return true;
+	QSaveFile output(packet_bin_path_);
+	if (!output.open(QIODevice::WriteOnly)) {
+		if (log_callback_)
+			log_callback_(QStringLiteral("Unable to save SSDV packets: %1")
+					  .arg(packet_bin_path_));
+		return false;
+	}
+	for (const auto& entry : bin_packets_) {
+		if (output.write(entry.second) != kDslwpPacketSize) {
+			output.cancelWriting();
+			if (log_callback_)
+				log_callback_(QStringLiteral("Unable to save SSDV packets: %1")
+						  .arg(packet_bin_path_));
+			return false;
+		}
+	}
+	if (!output.commit()) {
+		if (log_callback_)
+			log_callback_(QStringLiteral("Unable to save SSDV packets: %1")
+					  .arg(packet_bin_path_));
+		return false;
+	}
+	bin_dirty_ = false;
 	return true;
 }
 
@@ -433,8 +497,10 @@ bool SsdvReceiver::rebuildImage()
 void SsdvReceiver::clearState(std::uint64_t generation)
 {
 	packets_.clear();
+	bin_packets_.clear();
 	crc_failed_packet_ids_.clear();
 	image_path_.clear();
+	packet_bin_path_.clear();
 	image_id_ = -1;
 	satellite_.clear();
 	spacecraft_header_ = 0;
@@ -444,4 +510,5 @@ void SsdvReceiver::clearState(std::uint64_t generation)
 	state_generation_ = generation;
 	complete_ = false;
 	jamx_mode_ = false;
+	bin_dirty_ = false;
 }
