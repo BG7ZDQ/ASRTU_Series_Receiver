@@ -533,6 +533,10 @@ Length: %1 bytes</translation>
             <translation>ASRTU SatNOGS Telemetry Uploader</translation>
         </message>
         <message>
+            <source>上传状态</source>
+            <translation>Upload Status</translation>
+        </message>
+        <message>
             <source>站点与上传配置</source>
             <translation>Station and Upload Configuration</translation>
         </message>
@@ -638,5 +642,57 @@ Received: %2 UTC
             <source>MMT 与 SatNOGS 上传均已启动（PID %1 / %2）</source>
             <translation>MMT and SatNOGS uploaders started (PID %1 / %2)</translation>
         </message>
+    </context>
+    <context>
+        <name>ProxyWindow</name>
+        <message><source>ASRTU MMT 遥测上传</source><translation>ASRTU MMT Telemetry Upload</translation></message>
+        <message><source>已连接</source><translation>Connected</translation></message>
+        <message><source>连接中</source><translation>Connecting</translation></message>
+        <message><source>等待重连</source><translation>Waiting to reconnect</translation></message>
+        <message><source>已连接 ZeroMQ 订阅端，等待解码器帧。</source><translation>Connected to the ZeroMQ subscriber; waiting for decoder frames.</translation></message>
+        <message>
+            <source>配置：
+ZMQ 地址：
+  %1
+WebSocket 地址：
+  %2
+卫星：%3
+物理信道：%4
+呼号：%5
+经度：%6
+海拔：%7 m
+纬度：%8</source>
+            <translation>Configuration:
+ZMQ Address:
+  %1
+WebSocket Address:
+  %2
+Satellite: %3
+Physical Channel: %4
+Callsign: %5
+Longitude: %6
+Altitude: %7 m
+Latitude: %8</translation>
+        </message>
+        <message><source>收到 %1 帧遥测数据；累计接收 %2，已提交 %3，待发送 %4。</source><translation>Received %1 telemetry frames; total received %2, submitted %3, pending %4.</translation></message>
+        <message><source>已丢弃 %1 个无效遥测 PDU。</source><translation>Discarded %1 invalid telemetry PDUs.</translation></message>
+        <message><source>待发送队列已满，丢弃 %1 帧。</source><translation>Pending queue full; dropped %1 frames.</translation></message>
+        <message><source>已向 WebSocket 提交 %1 帧缓存数据。</source><translation>Submitted %1 buffered frames to WebSocket.</translation></message>
+        <message>
+            <source>WebSocket：%1
+已接收：%2  已提交：%3  待发送：%4
+队列丢弃：%5  无效 PDU：%6
+
+</source>
+            <translation>WebSocket: %1
+Received: %2  Submitted: %3  Pending: %4
+Queue drops: %5  Invalid PDUs: %6
+
+</translation>
+        </message>
+        <message><source>WebSocket 已连接。</source><translation>WebSocket connected.</translation></message>
+        <message><source>WebSocket 已断开，正在重连。</source><translation>WebSocket disconnected; reconnecting.</translation></message>
+        <message><source>WebSocket 错误：%1</source><translation>WebSocket error: %1</translation></message>
+        <message><source>服务器响应：%1</source><translation>Server response: %1</translation></message>
     </context>
 </TS>

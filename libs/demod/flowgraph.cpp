@@ -367,7 +367,6 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
     costas_ = gr::digital::costas_loop_cc::make(0.1f, 2, false);
 
     auto bpsk = gr::digital::constellation_bpsk::make();
-    bpsk->set_npwr(1.0);
     equalizer_gain_ = std::make_shared<std::atomic<float>>(0.05f);
     auto algorithm = std::make_shared<AdjustableLmsAlgorithm>(bpsk, equalizer_gain_);
     const auto equalizer = gr::digital::linear_equalizer::make(

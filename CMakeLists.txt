@@ -329,6 +329,9 @@ if(WIN32)
 else()
     add_executable(ASRTU_UploadProxy
         apps/proxy/main.cpp
+        apps/proxy/proxy_window.cpp
+        apps/proxy/proxy_window.h
+        apps/proxy/proxy_resources.qrc
         apps/proxy/proxy_config.cpp
         apps/proxy/proxy_config.h
         apps/proxy/upload_proxy.cpp
@@ -336,13 +339,15 @@ else()
         libs/proxy/pmt_frame_decoder.cpp
         libs/proxy/pmt_frame_decoder.h
         libs/common/runtime_paths.cpp
-        libs/common/runtime_paths.h)
+        libs/common/runtime_paths.h
+        libs/common/translation.cpp
+        libs/common/translation.h)
     target_include_directories(ASRTU_UploadProxy PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/apps/proxy
         ${CMAKE_CURRENT_SOURCE_DIR}/libs/proxy
         ${CMAKE_CURRENT_SOURCE_DIR}/libs/common)
     target_link_libraries(ASRTU_UploadProxy PRIVATE
-        Qt5::Core Qt5::Network Qt5::WebSockets
+        Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network Qt5::WebSockets
         gnuradio::gnuradio-runtime PkgConfig::ASRTU_ZMQ)
     asrtu_enable_strict_warnings(ASRTU_UploadProxy)
     install(TARGETS ASRTU_UploadProxy

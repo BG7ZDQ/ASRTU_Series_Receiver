@@ -533,6 +533,10 @@
             <translation>ASRTU SatNOGSテレメトリーアップローダー</translation>
         </message>
         <message>
+            <source>上传状态</source>
+            <translation>アップロード状況</translation>
+        </message>
+        <message>
             <source>站点与上传配置</source>
             <translation>地上局・アップロード設定</translation>
         </message>
@@ -638,5 +642,57 @@ NORAD ID：%4
             <source>MMT 与 SatNOGS 上传均已启动（PID %1 / %2）</source>
             <translation>MMTとSatNOGSのアップローダーを起動しました（PID %1 / %2）</translation>
         </message>
+    </context>
+    <context>
+        <name>ProxyWindow</name>
+        <message><source>ASRTU MMT 遥测上传</source><translation>ASRTU MMTテレメトリー送信</translation></message>
+        <message><source>已连接</source><translation>接続済み</translation></message>
+        <message><source>连接中</source><translation>接続中</translation></message>
+        <message><source>等待重连</source><translation>再接続待機中</translation></message>
+        <message><source>已连接 ZeroMQ 订阅端，等待解码器帧。</source><translation>ZeroMQ購読端に接続しました。デコーダーのフレームを待機中です。</translation></message>
+        <message>
+            <source>配置：
+ZMQ 地址：
+  %1
+WebSocket 地址：
+  %2
+卫星：%3
+物理信道：%4
+呼号：%5
+经度：%6
+海拔：%7 m
+纬度：%8</source>
+            <translation>設定：
+ZMQアドレス：
+  %1
+WebSocketアドレス：
+  %2
+衛星：%3
+物理チャネル：%4
+コールサイン：%5
+経度：%6
+高度：%7 m
+緯度：%8</translation>
+        </message>
+        <message><source>收到 %1 帧遥测数据；累计接收 %2，已提交 %3，待发送 %4。</source><translation>テレメトリーフレームを%1件受信しました。累計受信%2件、送信依頼%3件、送信待ち%4件。</translation></message>
+        <message><source>已丢弃 %1 个无效遥测 PDU。</source><translation>無効なテレメトリーPDUを%1件破棄しました。</translation></message>
+        <message><source>待发送队列已满，丢弃 %1 帧。</source><translation>送信待ちキューが満杯のため、%1フレームを破棄しました。</translation></message>
+        <message><source>已向 WebSocket 提交 %1 帧缓存数据。</source><translation>キャッシュ済み%1フレームをWebSocketに送信依頼しました。</translation></message>
+        <message>
+            <source>WebSocket：%1
+已接收：%2  已提交：%3  待发送：%4
+队列丢弃：%5  无效 PDU：%6
+
+</source>
+            <translation>WebSocket：%1
+受信：%2  送信依頼：%3  送信待ち：%4
+キュー破棄：%5  無効PDU：%6
+
+</translation>
+        </message>
+        <message><source>WebSocket 已连接。</source><translation>WebSocketに接続しました。</translation></message>
+        <message><source>WebSocket 已断开，正在重连。</source><translation>WebSocketが切断されました。再接続しています。</translation></message>
+        <message><source>WebSocket 错误：%1</source><translation>WebSocketエラー：%1</translation></message>
+        <message><source>服务器响应：%1</source><translation>サーバー応答：%1</translation></message>
     </context>
 </TS>

@@ -32,26 +32,39 @@ UploadProxy::UploadProxy(ProxyConfig config) : config_(std::move(config))
 	reconnectTimer_.setSingleShot(true);
 
 	QObject::connect(&receiveTimer_, &QTimer::timeout,
-			 [&] { receiveFrames(); });
+			 [this] { receiveFrames(); });
 	QObject::connect(&reconnectTimer_, &QTimer::timeout,
-			 [&] { connectWebSocket(); });
-	QObject::connect(&webSocket_, &QWebSocket::connected, [&] {
+			 [this] { connectWebSocket(); });
+	QObject::connect(&webSocket_, &QWebSocket::connected, [this] {
 		qInfo("WebSocket connection established");
+		if (feedbackHandler_)
+			feedbackHandler_(ProxyEvent::Connected, {});
 		flushPending();
 	});
-	QObject::connect(&webSocket_, &QWebSocket::disconnected, [&] {
+	QObject::connect(&webSocket_, &QWebSocket::disconnected, [this] {
 		qWarning("WebSocket connection closed; reconnecting");
+		if (feedbackHandler_)
+			feedbackHandler_(ProxyEvent::Disconnected, {});
 		reconnectTimer_.start();
 	});
 	QObject::connect(
 	    &webSocket_,
 	    QOverload<QAbstractSocket::SocketError>::of(&QWebSocket::error),
-	    [&](QAbstractSocket::SocketError) {
+	    [this](QAbstractSocket::SocketError) {
 		    qWarning("WebSocket error: %s",
 			     qPrintable(webSocket_.errorString()));
+		    if (feedbackHandler_)
+			    feedbackHandler_(ProxyEvent::ConnectionError,
+					     webSocket_.errorString());
 		    if (webSocket_.state() == QAbstractSocket::UnconnectedState)
 			    reconnectTimer_.start();
 	    });
+	QObject::connect(&webSocket_, &QWebSocket::textMessageReceived,
+			 [this](const QString &message) {
+				 if (feedbackHandler_)
+					 feedbackHandler_(ProxyEvent::ServerMessage,
+							  message);
+			 });
 }
 
 UploadProxy::~UploadProxy()
@@ -103,6 +116,19 @@ bool UploadProxy::start(QString *error)
 	return true;
 }
 
+ProxySnapshot UploadProxy::snapshot() const
+{
+	ProxySnapshot result = snapshot_;
+	result.connectionState = webSocket_.state();
+	result.pendingFrames = pendingFrames_.size();
+	return result;
+}
+
+void UploadProxy::setFeedbackHandler(FeedbackHandler handler)
+{
+	feedbackHandler_ = std::move(handler);
+}
+
 void UploadProxy::connectWebSocket()
 {
 	if (webSocket_.state() != QAbstractSocket::UnconnectedState)
@@ -128,6 +154,7 @@ void UploadProxy::receiveFrames()
 			return;
 		}
 		if (static_cast<std::size_t>(received) > serialized.size()) {
+			++snapshot_.invalidFrames;
 			qWarning(
 			    "Discarded oversized ZeroMQ message (%d bytes)",
 			    received);
@@ -137,6 +164,7 @@ void UploadProxy::receiveFrames()
 		std::string decodeError;
 		if (!decodePmtTelemetryFrame(serialized.data(), received,
 					     &frame, &decodeError)) {
+			++snapshot_.invalidFrames;
 			qWarning("Discarded invalid telemetry PDU: %s",
 				 decodeError.c_str());
 			continue;
@@ -149,6 +177,9 @@ void UploadProxy::receiveFrames()
 
 void UploadProxy::submitFrame(const QByteArray &frame)
 {
+	++snapshot_.receivedFrames;
+	snapshot_.lastFrame = frame;
+	snapshot_.lastFrameTimeUtc = QDateTime::currentDateTimeUtc();
 	QJsonObject object{
 	    {QStringLiteral("sat_name"), config_.satellite},
 	    {QStringLiteral("physical_channel"), config_.physicalChannel},
@@ -159,16 +190,20 @@ void UploadProxy::submitFrame(const QByteArray &frame)
 	    {QStringLiteral("raw_data"),
 	     "b'" + QString::fromLatin1(frame.toHex()) + "'"},
 	    {QStringLiteral("proxy_receive_time"),
-	     static_cast<double>(QDateTime::currentMSecsSinceEpoch())},
+	     static_cast<double>(snapshot_.lastFrameTimeUtc.toMSecsSinceEpoch())},
 	};
 	const QByteArray message =
 	    QJsonDocument(object).toJson(QJsonDocument::Compact);
 	if (webSocket_.state() == QAbstractSocket::ConnectedState) {
-		webSocket_.sendTextMessage(QString::fromUtf8(message));
-		return;
+		if (webSocket_.sendTextMessage(QString::fromUtf8(message)) >= 0) {
+			++snapshot_.sentFrames;
+			return;
+		}
 	}
-	if (pendingFrames_.size() == kMaximumPendingFrames)
+	if (pendingFrames_.size() == kMaximumPendingFrames) {
 		pendingFrames_.dequeue();
+		++snapshot_.droppedFrames;
+	}
 	pendingFrames_.enqueue(message);
 }
 
@@ -176,8 +211,11 @@ void UploadProxy::flushPending()
 {
 	while (!pendingFrames_.isEmpty() &&
 	       webSocket_.state() == QAbstractSocket::ConnectedState) {
-		webSocket_.sendTextMessage(
-		    QString::fromUtf8(pendingFrames_.dequeue()));
+		if (webSocket_.sendTextMessage(
+			QString::fromUtf8(pendingFrames_.head())) < 0)
+			break;
+		pendingFrames_.dequeue();
+		++snapshot_.sentFrames;
 	}
 }
 

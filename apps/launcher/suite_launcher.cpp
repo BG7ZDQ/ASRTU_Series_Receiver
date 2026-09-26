@@ -75,6 +75,19 @@ QString executableName(const QString &baseName)
 #endif
 }
 
+QString explicitLanguageArgument()
+{
+    const QStringList arguments = QCoreApplication::arguments();
+    for (const QString &language : {QStringLiteral("zh"),
+                                    QStringLiteral("en"),
+                                    QStringLiteral("ja")}) {
+        const QString option = QStringLiteral("--language=") + language;
+        if (arguments.contains(option))
+            return option;
+    }
+    return {};
+}
+
 void notifyRunningDspAudioDevice(int deviceId)
 {
     QLocalSocket socket;
@@ -378,13 +391,16 @@ bool startSatnogsUploader(const QString& satellite, int noradId,
 {
     const QString uploader = QDir(decoderDirectory()).filePath(
         executableName(QStringLiteral("ASRTU_SatnogsUploader")));
-    const QStringList arguments{
+    QStringList arguments{
         QStringLiteral("--satellite"), satellite,
         QStringLiteral("--norad-id"), QString::number(noradId),
         QStringLiteral("--source"), source,
         QStringLiteral("--longitude"), QString::number(longitude, 'f', 6),
         QStringLiteral("--latitude"), QString::number(latitude, 'f', 6),
         QStringLiteral("--altitude"), QString::number(altitude, 'f', 2)};
+    const QString language = explicitLanguageArgument();
+    if (!language.isEmpty())
+        arguments.append(language);
     qint64 uploaderPid = 0;
     if (!startProgram(uploader, arguments, decoderDirectory(), {}, false,
                       &uploaderPid, error)) {
@@ -432,7 +448,11 @@ bool startProxy(const QString& launchLog, qint64* processId, QString* error)
 	qint64 proxyPid = 0;
 	QStringList proxyArguments;
 #ifndef Q_OS_WIN
-	proxyArguments << QStringLiteral("--config") << configPath();
+	proxyArguments << QStringLiteral("--config") << configPath()
+	               << QStringLiteral("--gui");
+	const QString language = explicitLanguageArgument();
+	if (!language.isEmpty())
+		proxyArguments.append(language);
 #endif
 #ifdef Q_OS_WIN
 	const QString proxyOutputLog;
@@ -632,8 +652,14 @@ public:
             "border-radius:8px; }"
             "QLabel#sectionTitle { color:#344054; font-weight:600; }"
             "QLineEdit,QDoubleSpinBox,QComboBox { min-height:30px; padding:0 9px; "
-            "background:#ffffff; border:1px solid #cbd5e1; border-radius:5px; "
-            "selection-background-color:#2b7de9; }"
+            "background:#ffffff; color:#17202a; border:1px solid #cbd5e1; "
+            "border-radius:5px; selection-background-color:#dceeff; "
+            "selection-color:#17202a; }"
+            "QComboBox QAbstractItemView { background:#ffffff; color:#17202a; "
+            "selection-background-color:#dceeff; selection-color:#17202a; "
+            "outline:0; }"
+            "QComboBox QAbstractItemView::item:hover { background:#dceeff; "
+            "color:#17202a; }"
             "QLineEdit:focus,QDoubleSpinBox:focus,QComboBox:focus { "
             "border:1px solid #2b7de9; }"
             "QComboBox::drop-down { border:0; width:25px; }"

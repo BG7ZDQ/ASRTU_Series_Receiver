@@ -61,8 +61,11 @@ int main(int argc, char* argv[])
     const QCommandLineOption screenshot(QStringLiteral("screenshot"),
                                         QStringLiteral("Save a preview screenshot"),
                                         QStringLiteral("path"));
+    const QCommandLineOption language(QStringLiteral("language"),
+                                      QStringLiteral("UI language override"),
+                                      QStringLiteral("lang"));
     parser.addOptions({zmq, api, satellite, norad, source, longitude,
-                       latitude, altitude, screenshot});
+                       latitude, altitude, screenshot, language});
     parser.process(application);
 
     asrtu::SatnogsUploaderConfig config;

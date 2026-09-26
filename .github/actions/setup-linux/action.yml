@@ -8,6 +8,11 @@ runs:
       shell: bash
       run: |
         sudo apt-get update
+        . /etc/os-release
+        fuse_package=libfuse2
+        if [[ "$VERSION_ID" == "24.04" ]]; then
+          fuse_package=libfuse2t64
+        fi
         sudo apt-get install --yes --no-install-recommends \
           build-essential \
           ccache \
@@ -19,26 +24,36 @@ runs:
           dpkg-dev \
           file \
           gnuradio-dev \
-          libfuse2t64 \
+          "$fuse_package" \
+          libasound2-dev \
           libboost-all-dev \
           libfftw3-dev \
+          libjack-jackd2-dev \
           libqwt-qt5-dev \
+          libqt5opengl5-dev \
           libqt5websockets5-dev \
           libsndfile1-dev \
           libzmq3-dev \
           ninja-build \
           patchelf \
           pkg-config \
+          portaudio19-dev \
           jq \
           qtbase5-dev \
           rpm \
           xvfb
+    - name: Identify Ubuntu version for the OOT cache
+      id: ubuntu-version
+      shell: bash
+      run: |
+        . /etc/os-release
+        echo "version=$VERSION_ID" >> "$GITHUB_OUTPUT"
     - name: Restore GNU Radio OOT cache
       id: oot-cache
       uses: actions/cache@v4
       with:
         path: ${{ runner.temp }}/asrtu-oot
-        key: ${{ runner.os }}-gnuradio-3.10-oot-${{ hashFiles('ci/oot-dependencies.env') }}
+        key: ${{ runner.os }}-${{ steps.ubuntu-version.outputs.version }}-gnuradio-3.10-oot-${{ hashFiles('ci/oot-dependencies.env') }}
     - name: Build GNU Radio OOT dependencies
       if: steps.oot-cache.outputs.cache-hit != 'true'
       shell: bash

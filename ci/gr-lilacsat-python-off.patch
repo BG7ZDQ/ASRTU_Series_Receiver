@@ -1,0 +1,12 @@
+diff --git a/apps/CMakeLists.txt b/apps/CMakeLists.txt
+index db0ab60..90f96f5 100644
+--- a/apps/CMakeLists.txt
++++ b/apps/CMakeLists.txt
+@@ -9,3 +9,4 @@
+-include(GrPython)
+-
+-gr_python_install(PROGRAMS DESTINATION bin)
++if(ENABLE_PYTHON)
++    include(GrPython)
++    gr_python_install(PROGRAMS DESTINATION bin)
++endif()

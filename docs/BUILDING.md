@@ -55,7 +55,8 @@ PDU，并拒绝非 223 字节的遥测帧；它不使用 Windows 旧代理的固
 ```bash
 sudo apt update
 sudo apt install build-essential cmake ninja-build pkg-config \
-  qtbase5-dev libqt5svg5-dev libqt5websockets5-dev libqwt-qt5-dev \
+  qtbase5-dev libqt5svg5-dev libqt5opengl5-dev libqt5websockets5-dev \
+  libqwt-qt5-dev libasound2-dev libjack-jackd2-dev portaudio19-dev \
   gnuradio-dev libvolk2-dev libfftw3-dev libboost-all-dev \
   libsndfile1-dev libzmq3-dev
 ```
@@ -76,6 +77,7 @@ cmake --build build-linux --parallel
 ```bash
 ./build-linux/ASRTU1_Launcher
 ./build-linux/ASRTU_UploadProxy
+./build-linux/ASRTU_UploadProxy --gui
 ./build-linux/ASRTU1_Demod_CQt --wav /path/to/stereo_iq.wav --no-record
 ./build-linux/ASRTU1_Demod_CQt --wav /path/to/mono_12khz_if.wav \
   --real-if-12k --no-record
@@ -83,6 +85,9 @@ cmake --build build-linux --parallel
 
 Linux 当前范围与限制：
 
+- 从启动器启动 Linux 上传代理时会显示独立窗口；关闭启动器或接收器不会
+  停止上传。关闭代理窗口可手动结束代理。
+  直接执行 `ASRTU_UploadProxy` 则仍采用无窗口命令行模式。
 - 录音文件、GNU Radio DSP、FEC、Qt图形、TCP/ZMQ输出可作为主要移植路径。
 - Linux 默认把录音和日志写入当前用户的 XDG 数据目录，不会写入 AppImage
   挂载点或 `/usr` 等系统安装目录。
@@ -96,6 +101,9 @@ Linux 当前范围与限制：
 - Linux CI 会执行严格编译、单元测试、Cppcheck、Clang-Tidy、ASan、UBSan
   和 TSan，并构建 AppImage、deb、rpm；Arch Linux 打包元数据由
   `packaging/arch/PKGBUILD` 提供并在 CI 中校验。
+- GitHub 的 AppImage、deb、rpm 发行包任务在 Ubuntu 22.04 环境中构建；
+  AppImage 还会检查打包库的 glibc 符号版本不高于 2.35。CI 构建测试
+  与发布包构建使用不同 runner，避免新系统的 ABI 混入发布包。
 - Linux 发行包属于 CI 产物，正式发布仅由 `v*` tag 触发；运行时硬件和 OOT
   模块兼容性仍需在目标发行版上实测。
 - `benchmark_main.cpp` 使用 Windows 进程统计 API，非 Windows 默认关闭
