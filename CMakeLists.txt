@@ -379,6 +379,12 @@ asrtu_enable_strict_warnings(ASRTU1_Benchmark)
 endif()
 
 if(BUILD_TESTING)
+    add_executable(ASRTU1_LanguageTest tests/language_test.cpp
+        libs/common/translation.cpp libs/common/translation.h)
+    target_include_directories(ASRTU1_LanguageTest PRIVATE libs/common)
+    target_link_libraries(ASRTU1_LanguageTest PRIVATE
+        Qt5::Core Qt5::Gui Qt5::Widgets)
+    add_test(NAME application_language COMMAND ASRTU1_LanguageTest)
     if(UNIX AND NOT APPLE)
         add_executable(ASRTU1_RuntimePathsTest
             tests/runtime_paths_test.cpp

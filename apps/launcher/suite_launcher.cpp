@@ -77,15 +77,7 @@ QString executableName(const QString &baseName)
 
 QString explicitLanguageArgument()
 {
-    const QStringList arguments = QCoreApplication::arguments();
-    for (const QString &language : {QStringLiteral("zh"),
-                                    QStringLiteral("en"),
-                                    QStringLiteral("ja")}) {
-        const QString option = QStringLiteral("--language=") + language;
-        if (arguments.contains(option))
-            return option;
-    }
-    return {};
+	return QStringLiteral("--language=") + applicationLanguage();
 }
 
 void notifyRunningDspAudioDevice(int deviceId)

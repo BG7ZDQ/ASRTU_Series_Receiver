@@ -1,0 +1,31 @@
+SDR# Studio: Third-Party Software and Non-Affiliation Notice
+
+The optional "SDR# Studio telemetry preset" component in this installer is based
+on SDR# Studio 1.0.0.1920. It adds frequency, bandwidth and mode presets for
+telemetry reception from ASRTU Series and related amateur satellites, together
+with a local complex I/Q shared-memory bridge plugin developed by this project.
+Its sole purpose is to simplify configuration, launching and the data connection
+to the decoder. No claim of ownership of SDR# Studio is made.
+
+Copyrights, trademarks and other rights in SDR# Studio, the Airspy names and
+logos, the original software, drivers and other third-party components belong
+to Youssef Touil, Airspy and their respective rights holders. This suite is not
+an official Airspy product. It is not affiliated with, an agent of, sponsored,
+approved or endorsed by, or an official partner of Airspy, and does not represent
+the views of Airspy or other rights holders.
+
+This notice does not replace, modify or extend any upstream software license.
+Before publication, the installer creator or redistributor must independently
+confirm redistribution rights for the applicable version and all included
+components. This notice itself does not grant authorization. If redistribution
+rights cannot be confirmed, distribute only the presets created by this project
+and direct users to https://airspy.com/download/ for the official SDR# package.
+
+These presets are intended only for lawful reception of publicly available
+satellite signals, amateur radio, education and research. Users are responsible
+for complying with local laws and regulations concerning radio reception,
+spectrum use, software licensing, data and privacy. The software and presets
+are provided "as is", without any promise of suitability for particular
+hardware, frequencies or tasks.
+
+ASRTU Series Satellite Receiver and Upload / By BG7ZDQ

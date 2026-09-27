@@ -1,6 +1,6 @@
 # 翻译维护
 
-界面源语言是中文。中文系统直接显示源文本，日文系统加载 `translations/asrtu_ja.qm`，其他系统加载 `translations/asrtu_en.qm`。调试时可使用隐藏参数 `--language=zh`、`--language=ja` 或 `--language=en` 强制语言。
+界面源语言是中文。语言优先级为：命令行 `--language=zh|en|ja`、程序目录内 `ui-language.ini` 的 `[UI] Language`、系统语言。Inno 安装器每次将用户本次选择的语言写入 `decoder/ui-language.ini`，不改变地面站配置；现有快捷方式和直接运行 EXE 都读取此设置，启动器会向子窗口传递实际使用的语言。无安装配置的便携版默认按系统语言选择：中文直接显示源文本，日文加载 `translations/asrtu_ja.qm`，其他语言加载 `translations/asrtu_en.qm`。`--language en` 形式也受支持。
 
 相关文件：
 
@@ -10,7 +10,8 @@
 - `assets/translations/asrtu_ja.qm` — 发布用日文二进制翻译包
 - `tools/fill_asrtu_en.py` — 当前翻译映射维护脚本
 - `tools/fill_asrtu_ja.py` — 日文翻译映射维护脚本
-- `libs/common/translation.cpp` — 系统语言判断与加载逻辑
+- `libs/common/translation.cpp` — 安装语言、命令行覆盖及系统语言回退逻辑
+- `packaging/inno/THIRD_PARTY_NOTICE*.txt`、`SDRSHARP_NOTICE*.txt` — 安装声明及安装目录中的声明；英文使用 `.en.txt`，日文使用 `.ja.txt`，无语言后缀为中文
 
 更新源字符串后，使用 Qt 5 的 `lupdate` 重新扫描，再运行映射脚本和 `lrelease`：
 

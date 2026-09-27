@@ -25,7 +25,6 @@ OutputBaseFilename=ASRTU_Series_Receiver_Setup_{#AppVersion}{#AppBuildSuffix}
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
-InfoBeforeFile=THIRD_PARTY_NOTICE.txt
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -36,11 +35,14 @@ UsePreviousLanguage=no
 LanguageDetectionMethod=none
 
 [Languages]
-Name: "english"; MessagesFile: "English.isl"
-Name: "chinesesimp"; MessagesFile: "Languages\ChineseSimplified.isl"
-Name: "japanese"; MessagesFile: "Languages\Japanese.isl"
+Name: "english"; MessagesFile: "English.isl"; InfoBeforeFile: "THIRD_PARTY_NOTICE.en.txt"
+Name: "chinesesimp"; MessagesFile: "Languages\ChineseSimplified.isl"; InfoBeforeFile: "THIRD_PARTY_NOTICE.txt"
+Name: "japanese"; MessagesFile: "Languages\Japanese.isl"; InfoBeforeFile: "THIRD_PARTY_NOTICE.ja.txt"
 
 [CustomMessages]
+english.UiLanguage=en
+chinesesimp.UiLanguage=zh
+japanese.UiLanguage=ja
 english.ProgramGroup=ASRTU Series Satellite Receiver and Upload
 chinesesimp.ProgramGroup=阿斯图系列卫星接收与上传
 japanese.ProgramGroup=ASRTUシリーズ衛星受信・アップロード
@@ -122,16 +124,23 @@ Source: "stage\decoder\*"; DestDir: "{app}\decoder"; Components: core; Flags: ig
 Source: "stage\proxy\*"; DestDir: "{app}\proxy"; Excludes: "config.cfg"; Components: core; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "stage\sdrsharp\*"; DestDir: "{app}\sdrsharp"; Components: sdrsharp; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "README.txt"; DestDir: "{app}"; Components: core; Flags: ignoreversion
-Source: "SDRSHARP_NOTICE.txt"; DestDir: "{app}"; Flags: ignoreversion
-Source: "THIRD_PARTY_NOTICE.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "SDRSHARP_NOTICE.txt"; DestDir: "{app}"; Languages: chinesesimp; Flags: ignoreversion
+Source: "SDRSHARP_NOTICE.en.txt"; DestDir: "{app}"; DestName: "SDRSHARP_NOTICE.txt"; Languages: english; Flags: ignoreversion
+Source: "SDRSHARP_NOTICE.ja.txt"; DestDir: "{app}"; DestName: "SDRSHARP_NOTICE.txt"; Languages: japanese; Flags: ignoreversion
+Source: "THIRD_PARTY_NOTICE.txt"; DestDir: "{app}"; Languages: chinesesimp; Flags: ignoreversion
+Source: "THIRD_PARTY_NOTICE.en.txt"; DestDir: "{app}"; DestName: "THIRD_PARTY_NOTICE.txt"; Languages: english; Flags: ignoreversion
+Source: "THIRD_PARTY_NOTICE.ja.txt"; DestDir: "{app}"; DestName: "THIRD_PARTY_NOTICE.txt"; Languages: japanese; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{cm:ProgramGroup}\{cm:LauncherShortcut}"; Filename: "{app}\decoder\ASRTU1_Launcher.exe"; WorkingDir: "{app}\decoder"
 Name: "{autodesktop}\{cm:LauncherShortcut}"; Filename: "{app}\decoder\ASRTU1_Launcher.exe"; WorkingDir: "{app}\decoder"
 Name: "{autoprograms}\{cm:ProgramGroup}\{cm:SdrShortcut}"; Filename: "{app}\decoder\ASRTU1_Launcher.exe"; Parameters: "--sdrsharp"; WorkingDir: "{app}\decoder"; Components: sdrsharp
 
+[INI]
+Filename: "{app}\decoder\ui-language.ini"; Section: "UI"; Key: "Language"; String: "{cm:UiLanguage}"; Flags: uninsdeleteentry uninsdeletesectionifempty
+
 [Run]
-Filename: "{app}\decoder\ASRTU1_Launcher.exe"; Description: "{cm:OpenLauncher}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\decoder\ASRTU1_Launcher.exe"; Parameters: "--language={cm:UiLanguage}"; Description: "{cm:OpenLauncher}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
 Type: files; Name: "{app}\proxy\config.cfg"

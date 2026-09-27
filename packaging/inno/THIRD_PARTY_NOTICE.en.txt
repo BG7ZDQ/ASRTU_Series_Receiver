@@ -1,0 +1,28 @@
+Third-Party Software and Non-Affiliation Notice
+
+This installer optionally includes SDR# Studio with telemetry presets.
+
+The original software, names, trademarks, documentation and other rights belong
+to their respective authors and rights holders. This suite only provides telemetry
+presets, convenient configuration and a unified launcher. It is not affiliated with,
+an agent of, sponsored, approved or endorsed by, or an official partner of Airspy
+or the original authors of SDR#, and does not represent their views.
+
+This notice does not grant any software license or redistribution rights. For
+details, see SDRSHARP_NOTICE.txt in the installation directory and the original
+documentation supplied with the software.
+
+The built-in satellite orbit calculations use Andrew C. Young's sgp4 C99
+implementation under the MIT License. The full license text is provided in
+decoder\SGP4_LICENSE.txt.
+
+The DSP's parallel ASRTU decoding chain includes the soundmodem core from
+OpenHoshimi. Its original authors include BG6HNY / Hyacinth Satellite Team and
+the HIT LilacSat soundmodem authors credited in the source files. This component
+and its source files are provided under the applicable GPL terms.
+
+SSDV image decoding uses Daniel Estevez's DSLWP-compatible SSDV branch, based
+on Philip Heron's SSDV implementation. These components are provided under
+GPL-3.0-or-later.
+
+ASRTU Series Satellite Receiver and Upload / By BG7ZDQ
