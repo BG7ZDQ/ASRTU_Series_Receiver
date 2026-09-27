@@ -1,0 +1,3 @@
+[submodule "external/TinyDoppler"]
+	path = external/TinyDoppler
+	url = https://github.com/BG7ZDQ/TinyDoppler.git

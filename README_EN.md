@@ -70,7 +70,7 @@ Keep the computer clock, callsign, and coordinates accurate. SatNOGS submission 
 
 ### 7. Tracking and automatic Doppler
 
-Click **Satellite / Doppler Tracking**. The application downloads and merges all configured TLE sources, then allows selection of a satellite and frequency preset or a custom downlink frequency. Verify azimuth, elevation, range, and TLE epoch before enabling automatic Doppler in the SDR# plugin.
+Click **Satellite / Doppler Tracking** to open Tiny Doppler. You can manage satellite NORAD IDs, names, and multiple frequencies, and configure TLE or GP/OMM JSON sources. Settings are saved in the user configuration directory. Verify azimuth, elevation, range, and orbit-data epoch before enabling automatic Doppler in the SDR# plugin.
 
 Doppler correction only adjusts the receiver frequency; it does not prove successful decoding. Use `SYNCED`, FEC frames, and logs as the final criteria.
 
@@ -91,9 +91,9 @@ Doppler correction only adjusts the receiver frequency; it does not prove succes
 
 ## Repository layout
 
-- `apps/` — DSP receiver, launcher, Doppler window, native Linux proxy, and Windows proxy wrapper
+- `apps/` — DSP receiver, launcher, native Linux proxy, and Windows proxy wrapper
 - `libs/` — demodulation/FEC pipeline and shared code
-- `plugins/` — SDR# local RAW I/Q and Doppler bridge
+- `external/TinyDoppler/` — independently maintained [Tiny Doppler](https://github.com/BG7ZDQ/TinyDoppler) submodule with tracker, SDR# plugin, and interface docs; initialize Git submodules when cloning source
 - `assets/` — branding, icons, UI resources, and translations
 - `third_party/` — third-party source with upstream licenses retained
 - `packaging/inno/` — Inno Setup scripts

@@ -151,7 +151,7 @@ $processed = [System.Collections.Generic.HashSet[string]]::new(
 $queue = [System.Collections.Generic.Queue[string]]::new()
 
 foreach ($exe in @('ASRTU1_Demod_CQt.exe', 'ASRTU1_Launcher.exe',
-                    'ASRTU_Doppler.exe', 'ASRTU_SatnogsUploader.exe')) {
+                    'TinyDoppler.exe', 'ASRTU_SatnogsUploader.exe')) {
     $source = Join-Path $BuildDir $exe
     if (-not (Test-Path -LiteralPath $source)) {
         throw "Application executable not found: $source"
@@ -214,7 +214,7 @@ foreach ($name in @('asrtu_en.qm', 'asrtu_ja.qm')) {
 
 # Licenses shipped with the local portable package.
 foreach ($license in @(
-        @{ Source = 'third_party\sgp4\SGP4_LICENSE.txt'; Destination = 'SGP4_LICENSE.txt' },
+        @{ Source = 'external\TinyDoppler\third_party\sgp4\SGP4_LICENSE.txt'; Destination = 'SGP4_LICENSE.txt' },
         @{ Source = 'third_party\ssdv_dslwp\COPYING'; Destination = 'SSDV_GPL-3.0.txt' })) {
     $licenseSource = Join-Path $RepoRoot $license.Source
     if (Test-Path -LiteralPath $licenseSource) {

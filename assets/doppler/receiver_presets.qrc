@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="/tiny">
+    <file alias="default_satellites.json">default_satellites.json</file>
+  </qresource>
+</RCC>

@@ -12,8 +12,16 @@ _lilacsat_revision=74df3007f93899a29f543f49df35505025ada355
 source=(
 	"${pkgname}::git+${url}.git#tag=v${pkgver}"
 	"gr-lilacsat::git+https://github.com/bg2bhc/gr-lilacsat.git#commit=${_lilacsat_revision}"
+	"TinyDoppler::git+https://github.com/BG7ZDQ/TinyDoppler.git"
 )
-b2sums=('SKIP' 'SKIP')
+b2sums=('SKIP' 'SKIP' 'SKIP')
+
+prepare() {
+	cd "${srcdir}/${pkgname}"
+	git submodule init
+	git config submodule.external/TinyDoppler.url "${srcdir}/TinyDoppler"
+	git -c protocol.file.allow=always submodule update --init --recursive
+}
 
 build_oot()
 {

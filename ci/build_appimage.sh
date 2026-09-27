@@ -53,7 +53,7 @@ NO_STRIP=1 ARCH=x86_64 "$linuxdeploy" \
 	--appdir "$appdir" \
 	--executable "$appdir/usr/bin/ASRTU1_Launcher" \
 	--executable "$appdir/usr/bin/ASRTU1_Demod_CQt" \
-	--executable "$appdir/usr/bin/ASRTU_Doppler" \
+	--executable "$appdir/usr/bin/TinyDoppler" \
 	--executable "$appdir/usr/bin/ASRTU_UploadProxy" \
 	--executable "$appdir/usr/bin/ASRTU_SatnogsUploader" \
 	--desktop-file "$appdir/usr/share/applications/asrtu-series-receiver.desktop" \

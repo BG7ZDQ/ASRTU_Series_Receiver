@@ -2,6 +2,9 @@
 #ifndef AppVersion
 #define AppVersion "1.5.4"
 #endif
+#ifndef AppBuildSuffix
+#define AppBuildSuffix ""
+#endif
 
 [Setup]
 AppId={{957BAE5B-4E42-4ACB-932D-9759FB28DD44}
@@ -18,7 +21,7 @@ UninstallDisplayName={cm:ProgramGroup}
 UninstallDisplayIcon={app}\decoder\ASRTU1_Launcher.exe
 SetupIconFile=..\..\assets\branding\astro_series_launcher.ico
 OutputDir=dist
-OutputBaseFilename=ASRTU_Series_Receiver_Setup_{#AppVersion}
+OutputBaseFilename=ASRTU_Series_Receiver_Setup_{#AppVersion}{#AppBuildSuffix}
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern

@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $exe = Join-Path $BuildDir 'ASRTU1_Demod_CQt.exe'
 $launcher = Join-Path $BuildDir 'ASRTU1_Launcher.exe'
-$doppler = Join-Path $BuildDir 'ASRTU_Doppler.exe'
+$doppler = Join-Path $BuildDir 'TinyDoppler.exe'
 $satnogsUploader = Join-Path $BuildDir 'ASRTU_SatnogsUploader.exe'
 $runtimeBin = Join-Path $RuntimeRoot 'Library\bin'
 $plugins = Join-Path $RuntimeRoot 'Library\plugins'
@@ -53,7 +53,7 @@ if (Test-Path -LiteralPath $launcher) {
     Copy-Item -LiteralPath $launcher -Destination (Join-Path $OutputDir 'ASRTU1_Launcher.exe') -Force
 }
 if (Test-Path -LiteralPath $doppler) {
-    Copy-Item -LiteralPath $doppler -Destination (Join-Path $OutputDir 'ASRTU_Doppler.exe') -Force
+    Copy-Item -LiteralPath $doppler -Destination (Join-Path $OutputDir 'TinyDoppler.exe') -Force
 }
 if (-not (Test-Path -LiteralPath $satnogsUploader)) {
     throw "SatNOGS uploader not found: $satnogsUploader"
@@ -91,7 +91,7 @@ $processed = [System.Collections.Generic.HashSet[string]]::new(
 $queue = [System.Collections.Generic.Queue[string]]::new()
 $queue.Enqueue((Join-Path $OutputDir 'ASRTU1_Demod_CQt.exe'))
 $queue.Enqueue((Join-Path $OutputDir 'ASRTU1_Launcher.exe'))
-$queue.Enqueue((Join-Path $OutputDir 'ASRTU_Doppler.exe'))
+$queue.Enqueue((Join-Path $OutputDir 'TinyDoppler.exe'))
 $queue.Enqueue((Join-Path $OutputDir 'ASRTU_SatnogsUploader.exe'))
 $queue.Enqueue((Join-Path $OutputDir 'sndfile-convert.exe'))
 
@@ -154,7 +154,7 @@ Set-Content -LiteralPath (Join-Path $OutputDir 'qt.conf') -Encoding ASCII -Value
     'Plugins=.'
 )
 
-$sgp4License = Join-Path $PSScriptRoot '..\third_party\sgp4\SGP4_LICENSE.txt'
+$sgp4License = Join-Path $PSScriptRoot '..\external\TinyDoppler\third_party\sgp4\SGP4_LICENSE.txt'
 if (Test-Path -LiteralPath $sgp4License) {
     Copy-Item -LiteralPath $sgp4License `
         -Destination (Join-Path $OutputDir 'SGP4_LICENSE.txt') -Force

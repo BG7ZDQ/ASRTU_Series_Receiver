@@ -2,7 +2,7 @@
 
 ## 组件
 
-`ASRTU1_Launcher` 负责选择输入、声卡、录音选项和地面站资料，并启动其余进程。`ASRTU1_Demod_CQt` 执行 DSP、FEC、绘图和日志记录。`ASRTU_Proxy` 为旧 MMT 上传代理提供独立图标和控制台窗口。`ASRTU_SatnogsUploader` 是 Windows/Linux 共用的 Qt 上传程序，订阅 PMT/ZMQ 帧、显示站点与服务器状态并通过 HTTPS 上传 SatNOGS。`SDRSharp.AstroSeriesBridge` 从 SDR# 输出本地 RAW I/Q，并读取自动多普勒控制数据。
+`ASRTU1_Launcher` 负责选择输入、声卡、录音选项和地面站资料，并启动其余进程。`ASRTU1_Demod_CQt` 执行 DSP、FEC、绘图和日志记录。`ASRTU_Proxy` 为旧 MMT 上传代理提供独立图标和控制台窗口。`ASRTU_SatnogsUploader` 是 Windows/Linux 共用的 Qt 上传程序，订阅 PMT/ZMQ 帧、显示站点与服务器状态并通过 HTTPS 上传 SatNOGS。独立的 `external/TinyDoppler/` 子模块提供卫星跟踪应用及 SDR# 插件；插件从 SDR# 输出本地 RAW I/Q，并读取自动多普勒控制数据。
 
 ## 信号流
 
@@ -33,4 +33,4 @@ WAV/OGG playback ───┘                                      └─> Viter
 
 ## 运行数据
 
-录音和日志在 Windows 默认写入安装目录旁的 `ASRTU1_Records/<timestamp>/`，在 Linux 写入 `QStandardPaths::GenericDataLocation/ASRTU/ASRTU1_Records/<timestamp>/`。TLE 聚合缓存保存到当前用户的应用数据目录。呼号和坐标只写入本机配置，不应提交到版本库。
+录音和日志在 Windows 默认写入安装目录旁的 `ASRTU1_Records/<timestamp>/`，在 Linux 写入 `QStandardPaths::GenericDataLocation/ASRTU/ASRTU1_Records/<timestamp>/`。Tiny Doppler 的卫星目录和轨道数据缓存分别保存在当前用户的配置/应用数据目录。呼号和坐标只写入本机配置，不应提交到版本库。

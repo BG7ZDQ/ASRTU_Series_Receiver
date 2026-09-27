@@ -25,6 +25,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: recursive
       - name: Resolve comparison base
         id: base
         env:
@@ -49,6 +50,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: recursive
       - name: Resolve comparison base
         id: base
         env:
@@ -93,6 +95,8 @@ jobs:
             link_flags: -fsanitize=thread
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: ./.github/actions/setup-linux
       - name: Configure
         run: |
@@ -123,6 +127,8 @@ jobs:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: ilammy/msvc-dev-cmd@v1
       - uses: mamba-org/setup-micromamba@v2
         with:
@@ -201,6 +207,8 @@ jobs:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Download tested Windows package
         uses: actions/download-artifact@v4
         with:
@@ -218,6 +226,7 @@ jobs:
           foreach ($required in @(
               'ASRTU1_Demod_CQt.exe',
               'ASRTU1_Launcher.exe',
+              'TinyDoppler.exe',
               'ASRTU_SatnogsUploader.exe')) {
             if (-not (Test-Path -LiteralPath (Join-Path $portable $required))) {
               throw "Portable installer input is incomplete: $required"
@@ -278,6 +287,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: ./.github/actions/setup-linux
       - name: Configure release build
         run: |
@@ -427,6 +438,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Generate Arch package metadata
         run: |
           docker run --rm \

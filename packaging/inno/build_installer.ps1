@@ -3,8 +3,9 @@ param(
     [string]$ProxySource = "$PSScriptRoot\..\payload\proxy",
     [string]$SdrSharpSource = "$PSScriptRoot\..\payload\sdrsharp",
     [string]$SdrSharpApiRoot = "$PSScriptRoot\..\payload\sdrsharp-api",
-    [string]$IqBridgeProject = "$PSScriptRoot\..\..\plugins\sdrsharp-bridge",
+    [string]$IqBridgeProject = "$PSScriptRoot\..\..\external\TinyDoppler\plugin",
     [string]$InnoSetup = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
+    [ValidatePattern('^[A-Za-z0-9_-]*$')][string]$BuildSuffix = '',
     [switch]$RebuildDsp,
     [string]$RuntimeRoot = 'C:\ProgramData\radioconda'
 )
@@ -43,6 +44,10 @@ if ($RebuildDsp) {
 if (-not (Test-Path -LiteralPath (
         Join-Path $DecoderSource 'ASRTU_SatnogsUploader.exe'))) {
     throw "SatNOGS uploader not found in decoder payload: $DecoderSource"
+}
+if (-not (Test-Path -LiteralPath (
+        Join-Path $DecoderSource 'TinyDoppler.exe'))) {
+    throw "Tiny Doppler not found in decoder payload: $DecoderSource"
 }
 
 # Rebuild the legacy SDR# bridge using Roslyn from Visual Studio Build Tools.
@@ -99,9 +104,10 @@ if (-not $versionLine) {
 }
 $appVersion = $versionLine.Matches[0].Groups[1].Value
 
-& $InnoSetup "/DAppVersion=$appVersion" (Join-Path $PSScriptRoot 'ASRTU1_Receiver_Setup.iss')
+& $InnoSetup "/DAppVersion=$appVersion" "/DAppBuildSuffix=$BuildSuffix" `
+    (Join-Path $PSScriptRoot 'ASRTU1_Receiver_Setup.iss')
 if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
 
-$installer = Join-Path $PSScriptRoot "dist\ASRTU_Series_Receiver_Setup_${appVersion}.exe"
+$installer = Join-Path $PSScriptRoot "dist\ASRTU_Series_Receiver_Setup_${appVersion}${BuildSuffix}.exe"
 Write-Host "Installer: $installer"
 Get-Item -LiteralPath $installer | Select-Object FullName, Length, LastWriteTime

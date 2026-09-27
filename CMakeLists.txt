@@ -10,7 +10,6 @@ string(REPLACE "." "," ASRTU_VERSION_COMMA ${PROJECT_VERSION})
 set_source_files_properties(
     apps/dsp/demod.rc
     apps/launcher/launcher.rc
-    apps/doppler/doppler.rc
     apps/proxy-wrapper/proxy_wrapper.rc
     apps/satnogs-uploader/satnogs_uploader.rc
     PROPERTIES COMPILE_DEFINITIONS
@@ -185,15 +184,6 @@ if(UNIX AND NOT APPLE)
         RENAME asrtu-series-receiver.png)
 endif()
 
-add_library(asrtu_sgp4 STATIC
-    third_party/sgp4/sgp4.c
-)
-target_include_directories(asrtu_sgp4 PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/sgp4)
-if(MSVC)
-    target_compile_options(asrtu_sgp4 PRIVATE /w)
-endif()
-
 add_executable(ASRTU1_Launcher
     apps/launcher/suite_launcher.cpp
     libs/common/translation.cpp
@@ -204,9 +194,7 @@ add_executable(ASRTU1_Launcher
     apps/dsp/application_icons.qrc
 )
 target_include_directories(ASRTU1_Launcher PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/libs/common
-    ${CMAKE_CURRENT_SOURCE_DIR}/apps/doppler
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/sgp4)
+    ${CMAKE_CURRENT_SOURCE_DIR}/libs/common)
 target_link_libraries(ASRTU1_Launcher PRIVATE
     Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network)
 if(WIN32)
@@ -226,40 +214,19 @@ target_compile_definitions(ASRTU1_Launcher PRIVATE
     ASRTU_VERSION="${PROJECT_VERSION}")
 asrtu_enable_strict_warnings(ASRTU1_Launcher)
 
-add_executable(ASRTU_Doppler
-    apps/doppler/main.cpp
-    apps/doppler/satellite_tracker_dialog.cpp
-    apps/doppler/satellite_tracker_dialog.h
-    libs/common/translation.cpp
-    libs/common/translation.h
-    third_party/sgp4/sgp4.h
-    apps/launcher/launcher_resources.qrc
-    apps/dsp/application_icons.qrc
-)
-target_include_directories(ASRTU_Doppler PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/libs/common
-    ${CMAKE_CURRENT_SOURCE_DIR}/apps/doppler
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/sgp4)
-target_link_libraries(ASRTU_Doppler PRIVATE
-    asrtu_sgp4
-    Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network)
-if(WIN32)
-    set_target_properties(ASRTU_Doppler PROPERTIES WIN32_EXECUTABLE TRUE)
-    target_sources(ASRTU_Doppler PRIVATE
-        apps/doppler/doppler.rc
-    )
-    target_link_libraries(ASRTU_Doppler PRIVATE Qt5::WinMain)
-    target_compile_definitions(ASRTU_Doppler PRIVATE
-        NOMINMAX WIN32_LEAN_AND_MEAN)
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/external/TinyDoppler/CMakeLists.txt")
+    message(FATAL_ERROR
+        "Tiny Doppler submodule is missing. Run: git submodule update --init --recursive")
 endif()
-if(MSVC)
-    target_compile_options(ASRTU_Doppler PRIVATE /W4 /permissive- /utf-8)
+add_subdirectory(external/TinyDoppler)
+target_compile_definitions(TinyDoppler PRIVATE TINY_DOPPLER_RECEIVER_BUILD)
+target_sources(TinyDoppler PRIVATE assets/doppler/receiver_presets.qrc)
+if(TARGET tiny_catalog_test)
+    target_sources(tiny_catalog_test PRIVATE assets/doppler/receiver_presets.qrc)
+    target_compile_definitions(tiny_catalog_test PRIVATE TINY_DOPPLER_RECEIVER_BUILD)
 endif()
-target_compile_definitions(ASRTU_Doppler PRIVATE
-    ASRTU_VERSION="${PROJECT_VERSION}")
-asrtu_enable_strict_warnings(ASRTU_Doppler)
 
-install(TARGETS ASRTU1_Launcher ASRTU_Doppler
+install(TARGETS ASRTU1_Launcher
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(DIRECTORY assets/translations/
     DESTINATION ${CMAKE_INSTALL_BINDIR}/translations

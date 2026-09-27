@@ -287,12 +287,19 @@ bool startDoppler(double longitude, double latitude, double altitude,
 {
 	const QString executable =
 	    QDir(decoderDirectory())
-		.filePath(executableName(QStringLiteral("ASRTU_Doppler")));
-	const QStringList arguments{
-	    QStringLiteral("--longitude"), QString::number(longitude, 'f', 6),
-	    QStringLiteral("--latitude"),  QString::number(latitude, 'f', 6),
-	    QStringLiteral("--altitude"),  QString::number(altitude, 'f', 2),
-	    QStringLiteral("--satellite"), satellite};
+		.filePath(executableName(QStringLiteral("TinyDoppler")));
+	QStringList arguments{QStringLiteral("--integrated"),
+			      QStringLiteral("--longitude"),
+			      QString::number(longitude, 'f', 6),
+			      QStringLiteral("--latitude"),
+			      QString::number(latitude, 'f', 6),
+			      QStringLiteral("--altitude"),
+			      QString::number(altitude, 'f', 2),
+			      QStringLiteral("--satellite"),
+			      satellite};
+	const QString language = explicitLanguageArgument();
+	if (!language.isEmpty())
+		arguments.append(language);
 	return startProgram(executable, arguments, decoderDirectory(), {},
 			    false, processId, error);
 }

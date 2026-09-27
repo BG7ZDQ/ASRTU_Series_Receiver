@@ -70,7 +70,7 @@ Languages: **中文** · [English](README_EN.md) · [日本語](README_JA.md)
 
 ### 7. 卫星跟踪与自动多普勒
 
-点击 **卫星跟踪与自动多普勒** 打开独立窗口。程序会下载并合并设置中的全部 TLE 来源，然后可选择卫星和频率预设，也可输入自定义下行频率。确认方位角、仰角、距离和 TLE 历元合理后，再在 SDR# 插件中开启自动多普勒。
+点击 **卫星跟踪与自动多普勒** 打开 Tiny Doppler。可管理卫星的 NORAD 编号、名称及多组频率，添加或调整星历来源（支持 TLE 与 GP/OMM JSON）；设置保存在用户配置目录。确认方位角、仰角、距离和星历日期合理后，再在 SDR# 插件中开启自动多普勒。
 
 自动多普勒只负责修正接收频率，不代表已经成功解码；最终仍以 `SYNCED`、FEC 帧和日志为准。
 
@@ -91,9 +91,9 @@ Languages: **中文** · [English](README_EN.md) · [日本語](README_JA.md)
 
 ## 目录
 
-- `apps/` — DSP 接收器、启动器、多普勒窗口与代理包装器
+- `apps/` — DSP 接收器、启动器与代理包装器
 - `libs/` — 解调/FEC 数据链和公共代码
-- `plugins/` — SDR# 本地 RAW I/Q 与多普勒桥接插件
+- `external/TinyDoppler/` — 独立维护的 [Tiny Doppler](https://github.com/BG7ZDQ/TinyDoppler) 子模块，含跟踪应用、SDR# 插件及接口文档；源码检出需初始化子模块
 - `assets/` — 品牌图、程序图标、界面资源与翻译
 - `third_party/` — 保留上游许可的第三方源码
 - `packaging/inno/` — Inno Setup 安装脚本

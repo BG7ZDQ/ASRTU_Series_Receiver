@@ -15,7 +15,7 @@
 更新源字符串后，使用 Qt 5 的 `lupdate` 重新扫描，再运行映射脚本和 `lrelease`：
 
 ```powershell
-lupdate apps\dsp\*.cpp apps\dsp\*.h apps\launcher\*.cpp apps\doppler\*.cpp apps\satnogs-uploader\*.cpp apps\satnogs-uploader\*.h -ts assets\translations\asrtu_en.ts assets\translations\asrtu_ja.ts
+lupdate apps\dsp\*.cpp apps\dsp\*.h apps\launcher\*.cpp apps\satnogs-uploader\*.cpp apps\satnogs-uploader\*.h -ts assets\translations\asrtu_en.ts assets\translations\asrtu_ja.ts
 python tools\fill_asrtu_en.py
 python tools\fill_asrtu_ja.py
 lrelease assets\translations\asrtu_en.ts -qm assets\translations\asrtu_en.qm
@@ -23,3 +23,7 @@ lrelease assets\translations\asrtu_ja.ts -qm assets\translations\asrtu_ja.qm
 ```
 
 新增语言时复制 TS 文件、填写翻译，并在 `installSystemTranslation` 中加入 locale 到文件名的映射。不要把用户输入、卫星名称、呼号或协议字段送入翻译系统。
+
+Tiny Doppler 使用子模块内的 `assets/translations/tiny_en.ts` 和
+`tiny_ja.ts`，在子模块中运行 `lupdate app -ts assets/translations/tiny_en.ts assets/translations/tiny_ja.ts`
+及 `lrelease` 后提交。启动器会把用户选择的语言传给 Tiny Doppler。

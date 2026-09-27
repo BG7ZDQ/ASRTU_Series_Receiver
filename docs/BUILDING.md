@@ -33,10 +33,14 @@ job 中把同一份最新便携包组装为 Inno Setup 安装器。
 
 ## SDR# 插件
 
-插件面向兼容旧版插件 API 的 SDR#，需要合法取得的 SDR# API 程序集：
+多普勒应用和 SDR# 插件维护在独立的
+[Tiny Doppler](https://github.com/BG7ZDQ/TinyDoppler) 仓库中。
+首次获取主工程时使用 `git clone --recurse-submodules`；已有检出执行
+`git submodule update --init --recursive`。插件面向兼容旧版插件 API 的
+SDR#，需要兼容的 SDR# API 程序集：
 
 ```powershell
-.\plugins\sdrsharp-bridge\build_legacy.ps1 `
+.\external\TinyDoppler\plugin\build_legacy.ps1 `
   -SdrSharpApiRoot C:\path\to\SDRSharp `
   -Configuration Release
 ```
@@ -44,7 +48,7 @@ job 中把同一份最新便携包组装为 Inno Setup 安装器。
 ## Linux
 
 Linux 可以构建 `ASRTU1_Launcher`、`ASRTU1_Demod_CQt`、
-`ASRTU_Doppler`、`ASRTU_UploadProxy` 和跨平台的
+`TinyDoppler`、`ASRTU_UploadProxy` 和跨平台的
 `ASRTU_SatnogsUploader`。Windows 代理包装器、SDR# 插件和
 Inno Setup 安装器不会生成。Linux 原生上传代理会反序列化 GNU Radio PMT
 PDU，并拒绝非 223 字节的遥测帧；它不使用 Windows 旧代理的固定头偏移。

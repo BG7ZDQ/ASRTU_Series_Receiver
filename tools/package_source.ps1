@@ -35,7 +35,7 @@ Copy-Item -LiteralPath (Join-Path $repositoryRoot 'docs') -Destination $releaseR
 
 Copy-Item -LiteralPath (Join-Path $repositoryRoot 'build_installer.ps1') `
     -Destination $releaseRoot
-foreach ($directory in @('apps', 'libs', 'plugins', 'assets', 'packaging',
+foreach ($directory in @('apps', 'libs', 'assets', 'packaging',
                           'third_party', 'tests', 'tools')) {
     $source = Join-Path $repositoryRoot $directory
     $destination = Join-Path $releaseRoot $directory
@@ -46,11 +46,24 @@ foreach ($directory in @('apps', 'libs', 'plugins', 'assets', 'packaging',
     } | Copy-Item -Destination $destination -Recurse
 }
 
+$tinySource = Join-Path $repositoryRoot 'external\TinyDoppler'
+if (-not (Test-Path -LiteralPath (Join-Path $tinySource 'CMakeLists.txt'))) {
+    throw 'Tiny Doppler submodule is missing; run git submodule update --init --recursive.'
+}
+$tinyDestination = Join-Path $releaseRoot 'external\TinyDoppler'
+New-Item -ItemType Directory -Force -Path $tinyDestination | Out-Null
+foreach ($item in @('.github', '.gitignore', 'CMakeLists.txt', 'LICENSE',
+                    'README.md', 'THIRD_PARTY.md', 'app', 'assets', 'docs',
+                    'plugin', 'tests', 'third_party')) {
+    Copy-Item -LiteralPath (Join-Path $tinySource $item) `
+        -Destination $tinyDestination -Recurse
+}
+
 foreach ($generatedPath in @(
     'packaging\inno\stage',
     'packaging\inno\dist',
-    'plugins\sdrsharp-bridge\bin',
-    'plugins\sdrsharp-bridge\obj'
+    'external\TinyDoppler\plugin\bin',
+    'external\TinyDoppler\plugin\obj'
 )) {
     $target = [IO.Path]::GetFullPath((Join-Path $releaseRoot $generatedPath))
     $safeRoot = [IO.Path]::GetFullPath($releaseRoot).TrimEnd('\') + '\'

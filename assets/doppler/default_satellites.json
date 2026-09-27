@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "catalogRevision": 3,
+  "sources": [
+    "https://celestrak.org/NORAD/elements/gp.php?CATNR=61781&FORMAT=TLE",
+    "https://celestrak.org/NORAD/elements/gp.php?CATNR=100465&FORMAT=JSON",
+    "https://celestrak.org/NORAD/elements/gp.php?CATNR=100469&FORMAT=JSON"
+  ],
+  "satellites": [
+    {
+      "norad": 61781,
+      "name": "ASRTU-1 (AO-123)",
+      "frequenciesHz": [435400000, 436210000],
+      "selectedHz": 435400000
+    },
+    {
+      "norad": 100469,
+      "name": "BY04",
+      "frequenciesHz": [437443000],
+      "selectedHz": 437443000
+    },
+    {
+      "norad": 100465,
+      "name": "JAMX01",
+      "frequenciesHz": [435500000, 435075000],
+      "selectedHz": 435500000
+    }
+  ]
+}
