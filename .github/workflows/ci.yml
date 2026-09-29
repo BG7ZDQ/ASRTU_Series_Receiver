@@ -37,6 +37,8 @@ jobs:
         run: |
           docker run --rm --volume "$PWD:/work:ro" --workdir /work \
             rhysd/actionlint:1.7.12 -color
+      - name: Test package ABI checker
+        run: python3 -m unittest discover -s ci/tests -v
       - name: Check changed C and C++ formatting
         run: |
           BASE_SHA=${{ steps.base.outputs.sha }}
@@ -105,6 +107,7 @@ jobs:
             -DASRTU_BUILD_BENCHMARK=OFF \
             -DASRTU_STRICT_WARNINGS=ON \
             -DBUILD_TESTING=ON \
+            -DTINY_DOPPLER_TEST_QPA_PLATFORM=minimal \
             -DCMAKE_C_FLAGS="${{ matrix.c_flags }}" \
             -DCMAKE_CXX_FLAGS="${{ matrix.cxx_flags }}" \
             -DCMAKE_EXE_LINKER_FLAGS="${{ matrix.link_flags }}"
@@ -331,31 +334,7 @@ jobs:
         run: ci/build_appimage.sh build-package "$ASRTU_OOT_PREFIX" dist/appimage
       - name: Enforce Ubuntu 22.04 glibc baseline
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          import subprocess
-
-          maximum = (2, 35)
-          incompatible = []
-          for path in Path('dist/appimage/AppDir').rglob('*'):
-              if not path.is_file():
-                  continue
-              result = subprocess.run(
-                  ['readelf', '--version-info', str(path)],
-                  capture_output=True, text=True, check=False)
-              if result.returncode:
-                  continue
-              versions = [tuple(map(int, match)) for match in
-                          re.findall(r'GLIBC_(\d+)\.(\d+)', result.stdout)]
-              if versions and max(versions) > maximum:
-                  incompatible.append((str(path), max(versions)))
-          for path, version in incompatible:
-              print(f'{path} requires GLIBC_{version[0]}.{version[1]}')
-          if incompatible:
-              raise SystemExit('AppImage exceeds Ubuntu 22.04 glibc baseline')
-          print('AppImage glibc baseline is compatible with Ubuntu 22.04')
-          PY
+          python3 ci/check_linux_abi.py dist/appimage/AppDir dist/appimage/*.AppImage
       - name: Verify AppImage startup
         run: |
           appimage=$(find dist/appimage -maxdepth 1 -name '*.AppImage' -print -quit)
@@ -370,6 +349,15 @@ jobs:
             --longitude 0 --latitude 0 --altitude 0 \
             --screenshot "$uploader_shot"
           test -s "$uploader_shot"
+          doppler_shot="$RUNNER_TEMP/asrtu-linux-doppler.png"
+          XDG_CONFIG_HOME="$RUNNER_TEMP/asrtu-doppler-config" \
+            XDG_DATA_HOME="$RUNNER_TEMP/asrtu-doppler-data" \
+            LD_LIBRARY_PATH="$appdir/usr/lib" \
+            QT_PLUGIN_PATH="$appdir/usr/plugins" \
+            timeout 30 xvfb-run --auto-servernum \
+            "$appdir/usr/bin/TinyDoppler" \
+            --screenshot-catalog "$doppler_shot"
+          test -s "$doppler_shot"
           XDG_CONFIG_HOME="$RUNNER_TEMP/asrtu-config" \
             XDG_DATA_HOME="$RUNNER_TEMP/asrtu-data" \
             timeout 30 xvfb-run --auto-servernum "$appimage" \

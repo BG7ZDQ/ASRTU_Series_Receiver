@@ -106,7 +106,8 @@ Linux 当前范围与限制：
   和 TSan，并构建 AppImage、deb、rpm；Arch Linux 打包元数据由
   `packaging/arch/PKGBUILD` 提供并在 CI 中校验。
 - GitHub 的 AppImage、deb、rpm 发行包任务在 Ubuntu 22.04 环境中构建；
-  AppImage 还会检查打包库的 glibc 符号版本不高于 2.35。CI 构建测试
+  AppImage 还会检查内部 ELF 和最终 AppImage 启动程序的 glibc 要求不高于
+  2.35；未知的命名 ABI、私有 ABI 和无法解析的 ELF 都会使检查失败。CI 构建测试
   与发布包构建使用不同 runner，避免新系统的 ABI 混入发布包。
 - Linux 发行包属于 CI 产物，正式发布仅由 `v*` tag 触发；运行时硬件和 OOT
   模块兼容性仍需在目标发行版上实测。
@@ -122,6 +123,38 @@ Windows 专用部分。macOS 版本需要验证 Core Audio 输入、替代共享
 宣称已经提供可直接发布的 macOS 构建。
 
 ## 验证建议
+
+### Qt GUI sanitizer 测试
+
+Linux sanitizer 配置使用 `-DTINY_DOPPLER_TEST_QPA_PLATFORM=minimal`。
+Qt 5 的 `offscreen` 插件可在仅创建 `QApplication` 的对照程序中报告
+368 字节的屏幕初始化泄漏；不要为此关闭 `detect_leaks`。
+
+TinyDoppler 工作流测试注入异步模拟下载和空窗口图标，不初始化真实网络后端，
+也不触发发行版 Qt 的 PNG 并行转换线程池。仅加载原窗口图标的 Qt 对照程序
+即可复现该线程池的 TSan 报告，因此流程测试不检查这段未插桩的第三方代码。
+设置 `TINY_DOPPLER_QA_DIR` 的截图测试仍使用真实图标，应与 sanitizer 分开运行。
+此隔离不替代真实联网及界面外观测试，正式程序的网络实现和图标保持不变。
+
+若旧版 TSan 在新内核上启动即报 `unexpected memory mapping`，可在本地用
+`setarch x86_64 -R ctest --test-dir build-tsan --output-on-failure` 仅为测试进程
+固定地址布局；不要把这种启动失败视为通过，也无需修改全系统的 ASLR 设置。
+
+### Ubuntu 22.04 发行基线
+
+发行任务固定使用 `ubuntu-22.04`，不能直接拿 Ubuntu 24.04 的测试构建来打包。
+OOT 库缓存按 Ubuntu 版本隔离。静态分析和 sanitizer 仍可使用较新的 runner，
+它们的构建产物不进入发行包。
+
+本地 AppImage 打包后可执行与 CI 相同的检查：
+
+```bash
+python3 ci/check_linux_abi.py dist/appimage/AppDir dist/appimage/*.AppImage
+```
+
+符号检查只是必要条件，还需在 22.04 上启动实际产物。CI 在 22.04 发行任务中
+验证启动器、SatNOGS 窗口和 TinyDoppler 卫星管理窗口；声卡与实际接收另行实测。
+历史发行包不会因修改 CI 自动更新，需要重新构建并发布新产物。
 
 ### Arch Linux 打包工具
 

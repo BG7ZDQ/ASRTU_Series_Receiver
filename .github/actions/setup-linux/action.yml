@@ -41,6 +41,7 @@ runs:
           jq \
           qtbase5-dev \
           rpm \
+          xauth \
           xvfb
     - name: Identify Ubuntu version for the OOT cache
       id: ubuntu-version
