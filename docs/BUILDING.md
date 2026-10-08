@@ -114,13 +114,67 @@ Linux 当前范围与限制：
 - `benchmark_main.cpp` 使用 Windows 进程统计 API，非 Windows 默认关闭
   `ASRTU_BUILD_BENCHMARK`。
 
-## macOS（移植基础，尚未验证）
+## macOS（已验证：Apple Silicon，macOS 26）
 
-解码核心使用 C++17、Qt 5 和 GNU Radio，可作为 macOS 移植基础；但当前完整
-应用仍包含 WinMM 声卡枚举、Windows 共享内存、SDR# 插件和 Inno Setup 等
-Windows 专用部分。macOS 版本需要验证 Core Audio 输入、替代共享内存传输，
-并在可用的 GNU Radio 3.10/OOT 模块上重新验证 DSP 与应用打包。当前仓库不
-宣称已经提供可直接发布的 macOS 构建。
+macOS 与 Linux 共用同一套源码路径：实时输入经 GNU Radio `audio` 组件走 Core
+Audio，声卡列表由 `libs/common/audio_devices.cpp` 枚举（启动器下拉列表的第 N 项
+即 `--audio-device N`），文件回放使用树内 `WavIqSource`，上传代理为
+`ASRTU_UploadProxy --gui`。WinMM 采集、SDR# 共享内存桥接与 SDR# 预设按钮仅在
+Windows 上可用；SDR# 预设按钮在其他平台显示为禁用。
+
+依赖全部来自 conda-forge，且必须放在同一个环境中：
+
+```bash
+conda create -n asrtu-receiver -c conda-forge \
+    gnuradio "qwt=6.2.0" zeromq boost-cpp cmake ninja pkg-config
+conda activate asrtu-receiver
+```
+
+注意 `qwt` 的版本：conda-forge 的 `qwt 6.3.0` 链接 Qt 6，而 `gnuradio-qtgui`
+链接 Qt 5，两者同时载入会在 `QApplication` 构造时因 Objective-C 类重复而崩溃。
+`qwt=6.2.0` 是 Qt 5 构建，也会把 `gnuradio` 解析到与之匹配的版本。
+
+OOT 模块按 `ci/oot-dependencies.env` 中固定的修订构建，Linux 脚本可直接使用，
+仅需环境中有 `ninja`：
+
+```bash
+export PATH="$CONDA_PREFIX/bin:$PATH" CMAKE_PREFIX_PATH="$CONDA_PREFIX"
+ci/install_linux_oot.sh /path/to/oot-prefix /path/to/oot-work
+```
+
+配置、构建与测试（11 个 ctest 用例，含 Tiny Doppler）：
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_PREFIX_PATH="$CONDA_PREFIX;/path/to/oot-prefix" \
+    -DASRTU_LILACSAT_INCLUDE_DIR=/path/to/oot-prefix/include \
+    -DASRTU_LILACSAT_LIBRARY=/path/to/oot-prefix/lib/libgnuradio-lilacsat.dylib \
+    -DBUILD_TESTING=ON
+cmake --build build -j8
+ctest --test-dir build
+```
+
+打包为自包含的 `.app`。脚本会收集全部可执行文件、依赖 dylib 与 Qt 插件，重写
+install name 与 rpath，并校验包内没有任何指向包外的引用：
+
+```bash
+ci/build_macos_app.py --build-dir build --output dist \
+    --dep-prefix "$CONDA_PREFIX" --dep-prefix /path/to/oot-prefix
+```
+
+已知限制与注意事项：
+
+- 仅 ad-hoc 签名。在另一台 Mac 上首次打开需右键“打开”，或执行
+  `xattr -dr com.apple.quarantine "ASRTU Series Receiver.app"`；正式分发需要
+  Developer ID 签名与公证。
+- `Info.plist` 中的 `CFBundleLocalizations` 不可省略。macOS 上 `QLocale::system()`
+  只返回应用包声明过的本地化语言；缺少该键时中文系统也会被报告为 `en_US`，
+  界面随之变成英文。打包脚本已声明 `zh-Hans`、`zh-Hant`、`zh`、`en`、`ja`。
+- 仅产出 arm64 可执行文件；Intel Mac 需在 `osx-64` 环境中另行构建。
+- 应用固定使用浅色外观（`Info.plist` 中的 `NSRequiresAquaSystemAppearance`）。
+  界面样式表只为卡片和按钮指定了浅色背景，多数标签文字沿用系统调色板；
+  在深色模式下这些文字会变成白色，与白色卡片无法区分。
+- 上传代理同一时间只允许一个窗口；重复点击“启动上传”会提示代理已在运行。
 
 ## 验证建议
 
