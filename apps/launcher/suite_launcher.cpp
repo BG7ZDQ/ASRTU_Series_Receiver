@@ -590,9 +590,15 @@ bool startSuite(bool enableProxy, int inputMode, const QString &wavPath,
 			return false;
 	}
 	qint64 decoderPid = 0;
+	// Unix socket paths are limited to 104 bytes on macOS, and Qt resolves
+	// the temporary directory to /private/var/folders/<xx>/<hash>/T (56
+	// bytes) before prepending it to the name.  A 32-digit UUID made the
+	// path 106 bytes, so listen() failed in its length guard and reported a
+	// stale errno.  Sixteen digits keep the path at 90 bytes and are plenty
+	// for a per-launch handshake name.
 	const QString readyServerName =
 	    QStringLiteral("ASRTU_DSP_READY_%1")
-		.arg(QUuid::createUuid().toString(QUuid::Id128));
+		.arg(QUuid::createUuid().toString(QUuid::Id128).left(16));
 	QLocalServer readyServer;
 	if (!readyServer.listen(readyServerName)) {
 		if (proxyPid > 0)
