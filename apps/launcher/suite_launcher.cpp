@@ -48,6 +48,7 @@
 #include <QWidget>
 
 #include "translation.h"
+#include "audio_devices.h"
 #include "runtime_paths.h"
 #include "version.h"
 
@@ -499,6 +500,30 @@ bool startSuite(bool enableProxy, int inputMode, const QString &wavPath,
 	const QString decoder =
 	    QDir(decoderDirectory())
 		.filePath(executableName(QStringLiteral("ASRTU1_Demod_CQt")));
+#ifdef Q_OS_MAC
+	// A Mac with no capture hardware at all (a Mac mini, say) fails deep
+	// inside CoreAudio for every live mode with "audio_osx_source::setup".
+	// Refuse up front with an actionable message instead.
+	if (wavPath.isEmpty() && inputMode != 2 &&
+	    asrtu::macInputDevices().empty()) {
+		*error = QCoreApplication::translate(
+		    "ASRTU", "本机没有任何音频输入设备，无法进行实时接收。\n"
+			     "请连接电台音频接口或 USB 声卡后重试，"
+			     "或使用“播放录音文件”回放已有录音。");
+		return false;
+	}
+	// The sound-card list can go stale between selection and start, for
+	// example when an interface is unplugged.  Refuse instead of letting
+	// the decoder fail inside CoreAudio after a 15-second wait.
+	if (wavPath.isEmpty() && inputMode != 2 && audioDeviceId >= 0 &&
+	    audioDeviceId >=
+		static_cast<int>(asrtu::macInputDevices().size())) {
+		*error = QCoreApplication::translate(
+		    "ASRTU", "所选声卡已不可用（可能已被拔出或更换）。\n"
+			     "请在“声卡”列表中重新选择后再试。");
+		return false;
+	}
+#endif
 	*sessionDirectory = createSessionDirectory(error);
 	if (sessionDirectory->isEmpty())
 		return false;
@@ -1139,6 +1164,19 @@ private:
 #endif
         devices.append({QCoreApplication::translate("ASRTU", "系统默认输入设备"),
                         -1, defaultChannels});
+#ifdef Q_OS_MAC
+	// CoreAudio has no waveIn-style index. Share one enumeration with the
+	// DSP so the position shown here is the position --audio-device
+	// resolves to, and so the channel count feeds the stereo/mono guard.
+	{
+		int macId = 0;
+		for (const auto &device : asrtu::macInputDevices()) {
+			devices.append({QString::fromStdString(device.name),
+					macId, device.channels});
+			++macId;
+		}
+	}
+#endif
 #ifdef Q_OS_WIN
         const UINT count = waveInGetNumDevs();
         for (UINT id = 0; id < count; ++id) {

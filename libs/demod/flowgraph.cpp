@@ -7,6 +7,9 @@
 #ifdef _WIN32
 #include "winmm_iq_source.h"
 #endif
+#ifdef __APPLE__
+#include "audio_devices.h"
+#endif
 
 #include <gnuradio/analog/feedforward_agc_cc.h>
 #include <gnuradio/analog/sig_source.h>
@@ -323,9 +326,38 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
 	    source = winmm_iq_source_;
 	    sourceHasSecondOutput = !options.real_if_12khz;
 #else
-	    const std::string device = options.audio_device_id < 0
-					   ? std::string{}
-					   : "plughw:" + std::to_string(options.audio_device_id) + ",0";
+	    // GNU Radio's ALSA back end takes "plughw:N,0".  CoreAudio has no
+	    // such string: resolve the numeric id through the same enumeration
+	    // the launcher lists, so --audio-device selects the entry the user
+	    // picked. A negative or out-of-range id leaves the name empty,
+	    // which makes the audio back end open the platform default input.
+	    std::string device;
+#if defined(__linux__)
+	    if (options.audio_device_id >= 0)
+		    device =
+			"plughw:" + std::to_string(options.audio_device_id) +
+			",0";
+#elif defined(__APPLE__)
+	    if (options.audio_device_id >= 0) {
+		    const auto inputs = asrtu::macInputDevices();
+		    // An index past the end means the selected interface is
+		    // gone. Opening the default input instead would record from
+		    // the wrong source without saying so.
+		    if (options.audio_device_id >=
+			static_cast<int>(inputs.size()))
+			    throw std::runtime_error(
+				"Audio input device " +
+				std::to_string(options.audio_device_id) +
+				" is not available (" +
+				std::to_string(inputs.size()) +
+				" input devices found); select the sound card "
+				"again in "
+				"the launcher");
+		    device = inputs[static_cast<std::size_t>(
+					options.audio_device_id)]
+				 .name;
+	    }
+#endif
 	    source = gr::audio::source::make(48000, device, true);
 	    sourceHasSecondOutput = !options.real_if_12khz;
 #endif
