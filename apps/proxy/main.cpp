@@ -6,7 +6,9 @@
 
 #include <QApplication>
 #include <QCoreApplication>
+#include <QDir>
 #include <QFileInfo>
+#include <QLockFile>
 #include <QGuiApplication>
 #include <QString>
 #include <QStringList>
@@ -77,6 +79,15 @@ int main(int argc, char *argv[])
 		    QStringLiteral("ASRTU Upload Proxy"));
 		QTranslator translator;
 		installSystemTranslation(application, translator);
+		// One upload window per machine.  A second instance would
+		// subscribe to the same ZMQ stream and upload every frame a
+		// second time.  Exit with 3, as ASRTU_SatnogsUploader does, so
+		// the launcher can report that the proxy is already running
+		// instead of a startup failure.
+		QLockFile instanceLock(QDir::temp().filePath(
+		    QStringLiteral("asrtu-upload-proxy.lock")));
+		if (!instanceLock.tryLock(100))
+			return 3;
 		return runProxy(application, true);
 	}
 	QCoreApplication application(argc, argv);

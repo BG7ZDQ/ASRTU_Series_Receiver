@@ -467,6 +467,15 @@ bool startProxy(const QString& launchLog, qint64* processId, QString* error)
 		return false;
 	quint32 exitCode = 0;
 	if (!processSurvivedStartup(proxyPid, 1200, &exitCode)) {
+#ifndef Q_OS_WIN
+		// ASRTU_UploadProxy exits 3 when another instance already holds
+		// its lock, the same convention as ASRTU_SatnogsUploader.
+		if (exitCode == 3) {
+			*error = QCoreApplication::translate(
+			    "ASRTU", "上传代理已在运行；不会重复启动。");
+			return false;
+		}
+#endif
 		*error = QCoreApplication::translate(
 			     "ASRTU", "上传代理启动后立即退出（代码 %1）。")
 			     .arg(exitCode);
