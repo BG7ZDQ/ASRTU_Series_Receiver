@@ -1412,6 +1412,35 @@ private:
     QLabel* status_label_ = nullptr;
     QString status_text_;
 };
+
+#ifndef Q_OS_WIN
+// SDRSharp.exe ships only in the Windows payload.  Keep the preset button
+// so the tool grid keeps its shape, but disable it and say why.  The
+// button is a local of the LauncherWindow constructor, so find it by its
+// caption once the window exists.
+void disableSdrSharpPresetWhenAbsent(QWidget &window)
+{
+	if (QFileInfo::exists(sdrSharpDirectory() +
+			      QStringLiteral("/SDRSharp.exe")))
+		return;
+	const QString caption =
+	    QCoreApplication::translate("ASRTU", "打开 SDR# 遥测预设");
+	for (QPushButton *button : window.findChildren<QPushButton *>()) {
+		if (button->text() != caption)
+			continue;
+		button->setEnabled(false);
+		// The launcher stylesheet has no :disabled rule, so a disabled
+		// tool button would keep its normal colours.  Grey it out
+		// explicitly.
+		button->setStyleSheet(QStringLiteral(
+		    "QPushButton:disabled { color:#98a2ad; background:#f3f5f7; "
+		    "border-color:#e3e8ee; }"));
+		button->setToolTip(QCoreApplication::translate(
+		    "ASRTU",
+		    "未检测到 SDR#，此功能仅在 Windows payload 中提供。"));
+	}
+}
+#endif
 }
 
 int main(int argc, char *argv[])
@@ -1475,6 +1504,9 @@ int main(int argc, char *argv[])
 	}
 
 	LauncherWindow window;
+#ifndef Q_OS_WIN
+	disableSdrSharpPresetWhenAbsent(window);
+#endif
 	window.show();
 	const int screenshotOption =
 	    application.arguments().indexOf(QStringLiteral("--screenshot"));
