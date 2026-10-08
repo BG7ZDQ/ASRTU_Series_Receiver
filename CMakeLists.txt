@@ -115,6 +115,8 @@ set(ASRTU_DEMOD_SOURCES
     libs/common/translation.h
     libs/common/runtime_paths.cpp
     libs/common/runtime_paths.h
+    libs/common/audio_devices.cpp
+    libs/common/audio_devices.h
     apps/dsp/application_icons.qrc
 )
 if(WIN32)
@@ -162,6 +164,10 @@ if(NOT WIN32)
     target_link_libraries(ASRTU1_Demod_CQt PRIVATE
         gnuradio::gnuradio-audio)
 endif()
+if(APPLE)
+    target_link_libraries(ASRTU1_Demod_CQt PRIVATE
+        "-framework CoreAudio" "-framework CoreFoundation")
+endif()
 if(WIN32)
     target_link_libraries(ASRTU1_Demod_CQt PRIVATE Qt5::WinMain winmm)
 endif()
@@ -190,6 +196,8 @@ add_executable(ASRTU1_Launcher
     libs/common/translation.h
     libs/common/runtime_paths.cpp
     libs/common/runtime_paths.h
+    libs/common/audio_devices.cpp
+    libs/common/audio_devices.h
     apps/launcher/launcher_resources.qrc
     apps/dsp/application_icons.qrc
 )
@@ -197,6 +205,10 @@ target_include_directories(ASRTU1_Launcher PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/libs/common)
 target_link_libraries(ASRTU1_Launcher PRIVATE
     Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network)
+if(APPLE)
+    target_link_libraries(ASRTU1_Launcher PRIVATE
+        "-framework CoreAudio" "-framework CoreFoundation")
+endif()
 if(WIN32)
     set_target_properties(ASRTU1_Launcher PROPERTIES WIN32_EXECUTABLE TRUE)
     target_sources(ASRTU1_Launcher PRIVATE

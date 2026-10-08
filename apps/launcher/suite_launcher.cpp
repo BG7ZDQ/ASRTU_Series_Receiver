@@ -48,6 +48,7 @@
 #include <QWidget>
 
 #include "translation.h"
+#include "audio_devices.h"
 #include "runtime_paths.h"
 #include "version.h"
 
@@ -466,6 +467,15 @@ bool startProxy(const QString& launchLog, qint64* processId, QString* error)
 		return false;
 	quint32 exitCode = 0;
 	if (!processSurvivedStartup(proxyPid, 1200, &exitCode)) {
+#ifndef Q_OS_WIN
+		// ASRTU_UploadProxy exits 3 when another instance already holds
+		// its lock, the same convention as ASRTU_SatnogsUploader.
+		if (exitCode == 3) {
+			*error = QCoreApplication::translate(
+			    "ASRTU", "上传代理已在运行；不会重复启动。");
+			return false;
+		}
+#endif
 		*error = QCoreApplication::translate(
 			     "ASRTU", "上传代理启动后立即退出（代码 %1）。")
 			     .arg(exitCode);
@@ -499,6 +509,30 @@ bool startSuite(bool enableProxy, int inputMode, const QString &wavPath,
 	const QString decoder =
 	    QDir(decoderDirectory())
 		.filePath(executableName(QStringLiteral("ASRTU1_Demod_CQt")));
+#ifdef Q_OS_MAC
+	// A Mac with no capture hardware at all (a Mac mini, say) fails deep
+	// inside CoreAudio for every live mode with "audio_osx_source::setup".
+	// Refuse up front with an actionable message instead.
+	if (wavPath.isEmpty() && inputMode != 2 &&
+	    asrtu::macInputDevices().empty()) {
+		*error = QCoreApplication::translate(
+		    "ASRTU", "本机没有任何音频输入设备，无法进行实时接收。\n"
+			     "请连接电台音频接口或 USB 声卡后重试，"
+			     "或使用“播放录音文件”回放已有录音。");
+		return false;
+	}
+	// The sound-card list can go stale between selection and start, for
+	// example when an interface is unplugged.  Refuse instead of letting
+	// the decoder fail inside CoreAudio after a 15-second wait.
+	if (wavPath.isEmpty() && inputMode != 2 && audioDeviceId >= 0 &&
+	    audioDeviceId >=
+		static_cast<int>(asrtu::macInputDevices().size())) {
+		*error = QCoreApplication::translate(
+		    "ASRTU", "所选声卡已不可用（可能已被拔出或更换）。\n"
+			     "请在“声卡”列表中重新选择后再试。");
+		return false;
+	}
+#endif
 	*sessionDirectory = createSessionDirectory(error);
 	if (sessionDirectory->isEmpty())
 		return false;
@@ -556,9 +590,15 @@ bool startSuite(bool enableProxy, int inputMode, const QString &wavPath,
 			return false;
 	}
 	qint64 decoderPid = 0;
+	// Unix socket paths are limited to 104 bytes on macOS, and Qt resolves
+	// the temporary directory to /private/var/folders/<xx>/<hash>/T (56
+	// bytes) before prepending it to the name.  A 32-digit UUID made the
+	// path 106 bytes, so listen() failed in its length guard and reported a
+	// stale errno.  Sixteen digits keep the path at 90 bytes and are plenty
+	// for a per-launch handshake name.
 	const QString readyServerName =
 	    QStringLiteral("ASRTU_DSP_READY_%1")
-		.arg(QUuid::createUuid().toString(QUuid::Id128));
+		.arg(QUuid::createUuid().toString(QUuid::Id128).left(16));
 	QLocalServer readyServer;
 	if (!readyServer.listen(readyServerName)) {
 		if (proxyPid > 0)
@@ -1139,6 +1179,19 @@ private:
 #endif
         devices.append({QCoreApplication::translate("ASRTU", "系统默认输入设备"),
                         -1, defaultChannels});
+#ifdef Q_OS_MAC
+	// CoreAudio has no waveIn-style index. Share one enumeration with the
+	// DSP so the position shown here is the position --audio-device
+	// resolves to, and so the channel count feeds the stereo/mono guard.
+	{
+		int macId = 0;
+		for (const auto &device : asrtu::macInputDevices()) {
+			devices.append({QString::fromStdString(device.name),
+					macId, device.channels});
+			++macId;
+		}
+	}
+#endif
 #ifdef Q_OS_WIN
         const UINT count = waveInGetNumDevs();
         for (UINT id = 0; id < count; ++id) {
@@ -1365,6 +1418,35 @@ private:
     QLabel* status_label_ = nullptr;
     QString status_text_;
 };
+
+#ifndef Q_OS_WIN
+// SDRSharp.exe ships only in the Windows payload.  Keep the preset button
+// so the tool grid keeps its shape, but disable it and say why.  The
+// button is a local of the LauncherWindow constructor, so find it by its
+// caption once the window exists.
+void disableSdrSharpPresetWhenAbsent(QWidget &window)
+{
+	if (QFileInfo::exists(sdrSharpDirectory() +
+			      QStringLiteral("/SDRSharp.exe")))
+		return;
+	const QString caption =
+	    QCoreApplication::translate("ASRTU", "打开 SDR# 遥测预设");
+	for (QPushButton *button : window.findChildren<QPushButton *>()) {
+		if (button->text() != caption)
+			continue;
+		button->setEnabled(false);
+		// The launcher stylesheet has no :disabled rule, so a disabled
+		// tool button would keep its normal colours.  Grey it out
+		// explicitly.
+		button->setStyleSheet(QStringLiteral(
+		    "QPushButton:disabled { color:#98a2ad; background:#f3f5f7; "
+		    "border-color:#e3e8ee; }"));
+		button->setToolTip(QCoreApplication::translate(
+		    "ASRTU",
+		    "未检测到 SDR#，此功能仅在 Windows payload 中提供。"));
+	}
+}
+#endif
 }
 
 int main(int argc, char *argv[])
@@ -1428,6 +1510,9 @@ int main(int argc, char *argv[])
 	}
 
 	LauncherWindow window;
+#ifndef Q_OS_WIN
+	disableSdrSharpPresetWhenAbsent(window);
+#endif
 	window.show();
 	const int screenshotOption =
 	    application.arguments().indexOf(QStringLiteral("--screenshot"));
