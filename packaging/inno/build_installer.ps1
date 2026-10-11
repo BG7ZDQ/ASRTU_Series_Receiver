@@ -72,6 +72,75 @@ Copy-Item -Path (Join-Path $DecoderSource '*') -Destination $decoderStage -Recur
 Copy-Item -Path (Join-Path $ProxySource '*') -Destination $proxyStage -Recurse -Force
 Copy-Item -Path (Join-Path $SdrSharpSource '*') -Destination $sdrSharpStage -Recurse -Force
 
+# Split the Qt applications, copying only their transitive runtime dependencies.
+$objdump = Get-Command 'objdump.exe' -ErrorAction SilentlyContinue
+$dumpbin = Get-Command 'dumpbin.exe' -ErrorAction SilentlyContinue
+if (-not $objdump -and -not $dumpbin) {
+    $vswhere = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe'
+    if (Test-Path -LiteralPath $vswhere) {
+        $dumpbinPath = & $vswhere -latest -products '*' -find 'VC\Tools\MSVC\**\bin\Hostx64\x64\dumpbin.exe' |
+            Select-Object -First 1
+        if ($dumpbinPath) { $dumpbin = Get-Command $dumpbinPath }
+    }
+}
+if (-not $objdump -and -not $dumpbin) {
+    throw 'objdump.exe or Visual Studio dumpbin.exe is required to package module dependencies.'
+}
+
+function Get-ModuleDependencies([string]$Binary) {
+    if ($objdump) {
+        $output = & $objdump.Source -p $Binary 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "Cannot inspect dependencies: $Binary" }
+        $output | Select-String 'DLL Name:\s*(.+)$' |
+            ForEach-Object { $_.Matches[0].Groups[1].Value.Trim() }
+    } else {
+        $output = & $dumpbin.Source /DEPENDENTS $Binary 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "Cannot inspect dependencies: $Binary" }
+        $output | Select-String '^\s+([A-Za-z0-9_.-]+\.dll)\s*$' |
+            ForEach-Object { $_.Matches[0].Groups[1].Value }
+    }
+}
+
+foreach ($module in @(
+    @{ Directory = 'launcher'; Executable = 'ASRTU1_Launcher.exe' },
+    @{ Directory = 'doppler'; Executable = 'TinyDoppler.exe' },
+    @{ Directory = 'satnogs-uploader'; Executable = 'ASRTU_SatnogsUploader.exe' }
+)) {
+    $moduleStage = Join-Path $stage $module.Directory
+    New-Item -ItemType Directory -Path $moduleStage -Force | Out-Null
+    $moduleExe = Join-Path $moduleStage $module.Executable
+    Copy-Item -LiteralPath (Join-Path $DecoderSource $module.Executable) -Destination $moduleExe
+    foreach ($resource in @('platforms', 'imageformats', 'translations', 'qt.conf')) {
+        $resourceSource = Join-Path $DecoderSource $resource
+        if (Test-Path -LiteralPath $resourceSource) {
+            Copy-Item -LiteralPath $resourceSource -Destination $moduleStage -Recurse -Force
+        }
+    }
+    $queue = [Collections.Generic.Queue[string]]::new()
+    Get-ChildItem -LiteralPath $moduleStage -File -Recurse |
+        Where-Object { $_.Extension -in @('.exe', '.dll') } |
+        ForEach-Object { $queue.Enqueue($_.FullName) }
+    $processed = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    while ($queue.Count -gt 0) {
+        $binary = $queue.Dequeue()
+        if (-not $processed.Add($binary)) { continue }
+        foreach ($dependency in (Get-ModuleDependencies $binary)) {
+            $source = Join-Path $DecoderSource $dependency
+            $destination = Join-Path $moduleStage $dependency
+            if (Test-Path -LiteralPath $source) {
+                if (-not (Test-Path -LiteralPath $destination)) {
+                    Copy-Item -LiteralPath $source -Destination $destination
+                }
+                $queue.Enqueue($destination)
+            } elseif ($dependency -notlike 'api-ms-win-*' -and
+                      -not (Test-Path -LiteralPath (Join-Path ([Environment]::SystemDirectory) $dependency))) {
+                throw "Missing dependency for $($module.Directory): $dependency"
+            }
+        }
+    }
+    Remove-Item -LiteralPath (Join-Path $decoderStage $module.Executable)
+}
+
 $sdrSharpPlugins = Join-Path $sdrSharpStage 'Plugins'
 New-Item -ItemType Directory -Path $sdrSharpPlugins -Force | Out-Null
 Copy-Item -LiteralPath $iqBridgePlugin `
@@ -94,6 +163,66 @@ if (Test-Path -LiteralPath $sdrSharpConfig) {
     [IO.File]::WriteAllText($sdrSharpConfig, $configText,
         [Text.UTF8Encoding]::new($false))
 }
+
+# Keep one physical copy of DLLs shared by the Qt modules. The launcher keeps
+# its own startup copy; child modules receive common\ through PATH.
+$runtimeModules = @($decoderStage, $proxyStage, (Join-Path $stage 'doppler'),
+    (Join-Path $stage 'satnogs-uploader'))
+$filesByHash = @{}
+foreach ($moduleRoot in $runtimeModules) {
+    foreach ($file in (Get-ChildItem -LiteralPath $moduleRoot -File -Recurse)) {
+        if ($file.DirectoryName -ne $moduleRoot -or $file.Extension -ne '.dll') { continue }
+        $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+        if (-not $filesByHash.ContainsKey($hash)) { $filesByHash[$hash] = @() }
+        $filesByHash[$hash] += $file
+    }
+}
+foreach ($sameFiles in $filesByHash.Values) {
+    if ($sameFiles.Count -lt 2) { continue }
+    $canonical = $sameFiles[0]
+$commonFile = Join-Path (Join-Path $stage 'launcher') $canonical.Name
+    Copy-Item -LiteralPath $canonical.FullName -Destination $commonFile -Force
+    foreach ($file in $sameFiles) {
+        Remove-Item -LiteralPath $file.FullName -Force
+    }
+}
+
+# Inno Setup merges entries with the same source path, not identical content
+# at different paths. Reuse one source per hash while preserving destinations.
+$coreFileEntries = [Collections.Generic.List[string]]::new()
+$coreFileEntries.Add('; Generated by build_installer.ps1. Do not edit.')
+$hardLinkEntries = [Collections.Generic.List[string]]::new()
+$sourceByHash = @{}
+$duplicateBytes = 0L
+$coreModuleNames = @('decoder', 'launcher', 'doppler', 'satnogs-uploader', 'proxy')
+foreach ($moduleName in @('decoder', 'launcher', 'doppler', 'satnogs-uploader', 'proxy')) {
+    $moduleRoot = Join-Path $stage $moduleName
+    foreach ($file in (Get-ChildItem -LiteralPath $moduleRoot -File -Recurse | Sort-Object FullName)) {
+        $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+        $relativePath = [IO.Path]::GetRelativePath($stage, $file.FullName)
+        if ($sourceByHash.ContainsKey($hash)) {
+            $sourcePath = $sourceByHash[$hash]
+            $duplicateBytes += $file.Length
+            $sourceRelativePath = $sourcePath.Substring(6)
+            $hardLinkEntries.Add(
+                "  CollapseHardLink(ExpandConstant('{app}\$relativePath'), ExpandConstant('{app}\$sourceRelativePath'));" )
+        } else {
+            $sourcePath = "stage\$relativePath"
+            $sourceByHash[$hash] = $sourcePath
+        }
+        if ($coreModuleNames -contains $moduleName) {
+            $destinationDirectory = [IO.Path]::GetDirectoryName($relativePath)
+            $coreFileEntries.Add(
+                "Source: `"$sourcePath`"; DestDir: `"{app}\$destinationDirectory`"; DestName: `"$($file.Name)`"; Components: core; Flags: ignoreversion")
+        }
+    }
+}
+[IO.File]::WriteAllLines((Join-Path $stage 'core-files.iss'), $coreFileEntries,
+    [Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllLines((Join-Path $stage 'core-hardlinks.iss'), $hardLinkEntries,
+    [Text.UTF8Encoding]::new($false))
+Write-Host ("Core payload: {0} unique files; {1:N1} MiB of duplicate data reused." -f
+    $sourceByHash.Count, ($duplicateBytes / 1MB))
 
 # Resolve the application version from CMakeLists.txt so the installer never
 # drifts from the single PROJECT_VERSION source.

@@ -95,7 +95,8 @@ void notifyRunningDspAudioDevice(int deviceId)
 
 QString decoderDirectory()
 {
-    return QCoreApplication::applicationDirPath();
+    return asrtu::moduleDirectory(QStringLiteral("decoder"),
+        executableName(QStringLiteral("ASRTU1_Demod_CQt")));
 }
 
 QString proxyDirectory()
@@ -139,7 +140,7 @@ QList<SatelliteProfile> satelliteProfiles()
         {QStringLiteral("BY-04uv"), QStringLiteral("ws://119.45.229.166"), 98247},
         // JAMX has no MMT upload server; telemetry is submitted by the native
         // SatNOGS uploader, so the WebSocket target stays empty.
-        {QStringLiteral("JAMX"), QString(), 98248}
+        {QStringLiteral("JAMX"), QString(), 100470}
     };
 }
 
@@ -242,8 +243,11 @@ bool startProgram(const QString& executable, const QStringList& arguments,
         process.setStandardOutputFile(outputLog, QIODevice::Append);
         process.setStandardErrorFile(outputLog, QIODevice::Append);
     }
-    if (!outputLog.isEmpty() || visibleConsole) {
+    {
         QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+        const QString common = asrtu::commonDirectory();
+        const QString path = environment.value(QStringLiteral("PATH"));
+        environment.insert(QStringLiteral("PATH"), common + QDir::listSeparator() + path);
         environment.insert(QStringLiteral("TERM"), QStringLiteral("xterm"));
         environment.insert(QStringLiteral("TERMINFO"),
                            QDir(workingDirectory).filePath(QStringLiteral("terminfo")));
@@ -277,8 +281,10 @@ bool startSdrSharp(qint64* processId, QString* error)
 bool startDoppler(double longitude, double latitude, double altitude,
 		  const QString &satellite, qint64 *processId, QString *error)
 {
+	const QString directory = asrtu::moduleDirectory(QStringLiteral("doppler"),
+	    executableName(QStringLiteral("TinyDoppler")));
 	const QString executable =
-	    QDir(decoderDirectory())
+	    QDir(directory)
 		.filePath(executableName(QStringLiteral("TinyDoppler")));
 	QStringList arguments{QStringLiteral("--integrated"),
 			      QStringLiteral("--longitude"),
@@ -292,7 +298,7 @@ bool startDoppler(double longitude, double latitude, double altitude,
 	const QString language = explicitLanguageArgument();
 	if (!language.isEmpty())
 		arguments.append(language);
-	return startProgram(executable, arguments, decoderDirectory(), {},
+	return startProgram(executable, arguments, directory, {},
 			    false, processId, error);
 }
 
@@ -388,7 +394,9 @@ bool startSatnogsUploader(const QString& satellite, int noradId,
                           double latitude, double altitude,
                           qint64* processId, QString* error)
 {
-    const QString uploader = QDir(decoderDirectory()).filePath(
+    const QString directory = asrtu::moduleDirectory(QStringLiteral("satnogs-uploader"),
+        executableName(QStringLiteral("ASRTU_SatnogsUploader")));
+    const QString uploader = QDir(directory).filePath(
         executableName(QStringLiteral("ASRTU_SatnogsUploader")));
     QStringList arguments{
         QStringLiteral("--satellite"), satellite,
@@ -401,7 +409,7 @@ bool startSatnogsUploader(const QString& satellite, int noradId,
     if (!language.isEmpty())
         arguments.append(language);
     qint64 uploaderPid = 0;
-    if (!startProgram(uploader, arguments, decoderDirectory(), {}, false,
+    if (!startProgram(uploader, arguments, directory, {}, false,
                       &uploaderPid, error)) {
         return false;
     }

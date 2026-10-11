@@ -47,7 +47,7 @@
   </MemoryEntry>
   <MemoryEntry>
     <IsFavourite>true</IsFavourite>
-    <Name>ASRTU-1 SSDV(baseband)</Name>
+    <Name>ASRTU-1 Image</Name>
     <GroupName>Satellites</GroupName>
     <Frequency>436210000</Frequency>
     <DetectorType>RAW</DetectorType>
@@ -56,9 +56,9 @@
   </MemoryEntry>
   <MemoryEntry>
     <IsFavourite>true</IsFavourite>
-    <Name>BY-04 TLM</Name>
+    <Name>BY70-4 TLM / Image</Name>
     <GroupName>Satellites</GroupName>
-    <Frequency>437443000</Frequency>
+    <Frequency>437433000</Frequency>
     <DetectorType>RAW</DetectorType>
     <Shift>0</Shift>
     <FilterBandwidth>24000</FilterBandwidth>

@@ -18,12 +18,13 @@ VersionInfoProductName=ASRTU Series Satellite Receiver and Upload
 DefaultDirName={localappdata}\Programs\ASRTU_Series_Receiver
 DefaultGroupName={cm:ProgramGroup}
 UninstallDisplayName={cm:ProgramGroup}
-UninstallDisplayIcon={app}\decoder\ASRTU1_Launcher.exe
+UninstallDisplayIcon={app}\launcher\ASRTU1_Launcher.exe
 SetupIconFile=..\..\assets\branding\astro_series_launcher.ico
 OutputDir=dist
 OutputBaseFilename=ASRTU_Series_Receiver_Setup_{#AppVersion}{#AppBuildSuffix}
 Compression=lzma2/ultra64
 SolidCompression=yes
+MergeDuplicateFiles=yes
 WizardStyle=modern
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
@@ -120,7 +121,7 @@ Name: "core"; Description: "{cm:CoreComponent}"; Types: full compact custom; Fla
 Name: "sdrsharp"; Description: "{cm:SdrComponent}"; Types: full
 
 [Files]
-Source: "stage\decoder\*"; DestDir: "{app}\decoder"; Components: core; Flags: ignoreversion recursesubdirs createallsubdirs
+#include "stage\core-files.iss"
 Source: "stage\proxy\*"; DestDir: "{app}\proxy"; Excludes: "config.cfg"; Components: core; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "stage\sdrsharp\*"; DestDir: "{app}\sdrsharp"; Components: sdrsharp; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "README.txt"; DestDir: "{app}"; Components: core; Flags: ignoreversion
@@ -132,20 +133,31 @@ Source: "THIRD_PARTY_NOTICE.en.txt"; DestDir: "{app}"; DestName: "THIRD_PARTY_NO
 Source: "THIRD_PARTY_NOTICE.ja.txt"; DestDir: "{app}"; DestName: "THIRD_PARTY_NOTICE.txt"; Languages: japanese; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\{cm:ProgramGroup}\{cm:LauncherShortcut}"; Filename: "{app}\decoder\ASRTU1_Launcher.exe"; WorkingDir: "{app}\decoder"
-Name: "{autodesktop}\{cm:LauncherShortcut}"; Filename: "{app}\decoder\ASRTU1_Launcher.exe"; WorkingDir: "{app}\decoder"
-Name: "{autoprograms}\{cm:ProgramGroup}\{cm:SdrShortcut}"; Filename: "{app}\decoder\ASRTU1_Launcher.exe"; Parameters: "--sdrsharp"; WorkingDir: "{app}\decoder"; Components: sdrsharp
+Name: "{autoprograms}\{cm:ProgramGroup}\{cm:LauncherShortcut}"; Filename: "{app}\launcher\ASRTU1_Launcher.exe"; WorkingDir: "{app}\launcher"
+Name: "{autodesktop}\{cm:LauncherShortcut}"; Filename: "{app}\launcher\ASRTU1_Launcher.exe"; WorkingDir: "{app}\launcher"
+Name: "{autoprograms}\{cm:ProgramGroup}\{cm:SdrShortcut}"; Filename: "{app}\launcher\ASRTU1_Launcher.exe"; Parameters: "--sdrsharp"; WorkingDir: "{app}\launcher"; Components: sdrsharp
 
 [INI]
+Filename: "{app}\launcher\ui-language.ini"; Section: "UI"; Key: "Language"; String: "{cm:UiLanguage}"; Flags: uninsdeleteentry uninsdeletesectionifempty
 Filename: "{app}\decoder\ui-language.ini"; Section: "UI"; Key: "Language"; String: "{cm:UiLanguage}"; Flags: uninsdeleteentry uninsdeletesectionifempty
+Filename: "{app}\doppler\ui-language.ini"; Section: "UI"; Key: "Language"; String: "{cm:UiLanguage}"; Flags: uninsdeleteentry uninsdeletesectionifempty
+Filename: "{app}\satnogs-uploader\ui-language.ini"; Section: "UI"; Key: "Language"; String: "{cm:UiLanguage}"; Flags: uninsdeleteentry uninsdeletesectionifempty
 
 [Run]
-Filename: "{app}\decoder\ASRTU1_Launcher.exe"; Parameters: "--language={cm:UiLanguage}"; Description: "{cm:OpenLauncher}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\launcher\ASRTU1_Launcher.exe"; Parameters: "--language={cm:UiLanguage}"; Description: "{cm:OpenLauncher}"; Flags: nowait postinstall skipifsilent
+
+[InstallDelete]
+Type: files; Name: "{app}\decoder\ASRTU1_Launcher.exe"
+Type: files; Name: "{app}\decoder\TinyDoppler.exe"
+Type: files; Name: "{app}\decoder\ASRTU_SatnogsUploader.exe"
 
 [UninstallDelete]
 Type: files; Name: "{app}\proxy\config.cfg"
 Type: dirifempty; Name: "{app}\proxy"
 Type: dirifempty; Name: "{app}\decoder"
+Type: dirifempty; Name: "{app}\launcher"
+Type: dirifempty; Name: "{app}\doppler"
+Type: dirifempty; Name: "{app}\satnogs-uploader"
 Type: dirifempty; Name: "{app}"
 
 [Code]
@@ -153,6 +165,39 @@ var
   StationPage: TInputQueryWizardPage;
   StationValuesLoaded: Boolean;
   ParamNickname, ParamLongitude, ParamLatitude, ParamAltitude: String;
+
+function CreateHardLink(lpFileName, lpExistingFileName: String;
+  lpSecurityAttributes: Integer): Boolean;
+  external 'CreateHardLinkW@kernel32.dll stdcall';
+
+function CollapseHardLink(const Destination, Source: String): Boolean;
+var
+  Temporary: String;
+begin
+  Result := False;
+  if (not FileExists(Destination)) or (not FileExists(Source)) then
+    Exit;
+  Temporary := Destination + '.asrtu-hardlink';
+  DeleteFile(Temporary);
+  if not CreateHardLink(Temporary, Source, 0) then
+    Exit;
+  if not DeleteFile(Destination) then
+  begin
+    DeleteFile(Temporary);
+    Exit;
+  end;
+  if not RenameFile(Temporary, Destination) then
+  begin
+    DeleteFile(Temporary);
+    Exit;
+  end;
+  Result := True;
+end;
+
+procedure CollapseDuplicateFiles;
+begin
+#include "stage\core-hardlinks.iss"
+end;
 
 function ConfigStringValue(const Text, Key, Fallback: String): String;
 var
@@ -323,6 +368,9 @@ var
 begin
   if CurStep <> ssPostInstall then
     Exit;
+
+  { Keep module-local DLL paths while sharing identical runtime files on disk. }
+  CollapseDuplicateFiles;
 
   { The launcher owns the runtime satellite selection. ASRTU-1 is only the
     initial profile shown on first launch. }

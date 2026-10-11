@@ -379,6 +379,11 @@ asrtu_enable_strict_warnings(ASRTU1_Benchmark)
 endif()
 
 if(BUILD_TESTING)
+    add_executable(ASRTU1_ModulePathsTest tests/module_paths_test.cpp
+        libs/common/runtime_paths.cpp libs/common/runtime_paths.h)
+    target_include_directories(ASRTU1_ModulePathsTest PRIVATE libs/common)
+    target_link_libraries(ASRTU1_ModulePathsTest PRIVATE Qt5::Core)
+    add_test(NAME module_paths COMMAND ASRTU1_ModulePathsTest)
     add_executable(ASRTU1_LanguageTest tests/language_test.cpp
         libs/common/translation.cpp libs/common/translation.h)
     target_include_directories(ASRTU1_LanguageTest PRIVATE libs/common)

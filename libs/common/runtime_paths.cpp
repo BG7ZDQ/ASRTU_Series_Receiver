@@ -8,6 +8,35 @@
 namespace asrtu
 {
 
+QString moduleDirectory(const QString& module, const QString& executable,
+                        const QString& applicationDirectory)
+{
+    const QDir current(applicationDirectory.isEmpty()
+                           ? QCoreApplication::applicationDirPath()
+                           : applicationDirectory);
+    // Build trees and portable packages keep executables together.
+    if (QFileInfo::exists(current.filePath(executable)))
+        return current.absolutePath();
+    const QDir sibling(current.absoluteFilePath(QStringLiteral("../") + module));
+    if (QFileInfo::exists(sibling.filePath(executable)))
+        return QDir::cleanPath(sibling.absolutePath());
+    const QDir common(current.absoluteFilePath(QStringLiteral("../common")));
+    if (QFileInfo::exists(common.filePath(executable)))
+        return QDir::cleanPath(common.absolutePath());
+    return current.absolutePath();
+}
+
+QString commonDirectory(const QString& applicationDirectory)
+{
+    const QDir current(applicationDirectory.isEmpty()
+                           ? QCoreApplication::applicationDirPath()
+                           : applicationDirectory);
+    // The launcher directory is the shared runtime directory in installed
+    // layouts.  Keeping this as the application directory also works for
+    // flat build and portable layouts.
+    return QDir::cleanPath(current.absolutePath());
+}
+
 QString recordsDirectory()
 {
 #ifdef Q_OS_WIN
