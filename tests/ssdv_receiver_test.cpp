@@ -156,6 +156,19 @@ int main(int argc, char* argv[])
     }
     rawFrames.close();
 
+    // A packet arriving late after demodulator re-lock must not create a
+    // second image merely because its counter is below the current maximum.
+    const QByteArray lateFrame = rawData.mid(223, 223);
+    receiver.ingestFrame(lateFrame);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    {
+        std::lock_guard<std::mutex> lock(resultMutex);
+        if (last.path != result.path) {
+            std::cerr << "Late SSDV packet incorrectly split the image\n";
+            return 16;
+        }
+    }
+
     // The fixture begins at packet 34 and ends at packet 59. Replaying it
     // exercises a non-zero counter regression (59 -> 34): this must create a
     // fresh image even though its image ID and packet contents are unchanged.

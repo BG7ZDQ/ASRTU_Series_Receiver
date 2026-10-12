@@ -743,10 +743,18 @@ static char ssdv_have_marker_data(ssdv_t *s)
 	uint8_t *d = s->marker_data;
 	size_t l = s->marker_len;
 	int i;
+
+	/* Marker lengths come from the received JPEG bitstream. Validate every
+	 * variable-length table before walking it; an underflow here used to turn
+	 * a damaged marker into an out-of-bounds read and corrupt later RST state. */
+	if (d == NULL)
+		return(SSDV_ERROR);
 	
 	switch(s->marker)
 	{
 	case J_SOF0:
+		if (l < 6 || l < (size_t)(6 + 3 * d[5]))
+			return(SSDV_ERROR);
 		s->width  = (d[3] << 8) | d[4];
 		s->height = (d[1] << 8) | d[2];
 		
@@ -847,6 +855,8 @@ static char ssdv_have_marker_data(ssdv_t *s)
 		break;
 	
 	case J_SOS:
+		if (l < 1 || l < (size_t)(1 + 2 * d[0] + 3))
+			return(SSDV_ERROR);
 		fprintf(stderr, "Components: %i\n", d[0]);
 		
 		/* The image must have 1 or 3 components (Y'Cb'Cr) */
@@ -895,6 +905,8 @@ static char ssdv_have_marker_data(ssdv_t *s)
 		while(l > 0)
 		{
 			int i, j;
+			if (l < 17)
+				return(SSDV_ERROR);
 			
 			switch(d[0])
 			{
@@ -907,6 +919,8 @@ static char ssdv_have_marker_data(ssdv_t *s)
 			/* Skip to the next DHT table */
 			for(j = 17, i = 1; i <= 16; i++)
 				j += d[i];
+			if ((size_t)j > l)
+				return(SSDV_ERROR);
 			
 			l -= j;
 			d += j;
@@ -917,6 +931,8 @@ static char ssdv_have_marker_data(ssdv_t *s)
 		s->stbl_len += l;
 		while(l > 0)
 		{
+			if (l < 65)
+				return(SSDV_ERROR);
 			switch(d[0])
 			{
 			case 0x00: s->sdqt[0] = d; break;
@@ -930,6 +946,8 @@ static char ssdv_have_marker_data(ssdv_t *s)
 		break;
 	
 	case J_DRI:
+		if (l < 2)
+			return(SSDV_ERROR);
 		s->dri = (d[0] << 8) + d[1];
 		fprintf(stderr, "Reset interval: %i blocks\n", s->dri);
 		break;

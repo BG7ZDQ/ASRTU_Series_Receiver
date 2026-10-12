@@ -60,7 +60,8 @@ bool plausibleSsdvHeader(const ssdv_packet_info_t& info)
 	    info.mcu_count > std::uint32_t(std::numeric_limits<std::uint16_t>::max()))
 		return false;
 	if (info.mcu_id != 0xFFFF &&
-	    (info.mcu_id >= info.mcu_count || info.mcu_offset >= 205))
+	    (info.mcu_id >= info.mcu_count ||
+	     info.mcu_offset >= 205))
 		return false;
 	return true;
 }
@@ -232,7 +233,6 @@ bool SsdvReceiver::processFrame(const QByteArray& frame,
 		std::uint8_t(frame[1]);
 	QByteArray packet = frame.mid(kCcsdsShortHeaderSize, kDslwpPacketSize);
 	int errors = 0;
-
 	if (packet.size() != kDslwpPacketSize)
 		return false;
 
@@ -277,12 +277,12 @@ bool SsdvReceiver::processFrame(const QByteArray& frame,
 		firstPacket->second != packet;
 	const bool duplicatePacket =
 		existing != packets_.end() && existing->second == packet;
-	// SSDV packets arrive in counter order on the live downlink. Any validated
-	// decrease therefore starts a new image/pass, even when the image ID is
-	// reused and the previous EOI packet was lost. Do not use CRC-failed packet
-	// headers for this decision because a damaged counter could split an image.
+	// A late packet after demodulator re-lock is common and must not split the
+	// image. A validated return to the first packet (or packet zero) indicates
+	// a repeated pass, while an isolated decrease is simply out of order data.
 	const bool packetCounterRegressed = (crcValid || jamxCrcValid) &&
-		!packets_.empty() && info.packet_id < packets_.rbegin()->first;
+		!packets_.empty() && info.packet_id < packets_.rbegin()->first &&
+		(info.packet_id == packets_.begin()->first || info.packet_id == 0);
 	const bool sessionChanged = image_id_ != int(info.image_id) ||
 		spacecraft_header_ != spacecraftHeader || width_ != info.width ||
 		height_ != info.height || quality_ != info.quality ||
