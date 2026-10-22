@@ -2470,6 +2470,8 @@ class LauncherWindow final : public QWidget
 		    MMSYSERR_NOERROR) {
 			defaultChannels = int(defaultCaps.wChannels);
 		}
+#elif defined(Q_OS_MACOS)
+		defaultChannels = asrtu::macDefaultInputChannels();
 #endif
 		devices.append(
 		    {QCoreApplication::translate("ASRTU", "系统默认输入设备"),

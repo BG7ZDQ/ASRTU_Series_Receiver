@@ -65,7 +65,8 @@ class SsdvReceiver final
 	bool savePacketBin();
 	void appendRawFrame(const QByteArray &frame);
 	void clearState(std::uint64_t generation);
-	bool isCurrentGeneration(std::uint64_t generation);
+	bool isCurrentGeneration(std::uint64_t generation,
+				 bool allowStopped = false);
 
 	QString session_directory_;
 	QString image_path_;

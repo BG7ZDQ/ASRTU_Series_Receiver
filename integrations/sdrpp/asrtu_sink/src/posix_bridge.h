@@ -56,7 +56,7 @@ class SharedBridge
 		error_.clear();
 		fd_ = open(path.c_str(),
 			   O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600);
-		struct stat info{};
+		struct stat info = {};
 		if (fd_ < 0 || fstat(fd_, &info) || !S_ISREG(info.st_mode) ||
 		    info.st_uid != getuid())
 			return fail("Cannot open private ASRTU I/Q mapping.");

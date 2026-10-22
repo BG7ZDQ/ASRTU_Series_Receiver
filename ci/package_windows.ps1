@@ -1,8 +1,6 @@
 # ci/package_windows.ps1
-# Packages the Windows CI build into a self-contained portable folder and a
-# zip artifact that runs on a stock Windows machine without conda, GNU Radio
-# or radioconda installed. The folder mirrors what the local radioconda
-# packaging script (packaging/package_portable.ps1) produces: every
+# Collects the Windows CI runtime directory for the Inno Setup installer.
+# No portable release ZIP is produced. The directory includes every
 # transitive DLL dependency is copied next to the executables, together with
 # the Qt platform/image-format plugins and the built-in translations.
 #

@@ -69,6 +69,19 @@ std::string deviceName(AudioDeviceID deviceId)
 namespace asrtu
 {
 
+int macDefaultInputChannels()
+{
+	AudioObjectPropertyAddress address{
+	    kAudioHardwarePropertyDefaultInputDevice,
+	    kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
+	AudioDeviceID device = kAudioObjectUnknown;
+	UInt32 size = sizeof(device);
+	if (AudioObjectGetPropertyData(kAudioObjectSystemObject, &address, 0,
+				       nullptr, &size, &device) != noErr)
+		return 0;
+	return inputChannelCount(device);
+}
+
 std::vector<AudioInputDeviceInfo> macInputDevices()
 {
 	AudioObjectPropertyAddress address{kAudioHardwarePropertyDevices,
@@ -107,6 +120,10 @@ std::vector<AudioInputDeviceInfo> macInputDevices()
 
 namespace asrtu
 {
+int macDefaultInputChannels()
+{
+	return 0;
+}
 std::vector<AudioInputDeviceInfo> macInputDevices()
 {
 	return {};

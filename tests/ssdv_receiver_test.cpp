@@ -336,6 +336,14 @@ int main(int argc, char* argv[])
 		    batchReceiver.ingestFrame(frames.mid(offset, 223));
     batchReceiver.finish();
     const QDir batchDir(batchOutput.path());
+    QFile drained(
+	batchDir.filePath(QStringLiteral("SSDV_received_frames223.bin")));
+    if (!drained.open(QIODevice::ReadOnly) ||
+	drained.readAll() != data + nextImage) {
+	    std::cerr << "Shutdown dropped frames from an in-flight batch\n";
+	    return 21;
+    }
+
     const auto batchImages =
 	batchDir.entryList({QStringLiteral("*.jpg")}, QDir::Files);
     if (batchImages.size() != 2)

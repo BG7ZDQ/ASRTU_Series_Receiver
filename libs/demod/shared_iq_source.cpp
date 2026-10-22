@@ -123,7 +123,7 @@ bool SharedIqSource::openMapping()
 		return true;
 	mapping_ =
 	    open(asrtu::iqPath().c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
-	struct stat info{};
+	struct stat info = {};
 	if (mapping_ < 0 || fstat(mapping_, &info) || !S_ISREG(info.st_mode) ||
 	    info.st_uid != getuid() ||
 	    info.st_size != static_cast<off_t>(kMappingBytes)) {

@@ -142,11 +142,13 @@ void SsdvReceiver::clear()
 	queue_cv_.notify_one();
 }
 
-bool SsdvReceiver::isCurrentGeneration(std::uint64_t generation)
+bool SsdvReceiver::isCurrentGeneration(std::uint64_t generation,
+				       bool allowStopped)
 {
 	std::lock_guard<std::mutex> lock(queue_mutex_);
 
-	return !stop_requested_ && queue_generation_ == generation;
+	return (allowStopped || !stop_requested_) &&
+	       queue_generation_ == generation;
 }
 
 void SsdvReceiver::workerLoop()
@@ -236,7 +238,10 @@ void SsdvReceiver::workerLoop()
 
 		bool urgent = false;
 		for (const auto &queued : batch) {
-			if (!isCurrentGeneration(queued.generation))
+			// finish() may arrive after this batch left the queue.
+			// Drain those frames too, while still honoring an
+			// explicit clear().
+			if (!isCurrentGeneration(queued.generation, true))
 				continue;
 			if (processFrame(queued.frame, queued.generation)) {
 				dirty = true;
@@ -247,8 +252,11 @@ void SsdvReceiver::workerLoop()
 		const auto now = std::chrono::steady_clock::now();
 		if (dirty && (urgent || now >= nextRefresh)) {
 			savePacketBin();
-			rebuildImage();
-			dirty = false;
+			// Keep dirty state when shutdown suppresses the UI
+			// refresh; the shutdown branch still owes us the final
+			// on-disk image.
+			if (rebuildImage())
+				dirty = false;
 			nextRefresh = std::chrono::steady_clock::now() +
 				      kPreviewRefreshInterval;
 		}
