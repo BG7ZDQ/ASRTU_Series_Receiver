@@ -72,11 +72,15 @@ if (-not (Test-Path -LiteralPath $satnogsUploader)) {
 }
 Copy-Item -LiteralPath $satnogsUploader `
     -Destination (Join-Path $OutputDir 'ASRTU_SatnogsUploader.exe') -Force
-if (Test-Path -LiteralPath (Join-Path $sdrppSource 'sdrpp.exe')) {
+$sdrppIncluded = Test-Path -LiteralPath (Join-Path $sdrppSource 'sdrpp.exe')
+if ($sdrppIncluded) {
     # Keep SDR++ beside the launcher in the portable tree. The launcher checks
     # this location before any stale per-user installation.
     Copy-Item -LiteralPath $sdrppSource -Destination (Join-Path $OutputDir 'sdrpp') -Recurse -Force
     & (Join-Path $repoRoot 'integrations/sdrpp/configure_windows.ps1') -SdrppRoot (Join-Path $OutputDir 'sdrpp')
+}
+else {
+    Write-Warning "SDR++ payload not found at $sdrppSource; the portable package will not include SDR++."
 }
 # The chooser offers the SDR# preset too. Ship the complete runtime and
 # updated bridge, not just a card pointing at a missing sibling directory.
@@ -220,7 +224,8 @@ Set-Content -LiteralPath (Join-Path $OutputDir 'README.txt') -Encoding UTF8 -Val
     'ZeroMQ PUB output: tcp://127.0.0.1:5555',
     'ASRTU_SatnogsUploader.exe provides the Windows/Linux SatNOGS frame, station and server-status window.',
     'sdrpp-plugin/ contains the Windows SDR++ shared-memory I/Q and Doppler plugin source.',
-    'sdrpp/ contains the optional portable SDR++ receiver. The launcher discovers it automatically.',
+    $(if ($sdrppIncluded) { 'sdrpp/ contains the optional portable SDR++ receiver. The launcher discovers it automatically.' }
+      else { 'sdrpp/ is not included in this portable package because the SDR++ payload was unavailable.' }),
     '',
     'This package contains GNU Radio, GPL-licensed OOT modules, the OpenHoshimi ASRTU soundmodem core and the DSLWP-compatible SSDV decoder.',
     'OpenHoshimi decoder credits: BG6HNY / Hyacinth Satellite Team and the upstream HIT LilacSat soundmodem authors.',

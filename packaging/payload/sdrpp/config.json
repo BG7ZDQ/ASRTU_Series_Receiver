@@ -1,0 +1,201 @@
+{
+    "bandColors":  {
+                       "amateur":  "#FF0000FF",
+                       "aviation":  "#00FF00FF",
+                       "broadcast":  "#0000FFFF",
+                       "marine":  "#00FFFFFF",
+                       "military":  "#FFFF00FF"
+                   },
+    "bandPlan":  "General",
+    "bandPlanEnabled":  true,
+    "bandPlanPos":  0,
+    "centerTuning":  false,
+    "colorMap":  "Classic",
+    "decimation":  1,
+    "fastFFT":  true,
+    "fftHeight":  300,
+    "fftHold":  false,
+    "fftHoldSpeed":  60,
+    "fftRate":  20,
+    "fftSize":  65536,
+    "fftSmoothing":  false,
+    "fftSmoothingSpeed":  100,
+    "fftWindow":  1,
+    "frequency":  436210000.0,
+    "fullWaterfallUpdate":  false,
+    "fullscreen":  false,
+    "invertIQ":  true,
+    "iqCorrection":  true,
+    "lockMenuOrder":  false,
+    "manualOffset":  0.0,
+    "max":  -65,
+    "maximized":  true,
+    "menuElements":  [
+                         {
+                             "name":  "Source",
+                             "open":  true
+                         },
+                         {
+                             "name":  "Radio",
+                             "open":  false
+                         },
+                         {
+                             "name":  "Recorder",
+                             "open":  false
+                         },
+                         {
+                             "name":  "Frequency Manager",
+                             "open":  true
+                         },
+                         {
+                             "name":  "VFO Color",
+                             "open":  false
+                         },
+                         {
+                             "name":  "Scripting",
+                             "open":  false
+                         },
+                         {
+                             "name":  "Band Plan",
+                             "open":  false
+                         },
+                         {
+                             "name":  "Display",
+                             "open":  false
+                         },
+                         {
+                             "name":  "Sinks",
+                             "open":  false
+                         },
+                         {
+                             "name":  "Theme",
+                             "open":  false
+                         },
+                         {
+                             "name":  "Module Manager",
+                             "open":  false
+                         },
+                         {
+                             "name":  "Rigctl Server",
+                             "open":  false
+                         }
+                     ],
+    "menuWidth":  412,
+    "min":  -150,
+    "moduleInstances":  {
+                            "ASRTU Bridge":  {
+                                                 "enabled":  true,
+                                                 "module":  "asrtu_sink"
+                                             },
+                            "Airspy Source":  {
+                                                  "enabled":  true,
+                                                  "module":  "airspy_source"
+                                              },
+                            "AirspyHF+ Source":  {
+                                                     "enabled":  true,
+                                                     "module":  "airspyhf_source"
+                                                 },
+                            "Audio Sink":  {
+                                               "enabled":  true,
+                                               "module":  "audio_sink"
+                                           },
+                            "BladeRF Source":  {
+                                                   "enabled":  true,
+                                                   "module":  "bladerf_source"
+                                               },
+                            "File Source":  {
+                                                "enabled":  true,
+                                                "module":  "file_source"
+                                            },
+                            "Frequency Manager":  {
+                                                      "enabled":  true,
+                                                      "module":  "frequency_manager"
+                                                  },
+                            "HackRF Source":  {
+                                                  "enabled":  true,
+                                                  "module":  "hackrf_source"
+                                              },
+                            "LimeSDR Source":  {
+                                                   "enabled":  true,
+                                                   "module":  "limesdr_source"
+                                               },
+                            "Network Sink":  {
+                                                 "enabled":  true,
+                                                 "module":  "network_sink"
+                                             },
+                            "PlutoSDR Source":  {
+                                                    "enabled":  true,
+                                                    "module":  "plutosdr_source"
+                                                },
+                            "RTL-SDR Source":  {
+                                                   "enabled":  true,
+                                                   "module":  "rtl_sdr_source"
+                                               },
+                            "RTL-TCP Source":  {
+                                                   "enabled":  true,
+                                                   "module":  "rtl_tcp_source"
+                                               },
+                            "Radio":  {
+                                          "enabled":  true,
+                                          "module":  "radio"
+                                      },
+                            "Recorder":  {
+                                             "enabled":  true,
+                                             "module":  "recorder"
+                                         },
+                            "Rigctl Server":  {
+                                                  "enabled":  false,
+                                                  "module":  "rigctl_server"
+                                              },
+                            "SDRplay Source":  {
+                                                   "enabled":  true,
+                                                   "module":  "sdrplay_source"
+                                               },
+                            "SoapySDR Source":  {
+                                                    "enabled":  true,
+                                                    "module":  "soapy_source"
+                                                },
+                            "SpyServer Source":  {
+                                                     "enabled":  true,
+                                                     "module":  "spyserver_source"
+                                                 }
+                        },
+    "modules":  [
+
+                ],
+    "modulesDirectory":  "./modules",
+    "offsets":  {
+                    "DK5AV X-Band":  -6800000000.0,
+                    "Ham-It-Up":  125000000.0,
+                    "Ku LNB (10700MHz)":  -10700000000.0,
+                    "Ku LNB (9750MHz)":  -9750000000.0,
+                    "MMDS S-band (1998MHz)":  -1998000000.0,
+                    "SpyVerter":  120000000.0
+                },
+    "resourcesDirectory":  "./res",
+    "selectedOffset":  "None",
+    "showMenu":  true,
+    "showWaterfall":  true,
+    "snrSmoothing":  false,
+    "snrSmoothingSpeed":  20,
+    "source":  "PlutoSDR",
+    "streams":  {
+                    "Radio":  {
+                                  "muted":  false,
+                                  "sink":  "ASRTU Receiver",
+                                  "volume":  1.0
+                              }
+                },
+    "theme":  "Dark",
+    "uiScale":  1.0,
+    "vfoColors":  {
+                      "Radio":  "#FFFFFF"
+                  },
+    "vfoOffsets":  {
+                       "Radio":  0.0
+                   },
+    "windowSize":  {
+                       "h":  720,
+                       "w":  1280
+                   }
+}

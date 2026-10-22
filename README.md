@@ -20,7 +20,7 @@ Languages: **中文** · [English](README_EN.md) · [日本語](README_JA.md)
 
 ### 1. 安装与首次设置
 
-1. 运行 `ASRTU_Series_Receiver_Setup_<版本号>.exe`（例如 `ASRTU_Series_Receiver_Setup_1.5.4.exe`），按需求选择是否安装随包提供的 SDR# 遥测预设。
+1. 运行 `ASRTU_Series_Receiver-<版本号>-WinInstaller(Recommend).exe`（例如 `ASRTU_Series_Receiver-1.5.4-WinInstaller(Recommend).exe`），按需求选择是否安装随包提供的 SDR# 遥测预设。
 2. 从桌面打开 **ASRTU 系列卫星启动器**。
 3. 填写呼号、经度、纬度和海拔。坐标用于卫星跟踪与多普勒计算；启动器会在本机保存设置。
 4. 根据接收链路选择“输入”。只有声卡输入模式会显示“声卡”下拉框。
@@ -29,7 +29,7 @@ Languages: **中文** · [English](README_EN.md) · [日本語](README_JA.md)
 
 | 输入模式 | 适用场景 | 信号要求 |
 | --- | --- | --- |
-| 本地共享内存 RAW 模式 I/Q 桥接（SDR# / SDR++） | 使用安装包内的任一 SDR 软件及其 ASRTU 插件 | 48 kHz 浮点复数 I/Q，共享内存与自动多普勒控制 |
+| 本地共享内存 RAW 模式 I/Q 桥接 | 使用安装包内的任一 SDR 软件及其 ASRTU 插件 | 48 kHz 浮点复数 I/Q，共享内存与自动多普勒控制 |
 | 立体声零中频 RAW 模式 I/Q 输入 | SDR 软件通过虚拟声卡输出 I/Q | 左右声道分别为 I、Q，中心频率为 0 Hz |
 | 单声道实数域 12 kHz 电台 IF 输入 | 电台、接收机或录音设备输出实数中频 | 目标信号以 +12 kHz 为中心 |
 
@@ -50,13 +50,13 @@ SDR# 与 SDR++ 使用同一个启动器输入选项和同一块共享内存。�
 ### SDR++ 共享内存桥接（Windows）
 
 在 SDR++ 中选择 RAW 模式、48 kHz 带宽，并在 Sinks 中选择 **ASRTU Receiver**。
-启动器选择 **本地共享内存 RAW 模式 I/Q 桥接（SDR# / SDR++）** 后启动接收。
+启动器选择 **本地共享内存 RAW 模式 I/Q 桥接** 后启动接收。
 打开 TinyDoppler，并在 SDR++ 插件中勾选 **Automatic Doppler tuning** 即可
 通过共享内存自动调频。音量和静音不会改变传输的 I/Q。
 
 安装包包含 PlutoSDR-M2K Windows 驱动入口。网络版 PlutoSDR 可在 SDR++ 的
 **PlutoSDR Source → IIO URI** 中填写 `ip:192.168.1.10` 这类地址，无需依赖
-自动发现。随包的 RTL-SDR 2.0.2 驱动同时用于 SDR++ 和 SDR#，支持
+自动发现。随包的 RTL-SDR Blog 1.4.0 驱动同时用于 SDR++ 和 SDR#，支持
 RTL-SDR Blog V4 / R828D。
 
 SDR++ 与新版 SDR# 插件共用互斥保护；已有桥接插件启用时，第二个实例会提示
@@ -89,7 +89,7 @@ SDR++ 与新版 SDR# 插件共用互斥保护；已有桥接插件启用时，�
 
 ### 7. 卫星跟踪与自动多普勒
 
-点击 **卫星跟踪与自动多普勒** 打开 Tiny Doppler。可管理卫星的 NORAD 编号、名称及多组频率，添加或调整星历来源（支持 TLE 与 GP/OMM JSON）；设置保存在用户配置目录。确认方位角、仰角、距离和星历日期合理后，再在 SDR# 插件中开启自动多普勒。
+点击 **卫星跟踪与自动多普勒** 打开 Tiny Doppler。可管理卫星的 NORAD 编号、名称及多组频率，添加或调整星历来源（支持 TLE 与 GP/OMM JSON）；设置保存在安装主目录（Windows）或系统配置目录（Linux/macOS）。确认方位角、仰角、距离和星历日期合理后，再在 SDR# 插件中开启自动多普勒。
 
 自动多普勒只负责修正接收频率，不代表已经成功解码；最终仍以 `SYNCED`、FEC 帧和日志为准。
 

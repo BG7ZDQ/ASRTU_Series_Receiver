@@ -40,7 +40,7 @@ UDP 或 Rigctl。新版 SDR# 插件与 SDR++ 插件使用同一所有权锁，�
 
 Windows 安装包同时包含 PlutoSDR-M2K 官方 USB 驱动文件及其管理员安装入口，
 以及 libiio 0.26 的 USB/IP 后端。SDR++ 的 Pluto 模块支持手动输入完整
-libiio URI（例如 `ip:192.168.1.10`）。SDR++ 与 SDR# 共用 rtl-sdr 2.0.2
+libiio URI（例如 `ip:192.168.1.10`）。SDR++ 与 SDR# 共用 rtl-sdr Blog 1.4.0
 驱动，以支持 RTL-SDR Blog V4 / R828D。
 
 ## 第三方再分发

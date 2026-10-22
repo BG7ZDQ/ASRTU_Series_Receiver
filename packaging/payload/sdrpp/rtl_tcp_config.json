@@ -1,0 +1,12 @@
+{
+    "biasTee": false,
+    "directSamplingMode": 0,
+    "gainIndex": 0,
+    "host": "localhost",
+    "offsetTuning": false,
+    "port": 1234,
+    "ppm": 0,
+    "rtlAGC": false,
+    "sampleRate": 2400000.0,
+    "tunerAGC": false
+}

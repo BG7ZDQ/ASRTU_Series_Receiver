@@ -1,0 +1,7 @@
+{
+    "Recorder": {
+        "audioStream": "Radio",
+        "mode": 1,
+        "recPath": "%ROOT%/recordings"
+    }
+}

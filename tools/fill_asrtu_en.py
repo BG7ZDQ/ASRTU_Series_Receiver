@@ -182,9 +182,15 @@ missing = []
 for message in tree.findall(".//message"):
     source = message.findtext("source", default="")
     translation = message.find("translation")
+    # Keep existing translations; only fill unfinished/new messages.
+    if translation is not None and translation.text and \
+            translation.get("type") != "unfinished":
+        continue
     if source not in TRANSLATIONS:
         missing.append(source)
         continue
+    if translation is None:
+        translation = ET.SubElement(message, "translation")
     translation.attrib.pop("type", None)
     translation.text = TRANSLATIONS[source]
 

@@ -14,7 +14,7 @@ plugin. The Windows launcher selects `--shared-iq-bridge` for SDR++;
    **ASRTU Bridge**). In **Radio**, choose **RAW**, with 48 kHz bandwidth.
 3. In **Sinks**, select **ASRTU Receiver** for the Radio stream. Start SDR++.
 4. In the ASRTU launcher select the single
-   **本地共享内存 RAW 模式 I/Q 桥接（SDR# / SDR++）** input and start
+   **本地共享内存 RAW 模式 I/Q 桥接** input and start
    reception.
 5. Open TinyDoppler and enable **Automatic Doppler tuning** in the sink panel.
    This preference is saved per stream in `asrtu_sink_config.json`. The plugin
@@ -29,7 +29,7 @@ On module disable/unload or stream stop, ownership and mappings are released.
 ## Drivers and PlutoSDR URI
 
 The Windows payload uses libiio 0.26 with USB and IP backends, current
-libad9361, Airspy/AirspyHF+, LimeSuite and rtl-sdr 2.0.2 libraries. The same
+libad9361, Airspy/AirspyHF+, LimeSuite and rtl-sdr Blog 1.4.0 libraries. The same
 RTL driver is installed into both SDR++ and SDR# and recognizes RTL-SDR Blog V4
 / R828D hardware.
 

@@ -21,7 +21,7 @@ Contributors: **BG7ZDQ** **BI1NWO** **BG6HNY** **BG4QBF**
 
 ### 1. Installation and initial setup
 
-1. Run `ASRTU_Series_Receiver_Setup_<version>.exe` (for example `ASRTU_Series_Receiver_Setup_1.5.4.exe`) and choose whether to install the bundled SDR# telemetry preset.
+1. Run `ASRTU_Series_Receiver-<version>-WinInstaller(Recommend).exe` (for example `ASRTU_Series_Receiver-1.5.4-WinInstaller(Recommend).exe`) and choose whether to install the bundled SDR# telemetry preset.
 2. Open **ASRTU Series Satellite Launcher** from the desktop.
 3. Enter your callsign, longitude, latitude, and altitude. These coordinates are used for satellite tracking and Doppler calculation and are stored locally.
 4. Select an input appropriate for your receiving chain. The sound-card selector is shown only for sound-card modes.
@@ -30,7 +30,7 @@ Contributors: **BG7ZDQ** **BI1NWO** **BG6HNY** **BG4QBF**
 
 | Input | Intended use | Signal format |
 | --- | --- | --- |
-| Local shared-memory RAW I/Q bridge (SDR# / SDR++) | Either bundled SDR application with its ASRTU plugin | 48 kHz complex I/Q with shared-memory Doppler control |
+| Local shared-memory RAW I/Q bridge | Either bundled SDR application with its ASRTU plugin | 48 kHz complex I/Q with shared-memory Doppler control |
 | Stereo zero-IF RAW I/Q input | SDR software feeding a virtual sound card | I and Q in the left and right channels, centered at 0 Hz |
 | Mono real 12 kHz radio IF input | Radio, receiver, or recorder real-IF output | Desired signal centered at +12 kHz |
 
@@ -44,13 +44,13 @@ only one of their ASRTU bridge plugins at a time.
 1. Click **Open SDR# Telemetry Preset**.
 2. Select the receiver in SDR#, tune the satellite downlink, and start reception.
 3. Enable the local RAW I/Q bridge in the ASRTU plugin. Enable automatic Doppler there when frequency correction is required.
-4. In the launcher, select **Local Shared-Memory RAW I/Q Bridge (SDR# / SDR++)** and click **Start Receiver**.
+4. In the launcher, select **Local Shared-Memory RAW I/Q Bridge** and click **Start Receiver**.
 
 For SDR++, use RAW demodulation at 48 kHz and select **ASRTU Receiver** as the sink.
 
 The installer includes an Analog Devices PlutoSDR-M2K Windows driver entry. For
 network PlutoSDR devices, enter a URI such as `ip:192.168.1.10` in
-**PlutoSDR Source → IIO URI**. The bundled RTL-SDR 2.0.2 driver is shared by
+**PlutoSDR Source → IIO URI**. The bundled RTL-SDR Blog 1.4.0 driver is shared by
 SDR++ and SDR# and supports RTL-SDR Blog V4 / R828D.
 
 The decoder remains `NOSYNC` until SDR# supplies samples. A stale SNR value after SDR# is paused or closed must not be interpreted as an active signal.
@@ -80,7 +80,7 @@ Keep the computer clock, callsign, and coordinates accurate. SatNOGS submission 
 
 ### 7. Tracking and automatic Doppler
 
-Click **Satellite / Doppler Tracking** to open Tiny Doppler. You can manage satellite NORAD IDs, names, and multiple frequencies, and configure TLE or GP/OMM JSON sources. Settings are saved in the user configuration directory. Verify azimuth, elevation, range, and orbit-data epoch before enabling automatic Doppler in the SDR# plugin.
+Click **Satellite / Doppler Tracking** to open Tiny Doppler. You can manage satellite NORAD IDs, names, and multiple frequencies, and configure TLE or GP/OMM JSON sources. Settings are saved in the installed main directory on Windows (or the system configuration directory on Linux/macOS). Verify azimuth, elevation, range, and orbit-data epoch before enabling automatic Doppler in the SDR# plugin.
 
 Doppler correction only adjusts the receiver frequency; it does not prove successful decoding. Use `SYNCED`, FEC frames, and logs as the final criteria.
 

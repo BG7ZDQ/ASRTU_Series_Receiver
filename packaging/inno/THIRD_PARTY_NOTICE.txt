@@ -10,6 +10,10 @@
 本声明不构成任何软件许可或再分发授权。详细说明请参阅安装目录中的
 SDRSHARP_NOTICE.txt，以及随软件附带的原始文档。
 
+本安装包还可选集成 SDR++（GPL-3.0-or-later）。对应源代码可从
+https://github.com/AlexandreRouma/SDRPlusPlus 获取；GPL 许可全文
+随组件安装在 sdrpp\COPYING。
+
 内置卫星轨道计算使用 Andrew C. Young 的 sgp4 C99 实现，按 MIT License
 授权；完整许可文本见 decoder\SGP4_LICENSE.txt。
 

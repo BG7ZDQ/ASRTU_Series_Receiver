@@ -1,4 +1,4 @@
-# Build and release output
+﻿# Build and release output
 /outputs/
 /build/
 /build-*/
@@ -7,7 +7,6 @@
 /ui-*.png
 /packaging/inno/stage/
 /packaging/inno/dist/
-/packaging/payload/sdrpp/
 /packaging/inno/launcher*.png
 /integrations/sdrpp/build/
 

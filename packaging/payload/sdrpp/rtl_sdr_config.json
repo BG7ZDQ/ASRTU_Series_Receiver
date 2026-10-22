@@ -1,0 +1,15 @@
+{
+    "device": "",
+    "devices": {
+        "Generic RTL2832U OEM [0]": {
+            "biasT": false,
+            "directSampling": 0,
+            "gain": 0,
+            "offsetTuning": false,
+            "ppm": 0,
+            "rtlAgc": true,
+            "sampleRate": 2400000.0,
+            "tunerAgc": true
+        }
+    }
+}

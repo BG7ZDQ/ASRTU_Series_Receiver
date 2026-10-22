@@ -61,7 +61,8 @@ bool testSdrppPresetMigration()
     const QJsonObject streams = config.value(QStringLiteral("streams")).toObject();
     const QJsonObject radioSettings = radio.value(QStringLiteral("Radio")).toObject();
     const QJsonObject bridgeSettings = bridge.value(QStringLiteral("Radio")).toObject();
-    if (!instances.value(QStringLiteral("ASRTU Bridge")).toObject()
+    if (config.value(QStringLiteral("centerTuning")).toBool(true) ||
+        !instances.value(QStringLiteral("ASRTU Bridge")).toObject()
              .value(QStringLiteral("enabled")).toBool() ||
         !instances.value(QStringLiteral("Radio")).isObject() ||
         !streams.value(QStringLiteral("Radio")).toObject()
@@ -118,6 +119,12 @@ int main(int argc, char** argv)
         std::cerr << "SDR++ icon resource is missing\n";
         ok = false;
     }
+    const QIcon sdrsharpIcon = sdrProgramIcon(
+        {QStringLiteral("SDR#"), QString(), {}, {}, true});
+    if (sdrsharpIcon.pixmap(32, 32).isNull()) {
+        std::cerr << "SDR# icon resource is missing\n";
+        ok = false;
+    }
 #ifdef Q_OS_WIN
     if (normalizedInputMode(3) != 2) {
         std::cerr << "Legacy SDR++ input mode was not normalized\n";
@@ -129,9 +136,10 @@ int main(int argc, char** argv)
 #ifdef Q_OS_WIN
     auto* inputMode = parent.findChild<QComboBox*>(QStringLiteral("inputMode"));
     if (!inputMode || inputMode->findData(2) < 0 || inputMode->findData(3) >= 0 ||
-        !inputMode->itemText(inputMode->findData(2)).contains(QStringLiteral("SDR#")) ||
-        !inputMode->itemText(inputMode->findData(2)).contains(QStringLiteral("SDR++"))) {
-        std::cerr << "Unified SDR#/SDR++ shared-memory input is missing\n";
+        inputMode->itemText(inputMode->findData(2)).isEmpty() ||
+        inputMode->itemText(inputMode->findData(2)).contains(QStringLiteral("SDR#")) ||
+        inputMode->itemText(inputMode->findData(2)).contains(QStringLiteral("SDR++"))) {
+        std::cerr << "Unified shared-memory input label is invalid\n";
         ok = false;
     }
 #endif

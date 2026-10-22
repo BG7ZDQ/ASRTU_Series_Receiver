@@ -316,6 +316,8 @@ QList<SdrProgram> availableSdrPrograms()
     return programs;
 }
 
+bool sdrExecutableAvailable(const QString& path);
+
 #ifdef Q_OS_WIN
 bool sdrppBridgeAvailable()
 {
@@ -325,6 +327,28 @@ bool sdrppBridgeAvailable()
         if (QFileInfo::exists(QDir(QFileInfo(candidate).absolutePath())
                                   .filePath(QStringLiteral("modules/asrtu_sink.dll"))))
             return true;
+    }
+    // Also honor a path edited in the SDR chooser.
+    for (const SdrProgram& program : availableSdrPrograms()) {
+        if (program.overrideKey != QStringLiteral("sdrpp") ||
+            !isSdrppInstallation(program.executable))
+            continue;
+        if (QFileInfo::exists(QDir(program.workingDirectory)
+                                  .filePath(QStringLiteral("modules/asrtu_sink.dll"))))
+            return true;
+    }
+    return false;
+}
+
+bool sdrSharpBridgeAvailable()
+{
+    for (const SdrProgram& program : availableSdrPrograms()) {
+        if (program.overrideKey != QStringLiteral("sdrsharp") ||
+            !sdrExecutableAvailable(program.executable))
+            continue;
+        return QFileInfo::exists(
+            QDir(program.workingDirectory)
+                .filePath(QStringLiteral("Plugins/SDRSharp.AstroSeriesBridge.dll")));
     }
     return false;
 }
@@ -427,9 +451,19 @@ bool configureSdrppPreset(const QString& sdrppRoot, QString* error)
     // Preserve settings changed by the operator after the one-time migration.
     constexpr int kPresetVersion = 3;
     QFile marker(markerFile);
-    if (marker.open(QIODevice::ReadOnly) &&
-        marker.readAll().trimmed().toInt() >= kPresetVersion)
-        return true;
+    const bool presetAlreadyApplied =
+        marker.open(QIODevice::ReadOnly) &&
+        marker.readAll().trimmed().toInt() >= kPresetVersion;
+    // The +5 kHz IF offset only works with normal (VFO) tuning. SDR++'s
+    // centerTuning mode snaps the hardware back to the VFO frequency and makes
+    // the sink retune the hardware on every frame, so repair old installs even
+    // when the rest of the preset is already present.
+    if (presetAlreadyApplied) {
+        if (!config.value(QStringLiteral("centerTuning")).toBool(true))
+            return true;
+        config[QStringLiteral("centerTuning")] = false;
+        return writeJsonObject(configFile, config, error);
+    }
 
     QJsonObject instances = config.value(QStringLiteral("moduleInstances")).toObject();
     QString bridgeName = QStringLiteral("ASRTU Bridge");
@@ -465,6 +499,7 @@ bool configureSdrppPreset(const QString& sdrppRoot, QString* error)
     streams[QStringLiteral("Radio")] = radio;
     config[QStringLiteral("streams")] = streams;
 
+    config[QStringLiteral("centerTuning")] = false;
     QJsonObject radioSettings = radioConfig.value(QStringLiteral("Radio")).toObject();
     radioSettings[QStringLiteral("selectedDemodId")] = 7; // RAW in SDR++ 1.3.0
     QJsonObject raw = radioSettings.value(QStringLiteral("RAW")).toObject();
@@ -675,18 +710,6 @@ bool startProgram(const QString& executable, const QStringList& arguments,
     return true;
 }
 
-bool startSdrSharp(qint64* processId, QString* error)
-{
-    const QString executable = sdrSharpDirectory() + QStringLiteral("/SDRSharp.exe");
-    if (sdrProcessRunning(executable)) {
-        *error = QCoreApplication::translate(
-            "ASRTU", "SDR# 已在运行；请先关闭已有实例，避免重复启动桥接。");
-        return false;
-    }
-    return startProgram(executable, {}, sdrSharpDirectory(), {}, false,
-                        processId, error);
-}
-
 bool startSdrProgram(const SdrProgram& program, qint64* processId, QString* error)
 {
     if (sdrProcessRunning(program.executable)) {
@@ -694,7 +717,7 @@ bool startSdrProgram(const SdrProgram& program, qint64* processId, QString* erro
             "ASRTU", "该 SDR 软件已在运行；请先关闭已有实例，避免重复启动桥接。");
         return false;
     }
-    if (program.name.compare(QStringLiteral("SDR++"), Qt::CaseInsensitive) == 0 &&
+    if (program.overrideKey == QStringLiteral("sdrpp") &&
         !configureSdrppPreset(program.workingDirectory, error)) {
         return false;
     }
@@ -1007,21 +1030,12 @@ void showSdrChooser(QWidget* parent)
                         QCoreApplication::translate("ASRTU", "保存失败"));
                     return;
                 }
-                grid->removeWidget(card);
-                card->hide();
-                card->deleteLater();
-                QList<QWidget*> remaining;
-                while (auto* item = grid->takeAt(0)) {
-                    if (item->widget())
-                        remaining.append(item->widget());
-                    delete item;
-                }
-                count = 0;
-                for (auto* widget : remaining) {
-                    grid->addWidget(widget, count / 2, count % 2);
-                    ++count;
-                }
-                resizeCards();
+                // Rebuild the chooser from QSettings. Keeping the remaining
+                // cards alive would preserve stale custom-array indexes after
+                // deletion and make a later edit write a duplicate entry.
+                Q_UNUSED(card);
+                dialog.accept();
+                QTimer::singleShot(0, parent, [parent] { showSdrChooser(parent); });
             });
         }
         grid->addWidget(card, count / 2, count % 2);
@@ -1064,6 +1078,17 @@ void showSdrChooser(QWidget* parent)
     footer->addWidget(close);
     resizeCards();
     dialog.exec();
+#ifdef Q_OS_WIN
+    // A path edited in the chooser can add or remove the bridge. Refresh the
+    // shared-memory input item without requiring a launcher restart.
+    if (parent) {
+        if (auto* combo = parent->findChild<QComboBox*>(QStringLiteral("inputMode"))) {
+            if (auto* model = qobject_cast<QStandardItemModel*>(combo->model()))
+                model->item(0)->setEnabled(
+                    sdrSharpBridgeAvailable() || sdrppBridgeAvailable());
+        }
+    }
+#endif
 }
 
 bool startDoppler(double longitude, double latitude, double altitude,
@@ -1559,13 +1584,9 @@ public:
         input_mode_->setSizeAdjustPolicy(
             QComboBox::AdjustToMinimumContentsLengthWithIcon);
         input_mode_->setMinimumContentsLength(18);
-        const bool sdrSharpBridgeAvailable =
-            QFileInfo::exists(sdrSharpDirectory() + QStringLiteral("/SDRSharp.exe")) &&
-            QFileInfo::exists(sdrSharpDirectory() +
-                              QStringLiteral("/Plugins/SDRSharp.AstroSeriesBridge.dll"));
 #ifdef Q_OS_WIN
         const bool localBridgeAvailable =
-            sdrSharpBridgeAvailable || sdrppBridgeAvailable();
+            sdrSharpBridgeAvailable() || sdrppBridgeAvailable();
         const QString sharedBridgeLabel = QCoreApplication::translate(
             "ASRTU", "本地内存共享 RAW 模式 I/Q 桥接");
         input_mode_->addItem(sharedBridgeLabel, 2);
@@ -1573,6 +1594,10 @@ public:
             if (auto* model = qobject_cast<QStandardItemModel*>(input_mode_->model()))
                 model->item(0)->setEnabled(false);
 #else
+        const bool sdrSharpBridgeAvailable =
+            QFileInfo::exists(sdrSharpDirectory() + QStringLiteral("/SDRSharp.exe")) &&
+            QFileInfo::exists(sdrSharpDirectory() +
+                              QStringLiteral("/Plugins/SDRSharp.AstroSeriesBridge.dll"));
         input_mode_->addItem(
             QCoreApplication::translate("ASRTU", "本地内存共享 RAW 模式 I/Q 桥接"), 2);
         if (!sdrSharpBridgeAvailable)
@@ -2321,12 +2346,22 @@ int main(int argc, char *argv[])
 
 	if (application.arguments().contains(QStringLiteral("--sdrsharp"))) {
 		QString error;
+		const QList<SdrProgram> programs = availableSdrPrograms();
+		const auto program = std::find_if(
+		    programs.cbegin(), programs.cend(), [](const SdrProgram& candidate) {
+			return candidate.overrideKey == QStringLiteral("sdrsharp") &&
+			       sdrExecutableAvailable(candidate.executable);
+		    });
 		qint64 processId = 0;
-		if (!startSdrSharp(&processId, &error)) {
-			QMessageBox::critical(nullptr,
-					      QCoreApplication::translate(
-						  "ASRTU", "SDR# 启动失败"),
-					      error);
+		if (program == programs.cend() ||
+		    !startSdrProgram(*program, &processId, &error)) {
+			QMessageBox::critical(
+			    nullptr,
+			    QCoreApplication::translate("ASRTU", "SDR# 启动失败"),
+			    error.isEmpty()
+				? QCoreApplication::translate(
+				      "ASRTU", "未找到完整的 SDR# 安装。")
+				: error);
 			return 1;
 		}
 		return 0;
@@ -2337,8 +2372,7 @@ int main(int argc, char *argv[])
 		const QList<SdrProgram> programs = availableSdrPrograms();
 		const auto program = std::find_if(
 		    programs.cbegin(), programs.cend(), [](const SdrProgram& candidate) {
-			return candidate.name.compare(
-				   QStringLiteral("SDR++"), Qt::CaseInsensitive) == 0 &&
+			return candidate.overrideKey == QStringLiteral("sdrpp") &&
 			       sdrExecutableAvailable(candidate.executable);
 		    });
 		qint64 processId = 0;

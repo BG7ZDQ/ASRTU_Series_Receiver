@@ -50,8 +50,8 @@ if ($null -eq $stream.volume) { Set-Field $stream 'volume' 1.0 }
 if ($null -eq $stream.muted) { Set-Field $stream 'muted' $false }
 Set-Field $stream 'sink' 'ASRTU Receiver'
 # Receiver preset: keep the waterfall useful for weak telemetry signals.
-Set-Field $config 'min' -150.0
-Set-Field $config 'max' -65.0
+Set-Field $config 'min' ([double]-150.0)
+Set-Field $config 'max' ([double]-65.0)
 Write-Config 'config.json' $config
 if ($PlutoUri) {
     $plutoConfig = Read-Config 'plutosdr_source_config.json'

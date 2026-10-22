@@ -1,0 +1,15 @@
+{
+    "Radio": {
+        "hostname": "localhost",
+        "listening": false,
+        "port": 7355,
+        "protocol": 1,
+        "sampleRate": 48000.0,
+        "stereo": false
+    },
+    "host": "127.0.0.1",
+    "mode": 0,
+    "port": 7355,
+    "sr": 48000,
+    "stereo": true
+}

@@ -1,0 +1,41 @@
+{
+    "bookmarkDisplayMode": 1,
+    "lists": {
+        "Satellites": {
+            "bookmarks": {
+                "ASRTU-1 Image": {
+                    "bandwidth": 24000.0,
+                    "frequency": 436210000.0,
+                    "mode": 7
+                },
+                "ASRTU-1 TLM": {
+                    "bandwidth": 24000.0,
+                    "frequency": 435400000.0,
+                    "mode": 7
+                },
+                "BY70-4 TLM / Image": {
+                    "bandwidth": 24000.0,
+                    "frequency": 437433000.0,
+                    "mode": 7
+                },
+                "JAMX01 CW": {
+                    "bandwidth": 24000.0,
+                    "frequency": 435175000.0,
+                    "mode": 7
+                },
+                "JAMX01 SSDV(B)": {
+                    "bandwidth": 1000.0,
+                    "frequency": 435075000.0,
+                    "mode": 5
+                },
+                "JAMX01 TLM&FM&SSDV(A)": {
+                    "bandwidth": 24000.0,
+                    "frequency": 435500000.0,
+                    "mode": 7
+                }
+            },
+            "showOnWaterfall": true
+        }
+    },
+    "selectedList": "General"
+}

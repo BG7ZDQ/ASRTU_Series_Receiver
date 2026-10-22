@@ -45,6 +45,9 @@ Name: "japanese"; MessagesFile: "Languages\Japanese.isl"; InfoBeforeFile: "THIRD
 english.UiLanguage=en
 chinesesimp.UiLanguage=zh
 japanese.UiLanguage=ja
+english.RemoveUserDataPrompt=Delete all ASRTU user data?%n%nThis includes the callsign, coordinates, TinyDoppler satellites/frequencies/ephemeris, recordings/logs and launcher/decoder settings.%n%nChoose No to keep them for a later reinstall.
+chinesesimp.RemoveUserDataPrompt=是否删除所有 ASRTU 用户数据？%n%n包括呼号、经纬度、TinyDoppler 卫星/频率/星历、录音日志以及启动器/解码器设置。%n%n选择“否”将保留这些数据，重新安装后仍可使用。
+japanese.RemoveUserDataPrompt=ASRTU のユーザーデータをすべて削除しますか？%n%nコールサイン、緯度経度、TinyDoppler の衛星/周波数/星暦、録音・ログ、ランチャー/デコーダー設定が含まれます。%n%n「いいえ」を選ぶと再インストール用に保持されます。
 english.ProgramGroup=ASRTU Series Satellite Receiver and Upload
 chinesesimp.ProgramGroup=阿斯图系列卫星接收与上传
 japanese.ProgramGroup=ASRTUシリーズ衛星受信・アップロード
@@ -128,9 +131,9 @@ Name: "custom"; Description: "{cm:CustomInstall}"; Flags: iscustom
 
 [Components]
 Name: "core"; Description: "{cm:CoreComponent}"; Types: full compact custom; Flags: fixed
-Name: "sdrsharp"; Description: "{cm:SdrComponent}"; Types: full compact
+Name: "sdrsharp"; Description: "{cm:SdrComponent}"; Types: full
 #ifdef SdrppAvailable
-Name: "sdrpp"; Description: "{cm:SdrppComponent}"; Types: full compact
+Name: "sdrpp"; Description: "{cm:SdrppComponent}"; Types: full
 #endif
 
 [Files]
@@ -412,14 +415,16 @@ begin
     Exit;
   for I := 0 to GetArrayLength(Lines) - 1 do
   begin
-    if Pos('"min"', Lines[I]) > 0 then
+    { Only the top-level amplitude pair is indented by exactly four spaces.
+      Nested module settings can also contain min/max keys and must be kept. }
+    if Pos('    "min"', Lines[I]) = 1 then
     begin
       if Pos(',', Lines[I]) > 0 then
         Lines[I] := '    "min": -150.0,'
       else
         Lines[I] := '    "min": -150.0';
     end
-    else if Pos('"max"', Lines[I]) > 0 then
+    else if Pos('    "max"', Lines[I]) = 1 then
     begin
       if Pos(',', Lines[I]) > 0 then
         Lines[I] := '    "max": -65.0,'
@@ -474,25 +479,31 @@ begin
 #endif
 
   { The launcher owns the runtime satellite selection. ASRTU-1 is only the
-    initial profile shown on first launch. }
-  ConfigText :=
-    '# Server Config' + #13#10 +
-    'zmq_address = "tcp://127.0.0.1:5555";' + #13#10 +
-    'ws_address = "ws://1.92.100.130";' + #13#10 +
-    'ws_port = 9000;' + #13#10#13#10 +
-    '# Satellite Config' + #13#10 +
-    'sat_name = "ASRTU-1";' + #13#10#13#10 +
-    '# Proxy Config' + #13#10 +
-    'physical_channel = 0;' + #13#10 +
-    'proxy_nickname = "' + Trim(StationPage.Values[0]) + '";' + #13#10 +
-    'proxy_long = ' + ConfigNumber(StationPage.Values[1]) + ';' + #13#10 +
-    'proxy_lat = ' + ConfigNumber(StationPage.Values[2]) + ';' + #13#10 +
-    'proxy_alt = ' + ConfigNumber(StationPage.Values[3]) + ';' + #13#10;
+    initial profile shown on first launch. In a silent upgrade the custom
+    station page is never shown, so never overwrite an existing config with
+    the page's zero defaults. }
+  if not (WizardSilent and
+          FileExists(ExpandConstant('{app}\proxy\config.cfg'))) then
+  begin
+    ConfigText :=
+      '# Server Config' + #13#10 +
+      'zmq_address = "tcp://127.0.0.1:5555";' + #13#10 +
+      'ws_address = "ws://1.92.100.130";' + #13#10 +
+      'ws_port = 9000;' + #13#10#13#10 +
+      '# Satellite Config' + #13#10 +
+      'sat_name = "ASRTU-1";' + #13#10#13#10 +
+      '# Proxy Config' + #13#10 +
+      'physical_channel = 0;' + #13#10 +
+      'proxy_nickname = "' + Trim(StationPage.Values[0]) + '";' + #13#10 +
+      'proxy_long = ' + ConfigNumber(StationPage.Values[1]) + ';' + #13#10 +
+      'proxy_lat = ' + ConfigNumber(StationPage.Values[2]) + ';' + #13#10 +
+      'proxy_alt = ' + ConfigNumber(StationPage.Values[3]) + ';' + #13#10;
 
-  ForceDirectories(ExpandConstant('{app}\proxy'));
-  if not SaveStringToFile(ExpandConstant('{app}\proxy\config.cfg'),
-                          ConfigText, False) then
-    MsgBox(CustomMessage('ConfigWriteFailed'), mbError, MB_OK);
+    ForceDirectories(ExpandConstant('{app}\proxy'));
+    if not SaveStringToFile(ExpandConstant('{app}\proxy\config.cfg'),
+                            ConfigText, False) then
+      MsgBox(CustomMessage('ConfigWriteFailed'), mbError, MB_OK);
+  end;
 end;
 
 var
@@ -509,8 +520,14 @@ begin
     DirExists(ExpandConstant('{app}\ASRTU1_Records')) or
     DirExists(ExpandConstant('{localappdata}\BG7ZDQ\TinyDoppler')) or
     DirExists(ExpandConstant('{userappdata}\BG7ZDQ\TinyDoppler')) or
+    DirExists(ExpandConstant('{userappdata}\BG7ZDQ\TinyDopplerStandalone')) or
+    DirExists(ExpandConstant('{userappdata}\ASRTU\ASRTU1_Launcher')) or
+    DirExists(ExpandConstant('{userappdata}\ASRTU\ASRTU_Doppler')) or
+    DirExists(ExpandConstant('{localappdata}\ASRTU\ASRTU1_Demod_CQt')) or
     RegKeyExists(HKCU, 'Software\ASRTU\AstroSeriesLauncher') or
+    RegKeyExists(HKCU, 'Software\ASRTU\ASRTU1_Launcher') or
     RegKeyExists(HKCU, 'Software\ASRTU\ASRTU1_Demod_CQt_v3') or
+    RegKeyExists(HKCU, 'Software\ASRTU\ASRTU1_Demod_CQt') or
     RegKeyExists(HKCU, 'Software\TinyDoppler') or
     RegKeyExists(HKCU, 'Software\ASRTU\AstroSeriesTracker');
 end;
@@ -520,11 +537,8 @@ begin
   RemoveAllUserData := False;
   if AppUserDataExists then
     RemoveAllUserData :=
-      MsgBox('是否删除所有 ASRTU 用户数据？' + #13#10 +
-             '包括呼号、经纬度、TinyDoppler 卫星/频率/星历、' +
-             '录音日志以及启动器/解码器设置。' + #13#10 +
-             '选择“否”将保留这些数据，重新安装后仍可使用。',
-             mbConfirmation, MB_YESNO) = IDYES;
+      MsgBox(CustomMessage('RemoveUserDataPrompt'),
+             mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES;
   Result := True;
 end;
 
@@ -542,10 +556,22 @@ begin
             True, True, True);
     DelTree(ExpandConstant('{userappdata}\BG7ZDQ\TinyDoppler'),
             True, True, True);
+    DelTree(ExpandConstant('{userappdata}\BG7ZDQ\TinyDopplerStandalone'),
+            True, True, True);
+    DelTree(ExpandConstant('{userappdata}\ASRTU\ASRTU1_Launcher'),
+            True, True, True);
+    DelTree(ExpandConstant('{userappdata}\ASRTU\ASRTU_Doppler'),
+            True, True, True);
+    DelTree(ExpandConstant('{localappdata}\ASRTU\ASRTU1_Demod_CQt'),
+            True, True, True);
     RegDeleteKeyIncludingSubkeys(HKCU,
                                  'Software\ASRTU\AstroSeriesLauncher');
     RegDeleteKeyIncludingSubkeys(HKCU,
+                                 'Software\ASRTU\ASRTU1_Launcher');
+    RegDeleteKeyIncludingSubkeys(HKCU,
                                  'Software\ASRTU\ASRTU1_Demod_CQt_v3');
+    RegDeleteKeyIncludingSubkeys(HKCU,
+                                 'Software\ASRTU\ASRTU1_Demod_CQt');
     RegDeleteKeyIncludingSubkeys(HKCU, 'Software\TinyDoppler');
     RegDeleteKeyIncludingSubkeys(HKCU,
                                  'Software\ASRTU\AstroSeriesTracker');
