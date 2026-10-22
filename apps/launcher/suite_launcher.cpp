@@ -450,10 +450,15 @@ bool configureSdrppPreset(const QString& sdrppRoot, QString* error)
 
     // Preserve settings changed by the operator after the one-time migration.
     constexpr int kPresetVersion = 3;
-    QFile marker(markerFile);
-    const bool presetAlreadyApplied =
-        marker.open(QIODevice::ReadOnly) &&
-        marker.readAll().trimmed().toInt() >= kPresetVersion;
+    bool presetAlreadyApplied = false;
+    {
+        // Close the read handle before QSaveFile replaces this same path;
+        // Windows otherwise reports a sharing violation on migration.
+        QFile marker(markerFile);
+        presetAlreadyApplied =
+            marker.open(QIODevice::ReadOnly) &&
+            marker.readAll().trimmed().toInt() >= kPresetVersion;
+    }
     // The +5 kHz IF offset only works with normal (VFO) tuning. SDR++'s
     // centerTuning mode snaps the hardware back to the VFO frequency and makes
     // the sink retune the hardware on every frame, so repair old installs even
