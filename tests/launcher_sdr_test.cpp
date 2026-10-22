@@ -143,14 +143,14 @@ int main(int argc, char **argv)
 	QCoreApplication::setApplicationName(QStringLiteral("Chooser"));
 	app.setFont(QFont(QStringLiteral("Microsoft YaHei UI"), 9));
 	bool ok = testSdrppPresetMigration();
-	const QIcon sdrppIcon =
-	    sdrProgramIcon({QStringLiteral("SDR++"), QString(), {}, {}, false});
+	const QIcon sdrppIcon = sdrProgramIcon(
+	    {QStringLiteral("SDR++"), QString(), {}, {}, false, {}, -1});
 	if (sdrppIcon.pixmap(32, 32).isNull()) {
 		std::cerr << "SDR++ icon resource is missing\n";
 		ok = false;
 	}
-	const QIcon sdrsharpIcon =
-	    sdrProgramIcon({QStringLiteral("SDR#"), QString(), {}, {}, true});
+	const QIcon sdrsharpIcon = sdrProgramIcon(
+	    {QStringLiteral("SDR#"), QString(), {}, {}, true, {}, -1});
 	if (sdrsharpIcon.pixmap(32, 32).isNull()) {
 		std::cerr << "SDR# icon resource is missing\n";
 		ok = false;

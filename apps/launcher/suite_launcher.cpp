@@ -303,8 +303,8 @@ QList<SdrProgram> availableSdrPrograms()
 	    QDir(sdrSharpDirectory()).filePath(QStringLiteral("SDRSharp.exe"));
 	const QString sharpCanonical = QFileInfo(sharp).canonicalFilePath();
 	SdrProgram sharpProgram{
-	    QStringLiteral("SDR#"), sharp, {},
-	    sdrSharpDirectory(),    true,  QStringLiteral("sdrsharp")};
+	    QStringLiteral("SDR#"),	sharp, {}, sdrSharpDirectory(), true,
+	    QStringLiteral("sdrsharp"), -1};
 	applySdrProgramOverride(&sharpProgram);
 	programs.append(sharpProgram);
 	bool sdrppFound = false;
@@ -322,7 +322,7 @@ QList<SdrProgram> availableSdrPrograms()
 		const QString directory = QFileInfo(candidate).absolutePath();
 		SdrProgram sdrppProgram{
 		    QStringLiteral("SDR++"), candidate, {}, directory, false,
-		    QStringLiteral("sdrpp")};
+		    QStringLiteral("sdrpp"), -1};
 		applySdrProgramOverride(&sdrppProgram);
 		programs.append(sdrppProgram);
 		sdrppFound = true;
@@ -331,7 +331,7 @@ QList<SdrProgram> availableSdrPrograms()
 	if (!sdrppFound) {
 		SdrProgram placeholder{
 		    QStringLiteral("SDR++"), {}, {}, {}, false,
-		    QStringLiteral("sdrpp")};
+		    QStringLiteral("sdrpp"), -1};
 		applySdrProgramOverride(&placeholder);
 		programs.append(placeholder);
 	}
@@ -750,6 +750,7 @@ bool startProgram(const QString &executable, const QStringList &arguments,
 		  const QString &workingDirectory, const QString &outputLog,
 		  bool visibleConsole, qint64 *processId, QString *error)
 {
+	Q_UNUSED(visibleConsole)
 	if (!QFileInfo::exists(executable)) {
 		*error =
 		    QCoreApplication::translate("ASRTU", "找不到程序：\n%1")
@@ -1197,7 +1198,9 @@ void showSdrChooser(QWidget *parent)
 								     "s"))
 							     .toStringList(),
 							 {},
-							 false});
+							 false,
+							 {},
+							 -1});
 				    }
 				    settings.endArray();
 				    settings.remove(
