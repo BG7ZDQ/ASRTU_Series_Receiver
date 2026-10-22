@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ASRTU1Qt VERSION 1.5.4 LANGUAGES C CXX)
+project(ASRTU1Qt VERSION 1.5.5 LANGUAGES C CXX)
 
 # Windows RC version resources need a comma-separated number and a display
 # string; both are derived from the single PROJECT_VERSION source.

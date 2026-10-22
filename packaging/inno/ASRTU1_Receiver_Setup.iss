@@ -1,6 +1,6 @@
 #define AppName "ASRTU Series Satellite Receiver and Upload"
 #ifndef AppVersion
-#define AppVersion "1.5.4"
+#define AppVersion "1.5.5"
 #endif
 #ifndef AppBuildSuffix
 #define AppBuildSuffix ""

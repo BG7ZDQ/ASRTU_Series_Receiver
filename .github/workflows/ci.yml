@@ -459,6 +459,8 @@ jobs:
       - name: Publish tag artifacts
         uses: softprops/action-gh-release@v2
         with:
+          name: ${{ contains(github.ref_name, 'nightly') && format('ASRTU Series Receiver {0} (nightly)', github.ref_name) || github.ref_name }}
+          prerelease: ${{ contains(github.ref_name, 'nightly') }}
           files: |
             dist/**/*.AppImage
             dist/**/*.zip
