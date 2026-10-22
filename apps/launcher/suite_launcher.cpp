@@ -13,6 +13,7 @@
 #include <QEvent>
 #include <QFile>
 #include <QFileInfo>
+#include <QFileIconProvider>
 #include <QFileDialog>
 #include <QFont>
 #include <QFormLayout>
@@ -23,6 +24,9 @@
 #include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QStandardItemModel>
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QMessageBox>
@@ -32,6 +36,7 @@
 #include <QRegularExpression>
 #include <QResizeEvent>
 #include <QSaveFile>
+#include <QStandardPaths>
 #include <QScrollArea>
 #include <QSettings>
 #include <QScreen>
@@ -58,6 +63,7 @@
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <mmsystem.h>
+#include <tlhelp32.h>
 #else
 #include <cerrno>
 #include <signal.h>
@@ -99,6 +105,60 @@ QString decoderDirectory()
         executableName(QStringLiteral("ASRTU1_Demod_CQt")));
 }
 
+bool sdrProcessRunning(const QString& executable)
+{
+    if (executable.isEmpty())
+        return false;
+    const QString name = QFileInfo(executable).fileName();
+#ifdef Q_OS_WIN
+    const HANDLE snapshot =
+        CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE)
+        return false;
+    PROCESSENTRY32W entry{};
+    entry.dwSize = sizeof(entry);
+    bool found = false;
+    if (Process32FirstW(snapshot, &entry)) {
+        do {
+            if (name.compare(QString::fromWCharArray(entry.szExeFile),
+                             Qt::CaseInsensitive) == 0) {
+                found = true;
+                break;
+            }
+        } while (Process32NextW(snapshot, &entry));
+    }
+    CloseHandle(snapshot);
+    return found;
+#else
+    const QString target = QFileInfo(executable).canonicalFilePath();
+    if (target.isEmpty())
+        return false;
+    const QStringList entries = QDir(QStringLiteral("/proc"))
+        .entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    for (const QString& entry : entries) {
+        bool numeric = false;
+        entry.toInt(&numeric);
+        if (!numeric)
+            continue;
+        const QString link = QFileInfo(
+            QStringLiteral("/proc/%1/exe").arg(entry)).canonicalFilePath();
+        if (!link.isEmpty() && link == target)
+            return true;
+    }
+    return false;
+#endif
+}
+
+QString audioConverterPath()
+{
+    const QString local = QDir(decoderDirectory())
+                              .filePath(executableName(
+                                  QStringLiteral("sndfile-convert")));
+    if (QFileInfo::exists(local))
+        return local;
+    return QStandardPaths::findExecutable(QStringLiteral("sndfile-convert"));
+}
+
 QString proxyDirectory()
 {
 #ifdef Q_OS_WIN
@@ -111,7 +171,351 @@ QString proxyDirectory()
 
 QString sdrSharpDirectory()
 {
-    return QCoreApplication::applicationDirPath() + QStringLiteral("/../sdrsharp");
+    const QDir current(QCoreApplication::applicationDirPath());
+    const QString sibling = current.filePath(QStringLiteral("sdrsharp/SDRSharp.exe"));
+    if (QFileInfo::exists(sibling))
+        return QDir::cleanPath(current.filePath(QStringLiteral("sdrsharp")));
+    return QDir::cleanPath(current.filePath(QStringLiteral("../sdrsharp")));
+}
+
+struct SdrProgram {
+    QString name;
+    QString executable;
+    QStringList arguments;
+    QString workingDirectory;
+    bool sdrSharp = false;
+    QString overrideKey;   // "sdrsharp"/"sdrpp" for editable built-in entries
+    int customIndex = -1;  // array index for user-added entries
+};
+
+void applySdrProgramOverride(SdrProgram* program)
+{
+    if (program->overrideKey.isEmpty())
+        return;
+    QSettings settings;
+    settings.beginGroup(QStringLiteral("sdr/programOverrides/") + program->overrideKey);
+    program->name = settings.value(QStringLiteral("name"), program->name).toString();
+    program->executable = settings.value(QStringLiteral("executable"),
+                                         program->executable).toString();
+    program->arguments = settings.value(QStringLiteral("arguments"),
+                                        program->arguments).toStringList();
+    program->workingDirectory = QFileInfo(program->executable).absolutePath();
+    settings.endGroup();
+}
+
+QString sdrProgramCommandLine(const SdrProgram& program)
+{
+    QString command = QDir::toNativeSeparators(program.executable);
+    if (command.contains(QLatin1Char(' ')))
+        command = QLatin1Char('"') + command + QLatin1Char('"');
+    for (const QString& argument : program.arguments) {
+        command += QLatin1Char(' ');
+        if (argument.contains(QLatin1Char(' ')))
+            command += QLatin1Char('"') + argument + QLatin1Char('"');
+        else
+            command += argument;
+    }
+    return command;
+}
+
+QString sdrppBundledDirectory()
+{
+#ifdef Q_OS_WIN
+    const QString local = QProcessEnvironment::systemEnvironment().value(
+        QStringLiteral("LOCALAPPDATA"), QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
+    const QString userInstall = QDir(local).filePath(QStringLiteral("ASRTU Series Receiver/sdrpp"));
+    if (QFileInfo::exists(QDir(userInstall).filePath(QStringLiteral("sdrpp.exe"))))
+        return userInstall;
+#endif
+    return QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("../sdrpp"));
+}
+
+bool isSdrppInstallation(const QString& executable)
+{
+    const QFileInfo exe(executable);
+    if (!exe.isFile())
+        return false;
+    const QDir root(exe.absolutePath());
+    // A copied SDR++ executable without its resource tree starts and then
+    // crashes while loading themes/modules. Reject that stale installation
+    // so the chooser can continue to the complete bundled copy.
+#ifdef Q_OS_WIN
+    return QFileInfo::exists(root.filePath(QStringLiteral("sdrpp_core.dll"))) &&
+           QFileInfo::exists(root.filePath(QStringLiteral("modules"))) &&
+           QFileInfo::exists(root.filePath(QStringLiteral("res/themes/dark.json"))) &&
+           QFileInfo::exists(root.filePath(QStringLiteral("res/colormaps/classic.json")));
+#else
+    // System packages store shared resources under /usr/share, not bin/.
+    return exe.isExecutable();
+#endif
+}
+
+QStringList sdrppCandidates()
+{
+    QStringList candidates;
+    const QDir current(QCoreApplication::applicationDirPath());
+    // Portable and installed layouts keep SDR++ beside the launcher, just
+    // like SDR#. Check these locations before any stale per-user copy.
+    candidates << current.filePath(QStringLiteral("sdrpp/") + executableName(QStringLiteral("sdrpp")));
+    candidates << current.filePath(QStringLiteral("../sdrpp/") + executableName(QStringLiteral("sdrpp")));
+    const QString saved = QSettings().value(QStringLiteral("sdr/lastExecutable")).toString();
+    if (QFileInfo(saved).fileName().compare(executableName(QStringLiteral("sdrpp")), Qt::CaseInsensitive) == 0)
+        candidates << saved;
+    candidates << QDir(sdrppBundledDirectory()).filePath(executableName(QStringLiteral("sdrpp")));
+    const QString discovered = QStandardPaths::findExecutable(executableName(QStringLiteral("sdrpp")));
+    if (!discovered.isEmpty())
+        candidates << discovered;
+    candidates.removeDuplicates();
+    return candidates;
+}
+
+QList<SdrProgram> availableSdrPrograms()
+{
+    QList<SdrProgram> programs;
+    const QString sharp = QDir(sdrSharpDirectory()).filePath(QStringLiteral("SDRSharp.exe"));
+    const QString sharpCanonical = QFileInfo(sharp).canonicalFilePath();
+    SdrProgram sharpProgram{QStringLiteral("SDR#"), sharp, {}, sdrSharpDirectory(), true,
+                            QStringLiteral("sdrsharp")};
+    applySdrProgramOverride(&sharpProgram);
+    programs.append(sharpProgram);
+    bool sdrppFound = false;
+    for (const QString& candidate : sdrppCandidates()) {
+        if (!isSdrppInstallation(candidate))
+            continue;
+        const QString canonical = QFileInfo(candidate).canonicalFilePath();
+        if (!sharpCanonical.isEmpty() && canonical == sharpCanonical)
+            continue;
+        if (QFileInfo(candidate).fileName().compare(QStringLiteral("SDRSharp.exe"), Qt::CaseInsensitive) == 0)
+            continue;
+        const QString directory = QFileInfo(candidate).absolutePath();
+        SdrProgram sdrppProgram{QStringLiteral("SDR++"), candidate, {}, directory, false,
+                                QStringLiteral("sdrpp")};
+        applySdrProgramOverride(&sdrppProgram);
+        programs.append(sdrppProgram);
+        sdrppFound = true;
+        break;
+    }
+    if (!sdrppFound) {
+        SdrProgram placeholder{QStringLiteral("SDR++"), {}, {}, {}, false,
+                               QStringLiteral("sdrpp")};
+        applySdrProgramOverride(&placeholder);
+        programs.append(placeholder);
+    }
+    QSettings settings;
+    const int customCount = settings.beginReadArray(QStringLiteral("sdr/customPrograms"));
+    for (int i = 0; i < customCount; ++i) {
+        settings.setArrayIndex(i);
+        const QString name = settings.value(QStringLiteral("name")).toString().trimmed();
+        const QString executable = settings.value(QStringLiteral("executable")).toString();
+        if (name.isEmpty())
+            continue;
+        programs.append({name, executable, settings.value(QStringLiteral("arguments")).toStringList(),
+                         QFileInfo(executable).absolutePath(), false, {}, i});
+    }
+    settings.endArray();
+    return programs;
+}
+
+#ifdef Q_OS_WIN
+bool sdrppBridgeAvailable()
+{
+    for (const QString& candidate : sdrppCandidates()) {
+        if (!isSdrppInstallation(candidate))
+            continue;
+        if (QFileInfo::exists(QDir(QFileInfo(candidate).absolutePath())
+                                  .filePath(QStringLiteral("modules/asrtu_sink.dll"))))
+            return true;
+    }
+    return false;
+}
+#endif
+
+bool sdrExecutableAvailable(const QString& path)
+{
+    const QFileInfo info(path);
+    // Let CreateProcess validate Windows executables; Unix also requires
+    // executable permission before offering the program in the chooser.
+#ifdef Q_OS_WIN
+    return info.isFile();
+#else
+    return info.isFile() && info.isExecutable();
+#endif
+}
+
+int normalizedInputMode(int mode)
+{
+#ifdef Q_OS_WIN
+    // SDR# and SDR++ publish the same V1 I/Q mapping. Keep mode 3 as a
+    // compatibility alias for settings saved by older launcher versions.
+    if (mode == 3)
+        return 2;
+#endif
+    return mode;
+}
+
+QIcon sdrProgramIcon(const SdrProgram& program)
+{
+    if (program.sdrSharp ||
+        program.name.compare(QStringLiteral("SDR#"), Qt::CaseInsensitive) == 0)
+        return QIcon(QStringLiteral(":/launcher/sdrsharp.png"));
+    if (program.name.compare(QStringLiteral("SDR++"), Qt::CaseInsensitive) == 0)
+        return QIcon(QStringLiteral(":/launcher/sdrpp.png"));
+    QIcon icon = QFileIconProvider().icon(QFileInfo(program.executable));
+    if (icon.isNull())
+        icon = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
+    return icon;
+}
+
+bool readJsonObject(const QString& path, QJsonObject* object, QString* error)
+{
+    *object = {};
+    QFile file(path);
+    if (!file.exists())
+        return true;
+    if (!file.open(QIODevice::ReadOnly)) {
+        *error = QCoreApplication::translate(
+            "ASRTU", "无法读取 SDR++ 设置：\n%1").arg(path);
+        return false;
+    }
+    QJsonParseError parseError{};
+    const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
+        *error = QCoreApplication::translate(
+            "ASRTU", "SDR++ 配置文件格式有误：\n%1\n%2")
+                     .arg(path, parseError.errorString());
+        return false;
+    }
+    *object = document.object();
+    return true;
+}
+
+bool writeJsonObject(const QString& path, const QJsonObject& object, QString* error)
+{
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) {
+        *error = QCoreApplication::translate(
+            "ASRTU", "无法保存 SDR++ 设置：\n%1").arg(path);
+        return false;
+    }
+    file.write(QJsonDocument(object).toJson(QJsonDocument::Indented));
+    if (!file.commit()) {
+        *error = QCoreApplication::translate(
+            "ASRTU", "无法保存 SDR++ 设置：\n%1").arg(path);
+        return false;
+    }
+    return true;
+}
+
+bool configureSdrppPreset(const QString& sdrppRoot, QString* error)
+{
+    const QDir root(sdrppRoot);
+    if (!QFileInfo::exists(root.filePath(QStringLiteral("modules/asrtu_sink.dll"))))
+        return true;
+
+    const QString configFile = root.filePath(QStringLiteral("config.json"));
+    const QString radioFile = root.filePath(QStringLiteral("radio_config.json"));
+    const QString bridgeFile = root.filePath(QStringLiteral("asrtu_sink_config.json"));
+    const QString markerFile = root.filePath(QStringLiteral("asrtu-preset.version"));
+    QJsonObject config;
+    QJsonObject radioConfig;
+    QJsonObject bridgeConfig;
+    if (!readJsonObject(configFile, &config, error) ||
+        !readJsonObject(radioFile, &radioConfig, error) ||
+        !readJsonObject(bridgeFile, &bridgeConfig, error))
+        return false;
+
+    // Preserve settings changed by the operator after the one-time migration.
+    constexpr int kPresetVersion = 3;
+    QFile marker(markerFile);
+    if (marker.open(QIODevice::ReadOnly) &&
+        marker.readAll().trimmed().toInt() >= kPresetVersion)
+        return true;
+
+    QJsonObject instances = config.value(QStringLiteral("moduleInstances")).toObject();
+    QString bridgeName = QStringLiteral("ASRTU Bridge");
+    for (auto it = instances.constBegin(); it != instances.constEnd(); ++it) {
+        if (it.value().toObject().value(QStringLiteral("module")).toString() ==
+            QStringLiteral("asrtu_sink")) {
+            bridgeName = it.key();
+            break;
+        }
+    }
+    QJsonObject bridge = instances.value(bridgeName).toObject();
+    bridge[QStringLiteral("enabled")] = true;
+    bridge[QStringLiteral("module")] = QStringLiteral("asrtu_sink");
+    instances[bridgeName] = bridge;
+    if (!instances.value(QStringLiteral("Radio")).isObject()) {
+        instances[QStringLiteral("Radio")] = QJsonObject{
+            {QStringLiteral("enabled"), true},
+            {QStringLiteral("module"), QStringLiteral("radio")}};
+    }
+    config[QStringLiteral("moduleInstances")] = instances;
+
+    QJsonObject streams = config.value(QStringLiteral("streams")).toObject();
+    QJsonObject radio = streams.value(QStringLiteral("Radio")).toObject();
+    // SDR++ loads these keys unconditionally; a missing key becomes JSON
+    // null and aborts sink initialization.
+    if (!radio.contains(QStringLiteral("volume")) ||
+        radio.value(QStringLiteral("volume")).isNull())
+        radio[QStringLiteral("volume")] = 1.0;
+    if (!radio.contains(QStringLiteral("muted")) ||
+        radio.value(QStringLiteral("muted")).isNull())
+        radio[QStringLiteral("muted")] = false;
+    radio[QStringLiteral("sink")] = QStringLiteral("ASRTU Receiver");
+    streams[QStringLiteral("Radio")] = radio;
+    config[QStringLiteral("streams")] = streams;
+
+    QJsonObject radioSettings = radioConfig.value(QStringLiteral("Radio")).toObject();
+    radioSettings[QStringLiteral("selectedDemodId")] = 7; // RAW in SDR++ 1.3.0
+    QJsonObject raw = radioSettings.value(QStringLiteral("RAW")).toObject();
+    raw[QStringLiteral("bandwidth")] = 48000.0;
+    radioSettings[QStringLiteral("RAW")] = raw;
+    radioConfig[QStringLiteral("Radio")] = radioSettings;
+
+    QJsonObject bridgeSettings = bridgeConfig.value(QStringLiteral("Radio")).toObject();
+    bridgeSettings[QStringLiteral("autoDoppler")] = true;
+    bridgeConfig[QStringLiteral("Radio")] = bridgeSettings;
+
+    // Commit the marker last so a failed auxiliary write is retried next time.
+    if (!writeJsonObject(radioFile, radioConfig, error) ||
+        !writeJsonObject(bridgeFile, bridgeConfig, error))
+        return false;
+    if (!writeJsonObject(configFile, config, error))
+        return false;
+    QSaveFile markerOutput(markerFile);
+    if (!markerOutput.open(QIODevice::WriteOnly)) {
+        *error = QCoreApplication::translate(
+            "ASRTU", "无法保存 SDR++ 设置：\n%1").arg(markerFile);
+        return false;
+    }
+    markerOutput.write(QByteArray::number(kPresetVersion));
+    if (!markerOutput.commit()) {
+        *error = QCoreApplication::translate(
+            "ASRTU", "无法保存 SDR++ 设置：\n%1").arg(markerFile);
+        return false;
+    }
+    return true;
+}
+
+bool makeSdrCommandProgram(const QString& command, SdrProgram* program)
+{
+    QStringList parts;
+    if (QFileInfo(command.trimmed()).isFile())
+        parts << command.trimmed();
+    else
+        parts = QProcess::splitCommand(command.trimmed());
+    if (parts.isEmpty())
+        return false;
+    QString executable = parts.first();
+    if (!QFileInfo(executable).isFile())
+        executable = QStandardPaths::findExecutable(executable);
+    if (!sdrExecutableAvailable(executable))
+        return false;
+    program->executable = QFileInfo(executable).absoluteFilePath();
+    program->arguments = parts.mid(1);
+    program->workingDirectory = QFileInfo(executable).absolutePath();
+    program->sdrSharp = false;
+    return true;
 }
 
 QString configPath()
@@ -274,18 +678,406 @@ bool startProgram(const QString& executable, const QStringList& arguments,
 bool startSdrSharp(qint64* processId, QString* error)
 {
     const QString executable = sdrSharpDirectory() + QStringLiteral("/SDRSharp.exe");
+    if (sdrProcessRunning(executable)) {
+        *error = QCoreApplication::translate(
+            "ASRTU", "SDR# 已在运行；请先关闭已有实例，避免重复启动桥接。");
+        return false;
+    }
     return startProgram(executable, {}, sdrSharpDirectory(), {}, false,
                         processId, error);
+}
+
+bool startSdrProgram(const SdrProgram& program, qint64* processId, QString* error)
+{
+    if (sdrProcessRunning(program.executable)) {
+        *error = QCoreApplication::translate(
+            "ASRTU", "该 SDR 软件已在运行；请先关闭已有实例，避免重复启动桥接。");
+        return false;
+    }
+    if (program.name.compare(QStringLiteral("SDR++"), Qt::CaseInsensitive) == 0 &&
+        !configureSdrppPreset(program.workingDirectory, error)) {
+        return false;
+    }
+    QProcess process;
+    process.setProgram(program.executable);
+    process.setArguments(program.arguments);
+    process.setWorkingDirectory(program.workingDirectory);
+    QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+    const QString path = environment.value(QStringLiteral("PATH"));
+    environment.insert(QStringLiteral("PATH"),
+                       program.workingDirectory + QDir::listSeparator() + path);
+    const QString soapyPlugins = QDir(program.workingDirectory)
+        .filePath(QStringLiteral("lib/SoapySDR/modules0.8"));
+    if (QFileInfo::exists(soapyPlugins)) {
+        // Keep the portable Soapy installation isolated from any system or
+        // conda copy. This avoids duplicate plugin registration.
+        environment.insert(QStringLiteral("SOAPY_SDR_ROOT"),
+                           program.workingDirectory);
+        environment.remove(QStringLiteral("SOAPY_SDR_PLUGIN_PATH"));
+    }
+    process.setProcessEnvironment(environment);
+    if (!sdrExecutableAvailable(program.executable) || !process.startDetached(processId)) {
+        *error = QCoreApplication::translate("ASRTU", "无法启动：\n%1").arg(program.executable)
+               + QLatin1Char('\n') + process.errorString();
+        return false;
+    }
+    return true;
+}
+
+bool editSdrProgramDialog(QWidget* parent, SdrProgram* program, bool adding)
+{
+    QDialog dialog(parent);
+    dialog.setObjectName(QStringLiteral("addSdrDialog"));
+    dialog.setWindowTitle(QCoreApplication::translate(
+        "ASRTU", adding ? "添加 SDR 接收软件" : "修改 SDR 接收软件"));
+    dialog.resize(560, 250);
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* form = new QFormLayout;
+    auto* name = new QLineEdit(program->name, &dialog);
+    name->setObjectName(QStringLiteral("sdrName"));
+    name->setMaxLength(60);
+    name->setPlaceholderText(QCoreApplication::translate(
+        "ASRTU", "可留空，默认使用程序名"));
+    auto* path = new QLineEdit(&dialog);
+    path->setObjectName(QStringLiteral("sdrPath"));
+    if (!program->executable.isEmpty())
+        path->setText(sdrProgramCommandLine(*program));
+    path->setPlaceholderText(QCoreApplication::translate("ASRTU", "选择程序路径，也可填写启动命令"));
+    auto* browse = new QPushButton(QCoreApplication::translate("ASRTU", "浏览…"), &dialog);
+    auto* pathRow = new QHBoxLayout;
+    pathRow->addWidget(path, 1);
+    pathRow->addWidget(browse);
+    form->addRow(QCoreApplication::translate("ASRTU", "备注名（可留空）"), name);
+    form->addRow(QCoreApplication::translate("ASRTU", "程序路径或命令"), pathRow);
+    layout->addLayout(form);
+    auto* error = new QLabel(&dialog);
+    error->setObjectName(QStringLiteral("sdrValidationError"));
+    error->setWordWrap(true);
+    error->setStyleSheet(QStringLiteral("color:#b42318;"));
+    layout->addWidget(error);
+    auto* actions = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &dialog);
+    layout->addWidget(actions);
+    QObject::connect(browse, &QPushButton::clicked, &dialog, [&] {
+        const QString selected = QFileDialog::getOpenFileName(
+            &dialog, QCoreApplication::translate("ASRTU", "选择 SDR 接收软件"));
+        if (!selected.isEmpty())
+            path->setText(QDir::toNativeSeparators(selected));
+    });
+    QObject::connect(actions, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    QObject::connect(actions, &QDialogButtonBox::accepted, &dialog, [&] {
+        SdrProgram parsed;
+        if (!makeSdrCommandProgram(path->text(), &parsed)) {
+            error->setText(QCoreApplication::translate("ASRTU", "找不到可执行程序，请检查路径或命令。"));
+            path->setFocus();
+            return;
+        }
+        QString chosenName = name->text().trimmed();
+        if (chosenName.isEmpty()) {
+            chosenName = QFileInfo(parsed.executable).completeBaseName();
+            if (chosenName.isEmpty())
+                chosenName = QFileInfo(parsed.executable).fileName();
+        }
+        if (chosenName.isEmpty()) {
+            error->setText(QCoreApplication::translate("ASRTU", "请填写备注名或有效的程序路径。"));
+            name->setFocus();
+            return;
+        }
+        for (const auto& existing : availableSdrPrograms()) {
+            if (existing.name.compare(chosenName, Qt::CaseInsensitive) != 0)
+                continue;
+            const bool self = !adding &&
+                ((!program->overrideKey.isEmpty() &&
+                  existing.overrideKey == program->overrideKey) ||
+                 (program->customIndex >= 0 &&
+                  existing.customIndex == program->customIndex));
+            if (!self) {
+                error->setText(QCoreApplication::translate("ASRTU", "备注名已存在，请使用其他名称。"));
+                return;
+            }
+        }
+        parsed.name = chosenName;
+        parsed.overrideKey = program->overrideKey;
+        parsed.customIndex = program->customIndex;
+        parsed.sdrSharp = program->sdrSharp;
+        QSettings settings;
+        if (!parsed.overrideKey.isEmpty()) {
+            settings.beginGroup(QStringLiteral("sdr/programOverrides/") +
+                                parsed.overrideKey);
+            settings.setValue(QStringLiteral("name"), parsed.name);
+            settings.setValue(QStringLiteral("executable"), parsed.executable);
+            settings.setValue(QStringLiteral("arguments"), parsed.arguments);
+            settings.endGroup();
+        } else if (parsed.customIndex >= 0) {
+            settings.beginWriteArray(QStringLiteral("sdr/customPrograms"));
+            settings.setArrayIndex(parsed.customIndex);
+            settings.setValue(QStringLiteral("name"), parsed.name);
+            settings.setValue(QStringLiteral("executable"), parsed.executable);
+            settings.setValue(QStringLiteral("arguments"), parsed.arguments);
+            settings.endArray();
+        } else {
+            const int count = settings.beginReadArray(QStringLiteral("sdr/customPrograms"));
+            settings.endArray();
+            parsed.customIndex = count;
+            settings.beginWriteArray(QStringLiteral("sdr/customPrograms"), count + 1);
+            settings.setArrayIndex(count);
+            settings.setValue(QStringLiteral("name"), parsed.name);
+            settings.setValue(QStringLiteral("executable"), parsed.executable);
+            settings.setValue(QStringLiteral("arguments"), parsed.arguments);
+            settings.endArray();
+        }
+        settings.sync();
+        if (settings.status() != QSettings::NoError) {
+            error->setText(QCoreApplication::translate("ASRTU", "保存失败"));
+            return;
+        }
+        *program = parsed;
+        dialog.accept();
+    });
+    return dialog.exec() == QDialog::Accepted;
+}
+
+void showSdrChooser(QWidget* parent)
+{
+    QDialog dialog(parent);
+    dialog.setObjectName(QStringLiteral("sdrChooser"));
+    dialog.setWindowTitle(QCoreApplication::translate("ASRTU", "选择 SDR 接收软件"));
+    dialog.setWindowFlag(Qt::WindowContextHelpButtonHint, false);
+    dialog.setMinimumWidth(680);
+    dialog.setStyleSheet(QStringLiteral(
+        "QDialog#sdrChooser { background:#f7f9fc; }"
+        "QLabel { background:transparent; border:0; }"
+        "QLabel#sdrChooserTitle { color:#132238; font-size:17pt; font-weight:600; }"
+        "QLabel#sdrChooserHint { color:#66758a; font-size:10pt; }"
+        "QScrollArea#sdrChooserScroll { background:transparent; border:0; }"
+        "QWidget#sdrChooserContent { background:transparent; }"
+        "QFrame#sdrCard { background:#ffffff; border:1px solid #dbe3ee; border-radius:12px; }"
+        "QFrame#sdrCard:hover { border:1px solid #5b9be6; background:#fbfdff; }"
+        // Override the parent's generic QPushButton min-height too: Qt's
+        // stylesheet polish otherwise resets setFixedHeight's minimum to 34
+        // and compresses the custom child layout down to one-pixel labels.
+        "QPushButton#sdrLaunch { min-height:128px; border:0; background:transparent; padding:0; }"
+        "QPushButton#sdrLaunch:focus { border:1px solid #458bdd; border-radius:8px; }"
+        "QLabel#sdrName { color:#172b4d; font-size:15pt; font-weight:600; }"
+        "QLabel#sdrDescription { color:#66758a; font-size:9pt; }"
+        "QLabel#sdrStatus { color:#187655; background:#edf8f1; border-radius:5px; padding:3px 7px; font-size:9pt; }"
+        "QLabel#sdrStatus[unavailable=true] { color:#66758a; background:#f0f2f5; }"
+        "QLabel#sdrArrow { color:#3478c6; font-size:15pt; }"
+        "QPushButton#sdrDelete { border:0; color:#9aa7b8; font-size:17px; padding:8px; }"
+        "QPushButton#sdrDelete:hover { color:#d92d20; background:#fff1f0; border-radius:7px; }"
+        "QPushButton#addSdrButton { min-height:32px; border:1px solid #b9d2ee; padding:4px 14px; "
+        "border-radius:7px; background:#ffffff; color:#1769aa; font-size:10pt; }"
+        "QPushButton#addSdrButton:hover { background:#eef7ff; border-color:#5b9be6; }"
+        "QDialogButtonBox QPushButton { min-width:84px; min-height:32px; border:1px solid #c9d5e3; "
+        "border-radius:7px; background:#ffffff; color:#344054; padding:4px 14px; }"
+        "QDialogButtonBox QPushButton:hover { background:#f0f6fc; }"));
+    auto* layout = new QVBoxLayout(&dialog);
+    layout->setContentsMargins(24, 22, 24, 20);
+    layout->setSpacing(14);
+    auto* title = new QLabel(QCoreApplication::translate("ASRTU", "选择 SDR 接收软件"), &dialog);
+    title->setObjectName(QStringLiteral("sdrChooserTitle"));
+    layout->addWidget(title);
+    auto* hint = new QLabel(QCoreApplication::translate("ASRTU", "选择接收软件，开始卫星信号接收。"), &dialog);
+    hint->setObjectName(QStringLiteral("sdrChooserHint"));
+    hint->setWordWrap(true);
+    layout->addWidget(hint);
+    auto* scroll = new QScrollArea(&dialog);
+    scroll->setObjectName(QStringLiteral("sdrChooserScroll"));
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    auto* content = new QWidget(scroll);
+    content->setObjectName(QStringLiteral("sdrChooserContent"));
+    auto* grid = new QGridLayout(content);
+    grid->setContentsMargins(0, 0, 0, 0);
+    grid->setSpacing(12);
+    grid->setAlignment(Qt::AlignTop);
+    grid->setColumnStretch(0, 1);
+    grid->setColumnStretch(1, 1);
+    scroll->setWidget(content);
+    scroll->viewport()->setAutoFillBackground(false);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    layout->addWidget(scroll, 1);
+    int count = 0;
+    bool anyAvailable = false;
+    const auto resizeCards = [&] {
+        scroll->setFixedHeight(qMin((count + 1) / 2, 3) * 158 - 12);
+        dialog.adjustSize();
+    };
+    const auto addCard = [&](const SdrProgram& program) {
+        auto* card = new QFrame(content);
+        card->setObjectName(QStringLiteral("sdrCard"));
+        auto* row = new QHBoxLayout(card);
+        row->setContentsMargins(8, 8, 8, 8);
+        row->setSpacing(2);
+        auto* button = new QPushButton(card);
+        button->setObjectName(QStringLiteral("sdrLaunch"));
+        button->setAutoDefault(false);
+        button->setAccessibleName(program.name);
+        button->setFixedHeight(128);
+        button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        const bool available = sdrExecutableAvailable(program.executable);
+        anyAvailable = anyAvailable || available;
+        button->setEnabled(available);
+        button->setCursor(available ? Qt::PointingHandCursor : Qt::ArrowCursor);
+        button->setToolTip(QDir::toNativeSeparators(program.executable));
+        auto* body = new QVBoxLayout(button);
+        body->setContentsMargins(10, 8, 10, 8);
+        body->setSpacing(8);
+        auto* heading = new QHBoxLayout;
+        auto* icon = new QLabel(button);
+        icon->setPixmap(sdrProgramIcon(program).pixmap(32, 32));
+        heading->addWidget(icon);
+        auto* name = new QLabel(program.name, button);
+        name->setTextFormat(Qt::PlainText);
+        name->setObjectName(QStringLiteral("sdrName"));
+        heading->addWidget(name, 1);
+        auto* arrow = new QLabel(available ? QStringLiteral("→") : QString(), button);
+        arrow->setObjectName(QStringLiteral("sdrArrow"));
+        heading->addWidget(arrow);
+        body->addLayout(heading);
+        auto* description = new QLabel(program.sdrSharp
+            ? QCoreApplication::translate("ASRTU", "遥测预设 · 共享内存 I/Q")
+            : program.name == QStringLiteral("SDR++")
+#ifdef Q_OS_WIN
+                ? QCoreApplication::translate("ASRTU", "遥测预设 · 共享内存 I/Q 与多普勒")
+#else
+                ? QCoreApplication::translate("ASRTU", "遥测预设 · Rigctl")
+#endif
+                : QFileInfo(program.executable).fileName(), button);
+        description->setTextFormat(Qt::PlainText);
+        description->setObjectName(QStringLiteral("sdrDescription"));
+        description->setWordWrap(true);
+        body->addWidget(description);
+        auto* status = new QLabel(available
+            ? QCoreApplication::translate("ASRTU", "就绪 · 点击打开")
+            : QCoreApplication::translate("ASRTU", "未安装或文件不完整"), button);
+        status->setObjectName(QStringLiteral("sdrStatus"));
+        status->setProperty("unavailable", !available);
+        body->addWidget(status, 0, Qt::AlignLeft);
+        for (auto* label : button->findChildren<QLabel*>())
+            label->setAttribute(Qt::WA_TransparentForMouseEvents);
+        row->addWidget(button, 1);
+        auto* edit = new QPushButton(card);
+        edit->setObjectName(QStringLiteral("sdrEdit"));
+        edit->setIcon(QIcon(QStringLiteral(":/launcher/edit.png")));
+        edit->setIconSize(QSize(16, 16));
+        edit->setToolTip(QCoreApplication::translate("ASRTU", "修改此软件"));
+        edit->setAccessibleName(edit->toolTip() + QStringLiteral(" ") + program.name);
+        edit->setAutoDefault(false);
+        edit->setFixedSize(28, 28);
+        row->addWidget(edit, 0, Qt::AlignTop);
+        QObject::connect(edit, &QPushButton::clicked, &dialog, [&, program] {
+            SdrProgram updated = program;
+            if (!editSdrProgramDialog(&dialog, &updated, false))
+                return;
+            dialog.accept();
+            QTimer::singleShot(0, parent, [parent] { showSdrChooser(parent); });
+        });
+        if (!program.sdrSharp && program.overrideKey != QStringLiteral("sdrpp")) {
+            auto* remove = new QPushButton(QStringLiteral("×"), card);
+            remove->setObjectName(QStringLiteral("sdrDelete"));
+            remove->setToolTip(QCoreApplication::translate("ASRTU", "删除此软件"));
+            remove->setAccessibleName(remove->toolTip() + QStringLiteral(" ") + program.name);
+            remove->setAutoDefault(false);
+            row->addWidget(remove, 0, Qt::AlignTop);
+            QObject::connect(remove, &QPushButton::clicked, &dialog, [&, program, card] {
+                QSettings settings;
+                const int oldCount = settings.beginReadArray(QStringLiteral("sdr/customPrograms"));
+                QList<SdrProgram> retained;
+                for (int i = 0; i < oldCount; ++i) {
+                    settings.setArrayIndex(i);
+                    const QString name = settings.value(QStringLiteral("name")).toString();
+                    if (name.compare(program.name, Qt::CaseInsensitive) != 0)
+                        retained.append({name, settings.value(QStringLiteral("executable")).toString(),
+                                         settings.value(QStringLiteral("arguments")).toStringList(), {}, false});
+                }
+                settings.endArray();
+                settings.remove(QStringLiteral("sdr/customPrograms"));
+                settings.beginWriteArray(QStringLiteral("sdr/customPrograms"), retained.size());
+                for (int i = 0; i < retained.size(); ++i) {
+                    settings.setArrayIndex(i);
+                    settings.setValue(QStringLiteral("name"), retained.at(i).name);
+                    settings.setValue(QStringLiteral("executable"), retained.at(i).executable);
+                    settings.setValue(QStringLiteral("arguments"), retained.at(i).arguments);
+                }
+                settings.endArray();
+                settings.sync();
+                if (settings.status() != QSettings::NoError) {
+                    QMessageBox::warning(&dialog,
+                        QCoreApplication::translate("ASRTU", "保存失败"),
+                        QCoreApplication::translate("ASRTU", "保存失败"));
+                    return;
+                }
+                grid->removeWidget(card);
+                card->hide();
+                card->deleteLater();
+                QList<QWidget*> remaining;
+                while (auto* item = grid->takeAt(0)) {
+                    if (item->widget())
+                        remaining.append(item->widget());
+                    delete item;
+                }
+                count = 0;
+                for (auto* widget : remaining) {
+                    grid->addWidget(widget, count / 2, count % 2);
+                    ++count;
+                }
+                resizeCards();
+            });
+        }
+        grid->addWidget(card, count / 2, count % 2);
+        ++count;
+        QObject::connect(button, &QPushButton::clicked, &dialog, [&, program] {
+            QString error;
+            qint64 processId = 0;
+            if (!startSdrProgram(program, &processId, &error)) {
+                QMessageBox::critical(&dialog,
+                    QCoreApplication::translate("ASRTU", "SDR 启动失败"), error);
+                return;
+            }
+            dialog.accept();
+        });
+    };
+    for (const auto& program : availableSdrPrograms())
+        addCard(program);
+    if (!anyAvailable)
+        hint->setText(QCoreApplication::translate("ASRTU", "没有可用的 SDR 接收软件。请点击 + 添加。"));
+    auto* add = new QPushButton(QStringLiteral("＋  ") +
+        QCoreApplication::translate("ASRTU", "添加自定义软件"), &dialog);
+    add->setObjectName(QStringLiteral("addSdrButton"));
+    add->setAccessibleName(QCoreApplication::translate("ASRTU", "添加 SDR 接收软件"));
+    add->setToolTip(add->accessibleName());
+    auto* footer = new QHBoxLayout;
+    footer->addWidget(add);
+    footer->addStretch();
+    layout->addLayout(footer);
+    QObject::connect(add, &QPushButton::clicked, &dialog, [&] {
+        SdrProgram program;
+        if (editSdrProgramDialog(&dialog, &program, true)) {
+            addCard(program);
+            resizeCards();
+            hint->setText(QCoreApplication::translate("ASRTU", "选择接收软件，开始卫星信号接收。"));
+        }
+    });
+    auto* close = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
+    close->button(QDialogButtonBox::Close)->setText(QCoreApplication::translate("ASRTU", "关闭"));
+    QObject::connect(close, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    footer->addWidget(close);
+    resizeCards();
+    dialog.exec();
 }
 
 bool startDoppler(double longitude, double latitude, double altitude,
 		  const QString &satellite, qint64 *processId, QString *error)
 {
-	const QString directory = asrtu::moduleDirectory(QStringLiteral("doppler"),
-	    executableName(QStringLiteral("TinyDoppler")));
-	const QString executable =
-	    QDir(directory)
-		.filePath(executableName(QStringLiteral("TinyDoppler")));
+	const QString name = executableName(QStringLiteral("TinyDoppler"));
+	const QString directory =
+	    asrtu::moduleDirectory(QStringLiteral("doppler"), name);
+	const QString executable = QDir(directory).filePath(name);
+	if (!QFileInfo::exists(executable)) {
+		*error = QCoreApplication::translate("ASRTU",
+		    "未找到新版卫星跟踪程序 TinyDoppler.exe");
+		return false;
+	}
 	QStringList arguments{QStringLiteral("--integrated"),
 			      QStringLiteral("--longitude"),
 			      QString::number(longitude, 'f', 6),
@@ -330,7 +1122,7 @@ bool processSurvivedStartup(qint64 processId, int timeoutMs, quint32* exitCode)
     const HANDLE process = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION,
                                        FALSE, DWORD(processId));
     if (!process)
-        return true;
+        return false;
     const DWORD waitResult = WaitForSingleObject(process, DWORD(timeoutMs));
     DWORD nativeExitCode = STILL_ACTIVE;
     GetExitCodeProcess(process, &nativeExitCode);
@@ -392,8 +1184,11 @@ void terminateDetachedProcess(qint64 processId)
 bool startSatnogsUploader(const QString& satellite, int noradId,
                           const QString& source, double longitude,
                           double latitude, double altitude,
-                          qint64* processId, QString* error)
+                          qint64* processId, QString* error,
+                          bool* alreadyRunning = nullptr)
 {
+    if (alreadyRunning)
+        *alreadyRunning = false;
     const QString directory = asrtu::moduleDirectory(QStringLiteral("satnogs-uploader"),
         executableName(QStringLiteral("ASRTU_SatnogsUploader")));
     const QString uploader = QDir(directory).filePath(
@@ -415,20 +1210,27 @@ bool startSatnogsUploader(const QString& satellite, int noradId,
     }
     quint32 exitCode = 0;
     if (!processSurvivedStartup(uploaderPid, 1200, &exitCode)) {
-        *error = exitCode == 3
-                     ? QCoreApplication::translate(
-                           "ASRTU", "SatNOGS 上传程序已在运行；不会重复启动。")
-                     : QCoreApplication::translate(
-                           "ASRTU", "SatNOGS 上传程序启动后立即退出（代码 %1）。")
-                           .arg(exitCode);
+        if (exitCode == 3) {
+            if (alreadyRunning)
+                *alreadyRunning = true;
+            if (processId)
+                *processId = 0;
+            return true;
+        }
+        *error = QCoreApplication::translate(
+                     "ASRTU", "SatNOGS 上传程序启动后立即退出（代码 %1）。")
+                     .arg(exitCode);
         return false;
     }
     *processId = uploaderPid;
     return true;
 }
 
-bool startProxy(const QString& launchLog, qint64* processId, QString* error)
+bool startProxy(const QString& launchLog, qint64* processId, QString* error,
+                bool* alreadyRunning = nullptr)
 {
+    if (alreadyRunning)
+        *alreadyRunning = false;
 #ifdef Q_OS_WIN
 	const QString proxyWrapper =
 	    proxyDirectory() + QStringLiteral("/ASRTU_Proxy.exe");
@@ -474,6 +1276,12 @@ bool startProxy(const QString& launchLog, qint64* processId, QString* error)
 		return false;
 	quint32 exitCode = 0;
 	if (!processSurvivedStartup(proxyPid, 1200, &exitCode)) {
+		if (exitCode == 3) {
+			if (alreadyRunning)
+				*alreadyRunning = true;
+			*processId = 0;
+			return true;
+		}
 		*error = QCoreApplication::translate(
 			     "ASRTU", "上传代理启动后立即退出（代码 %1）。")
 			     .arg(exitCode);
@@ -504,6 +1312,7 @@ bool startSuite(bool enableProxy, int inputMode, const QString &wavPath,
 		QString *sessionDirectory, qint64 *proxyProcessId,
 		QString *error)
 {
+	inputMode = normalizedInputMode(inputMode);
 	const QString decoder =
 	    QDir(decoderDirectory())
 		.filePath(executableName(QStringLiteral("ASRTU1_Demod_CQt")));
@@ -516,13 +1325,10 @@ bool startSuite(bool enableProxy, int inputMode, const QString &wavPath,
 			.suffix()
 			.compare(QStringLiteral("wav"), Qt::CaseInsensitive) !=
 		    0) {
-			const QString converter =
-			    QDir(decoderDirectory())
-				.filePath(executableName(
-				    QStringLiteral("sndfile-convert")));
-			if (!QFileInfo::exists(converter)) {
+			const QString converter = audioConverterPath();
+			if (converter.isEmpty()) {
 				*error = QCoreApplication::translate(
-				    "ASRTU", "找不到录音格式转换器。 ");
+				    "ASRTU", "当前安装没有录音格式转换器，仅能播放 WAV 录音。");
 				return false;
 			}
 			const QString converted =
@@ -560,26 +1366,34 @@ bool startSuite(bool enableProxy, int inputMode, const QString &wavPath,
 		const QString proxyLog =
 		    QDir(*sessionDirectory)
 			.filePath(QStringLiteral("proxy.log"));
-		if (!startProxy(proxyLog, &proxyPid, error))
-			return false;
+		bool proxyAlreadyRunning = false;
+		if (!startProxy(proxyLog, &proxyPid, error, &proxyAlreadyRunning)) {
+			// The receiver can still decode and record without the legacy MMT
+			// upload proxy. Do not let a dead proxy block the whole session.
+			const QString proxyError = *error;
+			appendProxyLaunchLog(
+			    proxyLog,
+			    QStringLiteral("MMT upload proxy unavailable: %1")
+				.arg(proxyError));
+			error->clear();
+			proxyPid = 0;
+		} else if (proxyAlreadyRunning) {
+			appendProxyLaunchLog(
+			    proxyLog,
+			    QStringLiteral("MMT upload proxy already running; reusing it."));
+			proxyPid = 0;
+		}
 	}
 	qint64 decoderPid = 0;
-	const QString readyServerName =
-	    QStringLiteral("ASRTU_DSP_READY_%1")
-		.arg(QUuid::createUuid().toString(QUuid::Id128));
-	QLocalServer readyServer;
-	if (!readyServer.listen(readyServerName)) {
-		if (proxyPid > 0)
-			terminateDetachedProcess(proxyPid);
-		*error = QCoreApplication::translate(
-		    "ASRTU", "无法创建解码器启动确认通道：%1")
-			.arg(readyServer.errorString());
-		return false;
-	}
+	// A file handshake works across restricted/low-integrity launch contexts
+	// where QLocalSocket named-pipe connections can be denied.
+	const QString readyFile =
+	    QDir(*sessionDirectory).filePath(QStringLiteral("decoder.ready"));
+	QFile::remove(readyFile);
 	QStringList decoderArguments{QStringLiteral("--session-dir"),
 				     *sessionDirectory,
-				     QStringLiteral("--ready-server"),
-				     readyServerName};
+				     QStringLiteral("--ready-file"),
+				     readyFile};
 	if (!playbackPath.isEmpty())
 		decoderArguments << QStringLiteral("--wav") << playbackPath;
 	if (!playbackPath.isEmpty() && fastPlayback)
@@ -589,12 +1403,18 @@ bool startSuite(bool enableProxy, int inputMode, const QString &wavPath,
 	if (inputMode == 1)
 		decoderArguments << QStringLiteral("--real-if-12k");
 	else if (inputMode == 2)
+#ifdef Q_OS_WIN
+		decoderArguments << QStringLiteral("--shared-iq-bridge");
+#else
 		decoderArguments << QStringLiteral("--sdrsharp-iq-bridge");
+#endif
 	if (playbackPath.isEmpty() && inputMode != 2)
 		decoderArguments << QStringLiteral("--audio-device")
 				 << QString::number(audioDeviceId);
-	if (!startProgram(decoder, decoderArguments, decoderDirectory(), {},
-			  false, &decoderPid, error)) {
+	const QString decoderLog =
+	    QDir(*sessionDirectory).filePath(QStringLiteral("decoder.log"));
+	if (!startProgram(decoder, decoderArguments, decoderDirectory(),
+			  decoderLog, false, &decoderPid, error)) {
 		if (proxyPid > 0)
 			terminateDetachedProcess(proxyPid);
 		return false;
@@ -604,12 +1424,15 @@ bool startSuite(bool enableProxy, int inputMode, const QString &wavPath,
 	bool decoderReady = false;
 	quint32 decoderExitCode = 0;
 	while (readyTimer.elapsed() < 15000) {
-		if (readyServer.waitForNewConnection(100)) {
+		QFile ready(readyFile);
+		if (ready.open(QIODevice::ReadOnly) &&
+		    ready.readAll().trimmed() == QByteArrayLiteral("ready")) {
 			decoderReady = true;
 			break;
 		}
 		if (!processSurvivedStartup(decoderPid, 0, &decoderExitCode))
 			break;
+		QThread::msleep(25);
 	}
 	if (!decoderReady) {
 		terminateDetachedProcess(decoderPid);
@@ -622,20 +1445,7 @@ bool startSuite(bool enableProxy, int inputMode, const QString &wavPath,
 				   "ASRTU", "解码器未在 15 秒内完成初始化；已回滚本次启动。");
 		return false;
 	}
-	QLocalSocket* readySocket = readyServer.nextPendingConnection();
-	if (!readySocket ||
-	    (!readySocket->bytesAvailable() && !readySocket->waitForReadyRead(1000)) ||
-	    readySocket->readAll() != QByteArrayLiteral("ready")) {
-		if (readySocket)
-			delete readySocket;
-		terminateDetachedProcess(decoderPid);
-		if (proxyPid > 0)
-			terminateDetachedProcess(proxyPid);
-		*error = QCoreApplication::translate(
-		    "ASRTU", "解码器启动确认无效；已回滚本次启动。");
-		return false;
-	}
-	delete readySocket;
+	QFile::remove(readyFile);
 	*proxyProcessId = proxyPid;
 	return true;
 }
@@ -745,16 +1555,30 @@ public:
         altitude_ = makeCoordinate(-500.0, 10000.0, 2);
         altitude_->setSuffix(QStringLiteral(" m"));
         input_mode_ = new QComboBox(this);
+        input_mode_->setObjectName(QStringLiteral("inputMode"));
         input_mode_->setSizeAdjustPolicy(
             QComboBox::AdjustToMinimumContentsLengthWithIcon);
         input_mode_->setMinimumContentsLength(18);
-        const bool localBridgeAvailable =
+        const bool sdrSharpBridgeAvailable =
             QFileInfo::exists(sdrSharpDirectory() + QStringLiteral("/SDRSharp.exe")) &&
             QFileInfo::exists(sdrSharpDirectory() +
                               QStringLiteral("/Plugins/SDRSharp.AstroSeriesBridge.dll"));
-        if (localBridgeAvailable)
-            input_mode_->addItem(
-                QCoreApplication::translate("ASRTU", "本地内存共享 RAW 模式 I/Q 桥接"), 2);
+#ifdef Q_OS_WIN
+        const bool localBridgeAvailable =
+            sdrSharpBridgeAvailable || sdrppBridgeAvailable();
+        const QString sharedBridgeLabel = QCoreApplication::translate(
+            "ASRTU", "本地内存共享 RAW 模式 I/Q 桥接");
+        input_mode_->addItem(sharedBridgeLabel, 2);
+        if (!localBridgeAvailable)
+            if (auto* model = qobject_cast<QStandardItemModel*>(input_mode_->model()))
+                model->item(0)->setEnabled(false);
+#else
+        input_mode_->addItem(
+            QCoreApplication::translate("ASRTU", "本地内存共享 RAW 模式 I/Q 桥接"), 2);
+        if (!sdrSharpBridgeAvailable)
+            if (auto* model = qobject_cast<QStandardItemModel*>(input_mode_->model()))
+                model->item(0)->setEnabled(false);
+#endif
         input_mode_->addItem(
             QCoreApplication::translate("ASRTU", "立体声零中频 RAW 模式 I/Q 输入"), 0);
         input_mode_->addItem(
@@ -808,19 +1632,19 @@ public:
         toolsLayout->addWidget(toolsTitle);
         auto* tools = new QGridLayout;
         tools->setHorizontalSpacing(9);
-        auto* sdrSharp = new QPushButton(QCoreApplication::translate("ASRTU", "打开 SDR# 遥测预设"), this);
+        auto* sdrButton = new QPushButton(QCoreApplication::translate("ASRTU", "打开预设 SDR 接收软件"), this);
         auto* tracker = new QPushButton(QCoreApplication::translate("ASRTU", "卫星跟踪与自动多普勒"), this);
         auto* playback = new QPushButton(QCoreApplication::translate("ASRTU", "播放录音文件"), this);
         auto* quickReplay = new QPushButton(QCoreApplication::translate("ASRTU", "快速重放录音"), this);
         auto* openRecords = new QPushButton(QCoreApplication::translate("ASRTU", "打开录音目录"), this);
-        for (auto* button : {sdrSharp, tracker, playback, quickReplay, openRecords}) {
+        for (auto* button : {sdrButton, tracker, playback, quickReplay, openRecords}) {
             button->setObjectName(QStringLiteral("tool"));
             // Long translated captions must not increase the top-level
             // window's minimum width; the two equal grid columns provide
             // ample room at the compact launcher size.
             button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         }
-        tools->addWidget(sdrSharp, 0, 0);
+        tools->addWidget(sdrButton, 0, 0);
         tools->addWidget(tracker, 0, 1);
         tools->addWidget(playback, 1, 0);
         tools->addWidget(quickReplay, 1, 1);
@@ -864,11 +1688,8 @@ public:
             "color:#7b8794; font-style:italic; padding-top:1px;"));
         layout->addWidget(credit);
 
-        connect(sdrSharp, &QPushButton::clicked, this, [this] {
-            QString error;
-            qint64 processId = 0;
-            if (!startSdrSharp(&processId, &error))
-                QMessageBox::critical(this, QCoreApplication::translate("ASRTU", "SDR# 启动失败"), error);
+        connect(sdrButton, &QPushButton::clicked, this, [this] {
+            showSdrChooser(this);
         });
         tracker->setProperty("satelliteTracker", true);
         connect(tracker, &QPushButton::clicked, this, [this] {
@@ -894,9 +1715,14 @@ public:
                                     bool fastPlayback,
                                     const QString& dialogTitle,
                                     const QString& errorTitle) {
+            QString recordingFilter =
+                QCoreApplication::translate("ASRTU", "接收录音 (*.wav");
+            if (!audioConverterPath().isEmpty())
+                recordingFilter += QStringLiteral(
+                    " *.ogg *.oga *.opus *.flac *.mp3");
+            recordingFilter += QLatin1Char(')');
             const QString wavPath = QFileDialog::getOpenFileName(
-                this, dialogTitle, initialDirectory,
-                QCoreApplication::translate("ASRTU", "接收录音 (*.wav *.ogg *.oga *.opus *.flac *.mp3)"));
+                this, dialogTitle, initialDirectory, recordingFilter);
             if (wavPath.isEmpty())
                 return;
             QString error;
@@ -938,13 +1764,14 @@ public:
             settings.setValue(QStringLiteral("satnogs_latitude"), latitude_->value());
             settings.sync();
             qint64 satnogsProcessId = 0;
+            bool satnogsAlreadyRunning = false;
             if (satnogsEnabled) {
                 QString error;
                 if (!startSatnogsUploader(
                         satellite, noradForSatellite(satellite),
                         nickname_->text().trimmed(), longitude_->value(),
                         latitude_->value(), altitude_->value(),
-                        &satnogsProcessId, &error)) {
+                        &satnogsProcessId, &error, &satnogsAlreadyRunning)) {
                     QMessageBox::critical(
                         this,
                         QCoreApplication::translate(
@@ -956,30 +1783,68 @@ public:
             // Satellites without an MMT server use SatNOGS as their mandatory
             // and only upload path. MMT-backed satellites may run both paths.
             if (webSocketForSatellite(satellite).isEmpty()) {
-                setStatusText(
-                    QCoreApplication::translate(
-                        "ASRTU", "SatNOGS 上传程序已启动：%1（PID %2）")
-                        .arg(satellite)
-                        .arg(satnogsProcessId));
+                setStatusText(satnogsAlreadyRunning
+                    ? QCoreApplication::translate(
+                          "ASRTU", "SatNOGS 上传程序已在运行：%1")
+                          .arg(satellite)
+                    : QCoreApplication::translate(
+                          "ASRTU", "SatNOGS 上传程序已启动：%1（PID %2）")
+                          .arg(satellite)
+                          .arg(satnogsProcessId));
                 return;
             }
             QString error;
             qint64 processId = 0;
-            if (!startProxy({}, &processId, &error)) {
+            bool proxyAlreadyRunning = false;
+            if (!startProxy({}, &processId, &error, &proxyAlreadyRunning)) {
                 if (satnogsProcessId > 0)
                     terminateDetachedProcess(satnogsProcessId);
                 QMessageBox::critical(this, QCoreApplication::translate("ASRTU", "上传代理启动失败"), error);
                 return;
             }
-            setStatusText(satnogsEnabled
-                ? QCoreApplication::translate(
-                      "ASRTU", "MMT 与 SatNOGS 上传均已启动（PID %1 / %2）")
-                      .arg(processId)
-                      .arg(satnogsProcessId)
-                : QCoreApplication::translate(
-                      "ASRTU", "上传代理已启动（PID %1）").arg(processId));
+            if (proxyAlreadyRunning && !satnogsEnabled) {
+                setStatusText(QCoreApplication::translate(
+                    "ASRTU", "MMT 上传代理已在运行"));
+            } else if (proxyAlreadyRunning && satnogsAlreadyRunning) {
+                setStatusText(QCoreApplication::translate(
+                    "ASRTU", "MMT 与 SatNOGS 上传程序均已在运行"));
+                QMessageBox::warning(
+                    this,
+                    QCoreApplication::translate("ASRTU", "上传程序已在运行"),
+                    QCoreApplication::translate(
+                        "ASRTU",
+                        "MMT 与 SatNOGS 上传程序均已在运行；不会重复启动。"));
+            } else if (proxyAlreadyRunning) {
+                setStatusText(QCoreApplication::translate(
+                    "ASRTU", "MMT 上传代理已在运行；SatNOGS 上传程序已启动（PID %1）")
+                    .arg(satnogsProcessId));
+            } else if (satnogsAlreadyRunning) {
+                setStatusText(QCoreApplication::translate(
+                    "ASRTU", "MMT 上传代理已启动（PID %1）；SatNOGS 上传程序已在运行")
+                    .arg(processId));
+            } else {
+                setStatusText(satnogsEnabled
+                    ? QCoreApplication::translate(
+                          "ASRTU", "MMT 与 SatNOGS 上传均已启动（PID %1 / %2）")
+                          .arg(processId)
+                          .arg(satnogsProcessId)
+                    : QCoreApplication::translate(
+                          "ASRTU", "上传代理已启动（PID %1）").arg(processId));
+            }
         });
         connect(start, &QPushButton::clicked, this, [this] {
+            if (!inputModeIndexEnabled(input_mode_->currentIndex())) {
+                const int fallback = firstEnabledInputModeIndex();
+                input_mode_->setCurrentIndex(fallback);
+                updateAudioDeviceVisibility();
+                QMessageBox::warning(
+                    this,
+                    QCoreApplication::translate("ASRTU", "输入模式不可用"),
+                    QCoreApplication::translate(
+                        "ASRTU",
+                        "当前输入模式不可用，已切换到可用的输入模式；请确认后再次启动。"));
+                return;
+            }
             const int inputMode = input_mode_->currentData().toInt();
             const int channelCount =
                 audio_device_->currentData(kAudioChannelCountRole).toInt();
@@ -1110,9 +1975,32 @@ private:
         refreshStatusElide();
     }
 
+    bool inputModeIndexEnabled(int index) const
+    {
+        if (index < 0 || !input_mode_)
+            return false;
+        if (auto* model = qobject_cast<QStandardItemModel*>(input_mode_->model())) {
+            if (auto* item = model->item(index))
+                return item->isEnabled();
+        }
+        return true;
+    }
+
+    int firstEnabledInputModeIndex() const
+    {
+        if (!input_mode_)
+            return 0;
+        for (int index = 0; index < input_mode_->count(); ++index) {
+            if (inputModeIndexEnabled(index))
+                return index;
+        }
+        return 0;
+    }
+
     void updateAudioDeviceVisibility()
     {
-        const bool visible = input_mode_->currentData().toInt() != 2;
+        const int mode = input_mode_->currentData().toInt();
+        const bool visible = mode != 2;
         if (!form_ || !audio_device_label_)
             return;
         if (!visible && audio_row_inserted_) {
@@ -1258,9 +2146,15 @@ private:
     void loadConfiguration()
     {
         QSettings settings(QStringLiteral("ASRTU"), QStringLiteral("AstroSeriesLauncher"));
-        const int savedInputMode = settings.value(
-            QStringLiteral("input_mode"), input_mode_->itemData(0)).toInt();
-        const int savedInputIndex = input_mode_->findData(savedInputMode);
+        const int savedInputMode = normalizedInputMode(settings.value(
+            QStringLiteral("input_mode"), input_mode_->itemData(0)).toInt());
+        int savedInputIndex = input_mode_->findData(savedInputMode);
+        // A saved mode can become unavailable after an installation change
+        // (for example the SDR bridge is no longer installed).  Never leave
+        // the disabled item current: startup would otherwise run the decoder
+        // with an input that can never produce samples.
+        if (!inputModeIndexEnabled(savedInputIndex))
+            savedInputIndex = firstEnabledInputModeIndex();
         input_mode_->setCurrentIndex(savedInputIndex >= 0 ? savedInputIndex : 0);
         // Recording is deliberately opt-in for every launcher session so an
         // old preference cannot silently start filling the records folder.
@@ -1379,6 +2273,9 @@ int main(int argc, char *argv[])
 {
 	QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
 	QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
+	QCoreApplication::setAttribute(Qt::AA_DisableWindowContextHelpButton);
+#endif
 #if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
 	QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
 	    Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
@@ -1430,6 +2327,30 @@ int main(int argc, char *argv[])
 					      QCoreApplication::translate(
 						  "ASRTU", "SDR# 启动失败"),
 					      error);
+			return 1;
+		}
+		return 0;
+	}
+
+	if (application.arguments().contains(QStringLiteral("--sdrpp"))) {
+		QString error;
+		const QList<SdrProgram> programs = availableSdrPrograms();
+		const auto program = std::find_if(
+		    programs.cbegin(), programs.cend(), [](const SdrProgram& candidate) {
+			return candidate.name.compare(
+				   QStringLiteral("SDR++"), Qt::CaseInsensitive) == 0 &&
+			       sdrExecutableAvailable(candidate.executable);
+		    });
+		qint64 processId = 0;
+		if (program == programs.cend() ||
+		    !startSdrProgram(*program, &processId, &error)) {
+			QMessageBox::critical(
+			    nullptr,
+			    QCoreApplication::translate("ASRTU", "SDR++ 启动失败"),
+			    error.isEmpty()
+				? QCoreApplication::translate(
+				      "ASRTU", "未找到完整的随包 SDR++ 安装。")
+				: error);
 			return 1;
 		}
 		return 0;

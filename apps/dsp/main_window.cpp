@@ -240,8 +240,8 @@ bool requestedRealIf12k()
 
 bool requestedSharedIqBridge()
 {
-    return QCoreApplication::arguments().contains(
-        QStringLiteral("--sdrsharp-iq-bridge"));
+    return QCoreApplication::arguments().contains(QStringLiteral("--shared-iq-bridge")) ||
+           QCoreApplication::arguments().contains(QStringLiteral("--sdrsharp-iq-bridge"));
 }
 
 int requestedAudioDevice()
@@ -656,7 +656,7 @@ void MainWindow::updateStatus()
             }
             rssi_meter_->setReading(rssi, rssi_min_, rssi_max_);
         }
-        setSyncDisplay(flowgraph_->synced(1.5));
+        setSyncDisplay(flowgraph_->synced(2.0));
     } catch (const std::exception& e) {
         appendLog(QStringLiteral("Status read failed: %1").arg(QString::fromUtf8(e.what())));
     }
@@ -664,6 +664,10 @@ void MainWindow::updateStatus()
 
 void MainWindow::setSyncDisplay(bool synced)
 {
+    if (sync_display_valid_ && synced == sync_display_synced_)
+        return;
+    sync_display_valid_ = true;
+    sync_display_synced_ = synced;
     sync_label_->setText(synced ? QStringLiteral("SYNCED") : QStringLiteral("NOSYNC"));
     sync_label_->setStyleSheet(QStringLiteral(
         "QLabel { color:white; background:%1; border-radius:3px; padding:3px 10px; }")

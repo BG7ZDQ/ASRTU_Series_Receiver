@@ -24,6 +24,14 @@ void put(std::uint8_t* base, std::size_t offset, const T& value)
 
 int main()
 {
+    // An existing producer may deny write access to the mapping (for example a
+    // 32-bit SDR# host). Check for the mapping before trying to create it so a
+    // live station is never disturbed and the test skips cleanly.
+    if (HANDLE existing = OpenFileMappingW(
+            FILE_MAP_READ, FALSE, L"Local\\ASRTU_IQ_BRIDGE_V1")) {
+        CloseHandle(existing);
+        return 0;
+    }
     HANDLE mapping = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr,
                                         PAGE_READWRITE, 0, DWORD(kBytes),
                                         L"Local\\ASRTU_IQ_BRIDGE_V1");

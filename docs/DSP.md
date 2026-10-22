@@ -8,6 +8,13 @@ loop spectrum, SNR history, loop frequency offset, FEC frame monitoring and
 it does not wait for the first decoded frame. `SYNCED` means that a valid FEC
 PDU was produced during the previous 1.5 seconds.
 
+The spectrum and waterfall display the normalized output of the same causal
+AGC that feeds the demodulator. This applies equally to real 12 kHz IF and
+complex zero-IF inputs. The AGC-output plots are limited to a 24 kHz span
+(`-12` to `+12` kHz) while the demodulator continues to run at 48 kHz. RSSI
+remains measured before AGC so it continues to represent input level rather
+than normalized demodulator level.
+
 The application is a Windows GUI-subsystem executable, so no black console
 window appears. Runtime and FEC messages are appended to `ASRTU1_Demod.log`
 next to the executable.

@@ -7,6 +7,11 @@ $ErrorActionPreference = 'Stop'
 $cmake = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
 if (-not (Test-Path -LiteralPath $cmake)) { throw "CMake not found: $cmake" }
 
+function Quote-ProcessArgument([string]$value) {
+    if ($value -notmatch '[\s"]') { return $value }
+    return '"' + ($value -replace '(\\*)"', '$1$1\"') + '"'
+}
+
 function Invoke-CMake([string[]]$Arguments) {
     $psi = [System.Diagnostics.ProcessStartInfo]::new()
     $psi.FileName = $cmake
@@ -14,7 +19,9 @@ function Invoke-CMake([string[]]$Arguments) {
     $psi.UseShellExecute = $false
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
-    foreach ($argument in $Arguments) { $psi.ArgumentList.Add($argument) }
+    # ProcessStartInfo.ArgumentList is .NET Core only; Windows PowerShell 5.1
+    # (.NET Framework 4.8) must use the quoted Arguments string.
+    $psi.Arguments = ($Arguments | ForEach-Object { Quote-ProcessArgument $_ }) -join ' '
 
     # Some launchers inject both PATH and Path. MSBuild treats these as a
     # duplicate key; normalize only the child build environment.

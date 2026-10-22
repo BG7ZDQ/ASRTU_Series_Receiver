@@ -79,6 +79,17 @@ void FrameMonitor::handleLocalCandidate(const pmt::pmt_t& message,
     std::size_t length = 0;
     const auto* bytes = pmt::u8vector_elements(data, length);
     std::vector<std::uint8_t> payload(bytes, bytes + length);
+    // A failed diversity branch can deliver the same frame after the healthy
+    // branch already published it. Do not forward that byte-identical copy to
+    // the SSDV fallback: for the first packet it would be mistaken for a new
+    // image pass and would clear the partially accumulated image.
+    {
+        std::lock_guard<std::mutex> dispatchLock(dispatch_mutex_);
+        for (const auto& recent : recently_sent_) {
+            if (recent.payload == payload)
+                return;
+        }
+    }
     std::lock_guard<std::mutex> lock(candidate_mutex_);
     const auto now = std::chrono::steady_clock::now();
     const auto key = candidateKey(payload);

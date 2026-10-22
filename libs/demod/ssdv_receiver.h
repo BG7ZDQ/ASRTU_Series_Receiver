@@ -4,6 +4,7 @@
 #include <QImage>
 #include <QString>
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -49,6 +50,9 @@ public:
 
 	void ingestFrame(const QByteArray& frame);
 	void clear();
+	// Drain already-ingested frames, save the final packet/image files, and
+	// join the worker. Safe to call more than once.
+	void finish();
 
 private:
 	struct QueuedFrame {
@@ -58,7 +62,7 @@ private:
 
 	void workerLoop();
 	bool processFrame(const QByteArray& frame, std::uint64_t generation);
-	bool rebuildImage();
+	bool rebuildImage(bool allowStopped = false, bool publish = true);
 	bool savePacketBin();
 	void appendRawFrame(const QByteArray& frame);
 	void clearState(std::uint64_t generation);
@@ -84,6 +88,7 @@ private:
 	bool jamx_mode_ = false;
 	bool bin_dirty_ = false;
 	std::vector<std::uint8_t> jpeg_buffer_;
+	std::chrono::steady_clock::time_point last_image_save_{};
 
 	std::mutex queue_mutex_;
 	std::condition_variable queue_cv_;

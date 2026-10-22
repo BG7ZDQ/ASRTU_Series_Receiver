@@ -26,9 +26,7 @@ class probe_mpsk_snr_est_c;
 namespace qtgui {
 class const_sink_c;
 class freq_sink_c;
-class freq_sink_f;
 class waterfall_sink_c;
-class waterfall_sink_f;
 }
 }
 
@@ -114,9 +112,7 @@ private:
     std::shared_ptr<std::atomic<float>> equalizer_gain_;
     std::shared_ptr<std::atomic<std::int64_t>> last_input_sample_ms_;
     std::shared_ptr<gr::qtgui::freq_sink_c> input_spectrum_;
-    std::shared_ptr<gr::qtgui::freq_sink_f> input_spectrum_real_;
     std::shared_ptr<gr::qtgui::waterfall_sink_c> waterfall_;
-    std::shared_ptr<gr::qtgui::waterfall_sink_f> waterfall_real_;
     std::shared_ptr<gr::qtgui::freq_sink_c> loop_spectrum_;
     std::shared_ptr<gr::qtgui::const_sink_c> constellation_sink_;
     FrameMonitor::sptr frame_monitor_;

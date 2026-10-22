@@ -46,9 +46,7 @@
 #include <gnuradio/sync_block.h>
 #include <gnuradio/qtgui/const_sink_c.h>
 #include <gnuradio/qtgui/freq_sink_c.h>
-#include <gnuradio/qtgui/freq_sink_f.h>
 #include <gnuradio/qtgui/waterfall_sink_c.h>
-#include <gnuradio/qtgui/waterfall_sink_f.h>
 #include <gnuradio/zeromq/pub_msg_sink.h>
 
 #include <QWidget>
@@ -61,9 +59,9 @@
 namespace {
 constexpr double kIfRate = 48000.0;
 constexpr double kRealIfCenterHz = 12000.0;
+constexpr double kAgcDisplayBandwidthHz = kIfRate / 2.0;
 // A real 0..24 kHz spectrum is plotted as -12..+12 kHz so that the
 // radio's 12 kHz IF appears at 0 Hz in the GUI.
-constexpr double kRealIfDisplayCenterHz = -kRealIfCenterHz;
 constexpr double kSps = 5.0;
 constexpr float kAlpha = 0.35f;
 
@@ -303,8 +301,9 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
     // 1x. Use a much shorter gate so the history and its time axis advance at
     // the visibly accelerated replay rate.
     const double waterfallUpdateSeconds = options.fast_playback ? 0.01 : 0.05;
-    expects_stereo_iq_ = !options.shared_iq_bridge && !options.real_if_12khz;
-    monitors_live_audio_ = options.wav_path.empty() && !options.shared_iq_bridge;
+    const bool complexInput = options.shared_iq_bridge;
+    expects_stereo_iq_ = !complexInput && !options.real_if_12khz;
+    monitors_live_audio_ = options.wav_path.empty();
     tb_ = gr::make_top_block("Astro-series satellite C++/Qt demodulator", true);
 
     gr::basic_block_sptr source;
@@ -405,44 +404,24 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
     }
 
     if (options.enable_gui) {
-        if (options.real_if_12khz) {
-            input_spectrum_real_ = gr::qtgui::freq_sink_f::make(
-                1024, gr::fft::window::WIN_BLACKMAN_hARRIS,
-                kRealIfDisplayCenterHz, kIfRate,
-                "Real IF input spectrum", 1, nullptr);
-            input_spectrum_real_->set_plot_pos_half(true);
-            if (options.fast_playback)
-                input_spectrum_real_->set_frequency_range(
-                    kRealIfDisplayCenterHz, kIfRate / 2);
-            input_spectrum_real_->set_update_time(0.05);
-            input_spectrum_real_->set_y_axis(-140, 10);
-            input_spectrum_real_->disable_legend();
+        input_spectrum_ = gr::qtgui::freq_sink_c::make(
+            1024, gr::fft::window::WIN_BLACKMAN_hARRIS, 0.0,
+            kAgcDisplayBandwidthHz,
+            "AGC output spectrum", 1, nullptr);
+        input_spectrum_->set_update_time(0.05);
+        if (options.fast_playback)
+            input_spectrum_->set_frequency_range(
+                0.0, kAgcDisplayBandwidthHz);
+        input_spectrum_->set_y_axis(-100, 10);
+        input_spectrum_->disable_legend();
 
-            waterfall_real_ = gr::qtgui::waterfall_sink_f::make(
-                1024, gr::fft::window::WIN_BLACKMAN_hARRIS,
-                kRealIfDisplayCenterHz, kIfRate,
-                "Real IF input waterfall", 1, nullptr);
-            waterfall_real_->set_plot_pos_half(true);
-            waterfall_real_->set_update_time(waterfallUpdateSeconds);
-            waterfall_real_->set_intensity_range(-100, 0);
-            waterfall_real_->disable_legend();
-        } else {
-            input_spectrum_ = gr::qtgui::freq_sink_c::make(
-                1024, gr::fft::window::WIN_BLACKMAN_hARRIS, 0.0, kIfRate,
-                "Input spectrum", 1, nullptr);
-            input_spectrum_->set_update_time(0.05);
-            if (options.fast_playback)
-                input_spectrum_->set_frequency_range(0.0, kIfRate / 2);
-            input_spectrum_->set_y_axis(-140, 10);
-            input_spectrum_->disable_legend();
-
-            waterfall_ = gr::qtgui::waterfall_sink_c::make(
-                1024, gr::fft::window::WIN_BLACKMAN_hARRIS, 0.0, kIfRate,
-                "Input waterfall", 1, nullptr);
-            waterfall_->set_update_time(waterfallUpdateSeconds);
-            waterfall_->set_intensity_range(-100, 0);
-            waterfall_->disable_legend();
-        }
+        waterfall_ = gr::qtgui::waterfall_sink_c::make(
+            1024, gr::fft::window::WIN_BLACKMAN_hARRIS, 0.0,
+            kAgcDisplayBandwidthHz,
+            "AGC output waterfall", 1, nullptr);
+        waterfall_->set_update_time(waterfallUpdateSeconds);
+        waterfall_->set_intensity_range(-100, 0);
+        waterfall_->disable_legend();
 
         loop_spectrum_ = gr::qtgui::freq_sink_c::make(
             1024, gr::fft::window::WIN_BLACKMAN_hARRIS, 0.0, kIfRate,
@@ -472,9 +451,9 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
                                         ? OpenHoshimiDecoderSink::make()
                                         : OpenHoshimiDecoderSink::sptr{};
 
-    if (!options.shared_iq_bridge)
+    if (!complexInput)
         tb_->connect(source, 0, to_complex, 0);
-    if (options.real_if_12khz && !options.shared_iq_bridge) {
+    if (options.real_if_12khz && !complexInput) {
         const auto zero = gr::analog::sig_source_f::make(
             kIfRate, gr::analog::GR_CONST_WAVE, 0.0, 0.0, 0.0);
         const auto unusedRightChannel = gr::blocks::null_sink::make(sizeof(float));
@@ -484,7 +463,7 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
 	// requests one ALSA channel and therefore has nothing to drain.
 	if (sourceHasSecondOutput)
 		tb_->connect(source, 1, unusedRightChannel, 0);
-    } else if (!options.shared_iq_bridge) {
+    } else if (!complexInput) {
         tb_->connect(source, 1, to_complex, 1);
     }
     if (!options.record_wav_path.isEmpty()) {
@@ -493,7 +472,7 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
         const int recordingChannels = options.real_if_12khz ? 1 : 2;
         recorder_ = AsyncWavRecorderSink::make(
             options.record_wav_path, recordingChannels, unsigned(kIfRate));
-        if (options.shared_iq_bridge) {
+        if (complexInput) {
             const auto splitIq = gr::blocks::complex_to_float::make(1);
             tb_->connect(complexSource, 0, splitIq, 0);
             tb_->connect(splitIq, 0, recorder_, 0);
@@ -509,42 +488,20 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
         const auto activity = InputActivityProbe::make(last_input_sample_ms_);
         tb_->connect(complexSource, 0, activity, 0);
     }
-    gr::basic_block_sptr replayClockedSource = monitoredSource;
     if (options.fast_playback) {
         // The raw WAV source can run at ~60x. Replay that fast finishes the
         // file in under a second, so the waterfall never gets to scroll and
         // the window looks frozen at 1x. Throttle the demodulator chain to a
-        // visibly accelerated rate. The spectrum/waterfall branch uses this
-        // same clock so its time axis tracks the actual decoder throughput.
+        // visibly accelerated rate. The AGC display taps follow this same
+        // demodulator clock.
         const auto replayThrottle = gr::blocks::throttle::make(
             sizeof(gr_complex), kIfRate * options.replay_rate);
         tb_->connect(monitoredSource, 0, replayThrottle, 0);
         tb_->connect(replayThrottle, 0, mixer, 0);
-        replayClockedSource = replayThrottle;
     } else {
         tb_->connect(monitoredSource, 0, mixer, 0);
     }
     tb_->connect(oscillator, 0, mixer, 1);
-    if (options.enable_gui) {
-        if (options.real_if_12khz) {
-            if (options.fast_playback) {
-                // Use the same replay clock as the decoder. Converting I+j0
-                // back to float is lossless and keeps the real-IF display
-                // centered at 12 kHz without letting an unthrottled GUI
-                // branch dominate file playback.
-                const auto displayReal = gr::blocks::complex_to_real::make(1);
-                tb_->connect(replayClockedSource, 0, displayReal, 0);
-                tb_->connect(displayReal, 0, input_spectrum_real_, 0);
-                tb_->connect(displayReal, 0, waterfall_real_, 0);
-            } else {
-                tb_->connect(source, 0, input_spectrum_real_, 0);
-                tb_->connect(source, 0, waterfall_real_, 0);
-            }
-        } else {
-            tb_->connect(replayClockedSource, 0, input_spectrum_, 0);
-            tb_->connect(replayClockedSource, 0, waterfall_, 0);
-        }
-    }
     tb_->connect(mixer, 0, gain, 0);
     // The reference decoder owns its exact LPF/AGC/FLL/Gardner/Costas chain,
     // so branch before the native receiver's low-pass filter.
@@ -564,6 +521,20 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options& options)
         }
     }
     tb_->connect(lowpass, 0, agc, 0);
+    if (options.enable_gui) {
+        // Display the same normalized signal that feeds the demodulator.
+        // The Qt frequency/waterfall sinks label 1024 bins across their
+        // configured sample rate.  The AGC runs at 48 kHz, while the RAW
+        // signal only occupies 24 kHz; decimate the display tap by two so a
+        // real frequency offset is drawn at its true position.
+        const auto displayDecim = gr::filter::fir_filter_ccf::make(
+            2, gr::filter::firdes::low_pass(
+                   1.0, kIfRate, 10000.0, 2000.0,
+                   gr::fft::window::WIN_HAMMING, 6.76));
+        tb_->connect(agc, 0, displayDecim, 0);
+        tb_->connect(displayDecim, 0, input_spectrum_, 0);
+        tb_->connect(displayDecim, 0, waterfall_, 0);
+    }
     tb_->connect(lowpass, 0, rms, 0);
     tb_->connect(rms, 0, db, 0);
     tb_->connect(db, 0, rssi_probe_, 0);
@@ -738,14 +709,12 @@ bool AsrtuFlowgraph::recordingWriteFailed() const noexcept
 }
 QWidget* AsrtuFlowgraph::inputSpectrumWidget() const
 {
-    return input_spectrum_real_ ? input_spectrum_real_->qwidget()
-                                : input_spectrum_->qwidget();
+    return input_spectrum_->qwidget();
 }
 
 QWidget* AsrtuFlowgraph::waterfallWidget() const
 {
-    return waterfall_real_ ? waterfall_real_->qwidget()
-                           : waterfall_->qwidget();
+    return waterfall_->qwidget();
 }
 QWidget* AsrtuFlowgraph::loopSpectrumWidget() const { return loop_spectrum_->qwidget(); }
 QWidget* AsrtuFlowgraph::constellationWidget() const { return constellation_sink_->qwidget(); }
@@ -759,28 +728,15 @@ void AsrtuFlowgraph::setEqualizerGain(double value)
 
 void AsrtuFlowgraph::resetInputSpectrum()
 {
-    if (input_spectrum_real_) {
-        input_spectrum_real_->set_plot_pos_half(true);
-        input_spectrum_real_->set_frequency_range(kRealIfDisplayCenterHz, kIfRate);
-        input_spectrum_real_->set_y_axis(-140.0, 10.0);
-        input_spectrum_real_->reset();
-    } else {
-        input_spectrum_->set_frequency_range(0.0, kIfRate);
-        input_spectrum_->set_y_axis(-140.0, 10.0);
-        input_spectrum_->reset();
-    }
+    input_spectrum_->set_frequency_range(0.0, kAgcDisplayBandwidthHz);
+    input_spectrum_->set_y_axis(-100.0, 10.0);
+    input_spectrum_->reset();
 }
 
 void AsrtuFlowgraph::resetWaterfall()
 {
-    if (waterfall_real_) {
-        waterfall_real_->set_plot_pos_half(true);
-        waterfall_real_->set_frequency_range(kRealIfDisplayCenterHz, kIfRate);
-        waterfall_real_->set_intensity_range(-100.0, 0.0);
-    } else {
-        waterfall_->set_frequency_range(0.0, kIfRate);
-        waterfall_->set_intensity_range(-100.0, 0.0);
-    }
+    waterfall_->set_frequency_range(0.0, kAgcDisplayBandwidthHz);
+    waterfall_->set_intensity_range(-100.0, 0.0);
 }
 
 void AsrtuFlowgraph::resetLoopSpectrum()

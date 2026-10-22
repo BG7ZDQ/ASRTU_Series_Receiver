@@ -30,18 +30,28 @@ Contributors: **BG7ZDQ** **BI1NWO** **BG6HNY** **BG4QBF**
 
 | Input | Intended use | Signal format |
 | --- | --- | --- |
-| Local shared-memory RAW I/Q bridge | Bundled SDR# with the ASRTU plugin | Complex zero-IF RAW I/Q from SDR# |
+| Local shared-memory RAW I/Q bridge (SDR# / SDR++) | Either bundled SDR application with its ASRTU plugin | 48 kHz complex I/Q with shared-memory Doppler control |
 | Stereo zero-IF RAW I/Q input | SDR software feeding a virtual sound card | I and Q in the left and right channels, centered at 0 Hz |
 | Mono real 12 kHz radio IF input | Radio, receiver, or recorder real-IF output | Desired signal centered at +12 kHz |
 
 For sound-card input, select the actual capture device. Stop the current reception before changing or reconnecting a sound card, then select the device again and restart.
 
-### 3. SDR# RAW I/Q bridge
+### 3. Shared-memory RAW I/Q bridge
+
+SDR# and SDR++ use the same launcher input and the same shared-memory mapping. Start
+only one of their ASRTU bridge plugins at a time.
 
 1. Click **Open SDR# Telemetry Preset**.
 2. Select the receiver in SDR#, tune the satellite downlink, and start reception.
 3. Enable the local RAW I/Q bridge in the ASRTU plugin. Enable automatic Doppler there when frequency correction is required.
-4. In the launcher, select **Local Shared-Memory RAW I/Q Bridge** and click **Start Receiver**.
+4. In the launcher, select **Local Shared-Memory RAW I/Q Bridge (SDR# / SDR++)** and click **Start Receiver**.
+
+For SDR++, use RAW demodulation at 48 kHz and select **ASRTU Receiver** as the sink.
+
+The installer includes an Analog Devices PlutoSDR-M2K Windows driver entry. For
+network PlutoSDR devices, enter a URI such as `ip:192.168.1.10` in
+**PlutoSDR Source → IIO URI**. The bundled RTL-SDR 2.0.2 driver is shared by
+SDR++ and SDR# and supports RTL-SDR Blog V4 / R828D.
 
 The decoder remains `NOSYNC` until SDR# supplies samples. A stale SNR value after SDR# is paused or closed must not be interpreted as an active signal.
 
@@ -78,7 +88,7 @@ Doppler correction only adjusts the receiver frequency; it does not prove succes
 
 - Automatic recording stores WAV and log files under `ASRTU1_Records/<timestamp>/`. Windows uses a folder beside the installation by default; Linux uses the current user's data directory.
 - **Open Recordings and Logs** opens that directory.
-- **Play Recording File** accepts supported recordings. Mono files are treated as 12 kHz real IF; stereo files are treated as zero-IF I/Q.
+- **Play Recording File** accepts supported recordings. Mono files are treated as 12 kHz real IF; stereo files are treated as zero-IF I/Q. Non-WAV formats require `sndfile-convert`: the Windows package includes it; on Linux install `sndfile-tools`, otherwise only WAV is offered.
 - **Quick Play Recording File** provides a shorter path for selecting a recording and running regression checks. It does not switch to live sound-card input.
 
 ### 9. Troubleshooting
@@ -104,7 +114,7 @@ Doppler correction only adjusts the receiver frequency; it does not prove succes
 
 ## Building
 
-With Visual Studio 2022 Build Tools and Inno Setup 6 installed, build the complete installer from the repository root:
+With Visual Studio 2022 Build Tools and Inno Setup 6 installed, build the core installer from the repository root; the SDR++ and PlutoSDR payloads under `packaging/payload/` add the optional components:
 
 ```powershell
 .\build_installer.ps1

@@ -7,9 +7,12 @@
 #include <QGuiApplication>
 #include <QIcon>
 #include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QLockFile>
 #include <QLocalSocket>
 #include <QMessageBox>
+#include <QStandardPaths>
 #include <QTimer>
 #include <QTranslator>
 #include <cstdlib>
@@ -20,6 +23,49 @@
 #include <windows.h>
 #endif
 
+namespace {
+bool lockOwnerIsLiveDecoder(QLockFile* lock)
+{
+    qint64 pid = 0;
+    QString host;
+    QString application;
+    if (!lock->getLockInfo(&pid, &host, &application))
+        return false; // Corrupt or incomplete lock file: safe to replace.
+    if (pid <= 0)
+        return false;
+
+#ifdef Q_OS_WIN
+    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE,
+                                 static_cast<DWORD>(pid));
+    if (!process)
+        return GetLastError() == ERROR_ACCESS_DENIED; // Assume live if protected.
+    using QueryImageName = BOOL(WINAPI*)(HANDLE, DWORD, LPWSTR, PDWORD);
+    const auto queryImage = reinterpret_cast<QueryImageName>(
+        GetProcAddress(GetModuleHandleW(L"kernel32.dll"),
+                       "QueryFullProcessImageNameW"));
+    wchar_t executable[MAX_PATH] = {};
+    DWORD length = static_cast<DWORD>(sizeof(executable) / sizeof(executable[0]));
+    const bool queried = queryImage && queryImage(process, 0, executable, &length);
+    CloseHandle(process);
+    if (!queried)
+        return application.startsWith(QStringLiteral("ASRTU1_Demod_CQt"));
+    const QString name = QFileInfo(
+        QString::fromWCharArray(executable, static_cast<int>(length))).fileName();
+    return name.compare(QStringLiteral("ASRTU1_Demod_CQt.exe"),
+                        Qt::CaseInsensitive) == 0;
+#else
+    const QFileInfo process(QStringLiteral("/proc/%1/comm").arg(pid));
+    if (!process.exists())
+        return false;
+    QFile comm(process.filePath());
+    if (!comm.open(QIODevice::ReadOnly))
+        return true; // PID exists but is not inspectable; keep the lock.
+    return QString::fromLatin1(comm.readAll()).trimmed().startsWith(
+        QStringLiteral("ASRTU1_Demod_CQt"));
+#endif
+}
+} // namespace
+
 int main(int argc, char* argv[])
 {
 #ifdef _WIN32
@@ -28,6 +74,9 @@ int main(int argc, char* argv[])
 #endif
     QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
+    QCoreApplication::setAttribute(Qt::AA_DisableWindowContextHelpButton);
+#endif
 #if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
     QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
         Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
@@ -47,16 +96,35 @@ int main(int argc, char* argv[])
     app.setFont(uiFont);
     QCoreApplication::setOrganizationName(QStringLiteral("ASRTU"));
     QCoreApplication::setApplicationName(QStringLiteral("ASRTU1_Demod_CQt"));
+    // Keep GNU Radio's FFTW wisdom with the application instead of scattering
+    // it under %APPDATA%. Fall back only if the install folder is read-only.
+    QString grCache = QDir(QCoreApplication::applicationDirPath())
+                          .filePath(QStringLiteral("gnuradio-cache"));
+    if (!QDir().mkpath(grCache)) {
+        grCache = QDir(QStandardPaths::writableLocation(
+                           QStandardPaths::AppLocalDataLocation))
+                      .filePath(QStringLiteral("gnuradio-cache"));
+        QDir().mkpath(grCache);
+    }
+    qputenv("GR_CACHE_PATH", QFile::encodeName(grCache));
 
     const QStringList arguments = QCoreApplication::arguments();
-    QLockFile liveReceiverLock(QDir::temp().filePath(
-        QStringLiteral("asrtu-live-demodulator.lock")));
+    const QString liveReceiverLockPath = QDir::temp().filePath(
+        QStringLiteral("asrtu-live-demodulator.lock"));
+    QLockFile liveReceiverLock(liveReceiverLockPath);
     // Live receivers commonly run for hours. Disable age-based expiry while
     // retaining QLockFile's dead-owner detection after an abnormal exit.
     liveReceiverLock.setStaleLockTime(0);
-    if (!arguments.contains(QStringLiteral("--wav")) &&
-        !liveReceiverLock.tryLock(100)) {
-        return 3;
+    if (!arguments.contains(QStringLiteral("--wav"))) {
+        bool locked = liveReceiverLock.tryLock(100);
+        if (!locked && !lockOwnerIsLiveDecoder(&liveReceiverLock)) {
+            // A crashed decoder leaves a PID that Windows may reuse later.
+            // Never let an unrelated process block all future live receivers.
+            QFile::remove(liveReceiverLockPath);
+            locked = liveReceiverLock.tryLock(100);
+        }
+        if (!locked)
+            return 3;
     }
 
     try {
@@ -65,6 +133,21 @@ int main(int argc, char* argv[])
             window.show();
         else
             window.showMaximized();
+        const int readyFileIndex = arguments.indexOf(
+            QStringLiteral("--ready-file"));
+        if (readyFileIndex >= 0 && readyFileIndex + 1 < arguments.size()) {
+            QFile readyFile(arguments.at(readyFileIndex + 1));
+            if (!readyFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+                std::cerr << "Unable to write decoder readiness file\n";
+                return EXIT_FAILURE;
+            }
+            readyFile.write(QByteArrayLiteral("ready"));
+            if (!readyFile.flush()) {
+                std::cerr << "Unable to flush decoder readiness file\n";
+                return EXIT_FAILURE;
+            }
+            readyFile.close();
+        }
         const int readyIndex = arguments.indexOf(
             QStringLiteral("--ready-server"));
         if (readyIndex >= 0 && readyIndex + 1 < arguments.size()) {

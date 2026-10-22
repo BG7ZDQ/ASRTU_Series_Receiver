@@ -176,6 +176,9 @@ include(GNUInstallDirs)
 install(TARGETS ASRTU1_Demod_CQt RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES LICENSE THIRD_PARTY.md
     DESTINATION ${CMAKE_INSTALL_DOCDIR})
+install(DIRECTORY integrations/sdrpp/
+    DESTINATION ${CMAKE_INSTALL_DOCDIR}/sdrpp-plugin
+    FILES_MATCHING PATTERN "*" PATTERN "build" EXCLUDE)
 if(UNIX AND NOT APPLE)
     install(FILES packaging/linux/asrtu-series-receiver.desktop
         DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
@@ -379,6 +382,21 @@ asrtu_enable_strict_warnings(ASRTU1_Benchmark)
 endif()
 
 if(BUILD_TESTING)
+    add_executable(ASRTU1_LauncherSdrTest tests/launcher_sdr_test.cpp
+        libs/common/translation.cpp libs/common/runtime_paths.cpp
+        apps/launcher/launcher_resources.qrc apps/dsp/application_icons.qrc)
+    target_include_directories(ASRTU1_LauncherSdrTest PRIVATE libs/common)
+    target_link_libraries(ASRTU1_LauncherSdrTest PRIVATE Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network)
+    target_compile_definitions(ASRTU1_LauncherSdrTest PRIVATE ASRTU_VERSION="${PROJECT_VERSION}")
+    if(WIN32)
+        target_link_libraries(ASRTU1_LauncherSdrTest PRIVATE winmm)
+        target_compile_definitions(ASRTU1_LauncherSdrTest PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+    endif()
+    if(MSVC)
+        target_compile_options(ASRTU1_LauncherSdrTest PRIVATE /utf-8)
+    endif()
+    add_test(NAME launcher_sdr_layout COMMAND ASRTU1_LauncherSdrTest)
+    set_tests_properties(launcher_sdr_layout PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
     add_executable(ASRTU1_ModulePathsTest tests/module_paths_test.cpp
         libs/common/runtime_paths.cpp libs/common/runtime_paths.h)
     target_include_directories(ASRTU1_ModulePathsTest PRIVATE libs/common)
@@ -451,6 +469,10 @@ if(BUILD_TESTING)
         libs/demod/async_wav_recorder_sink.cpp
         libs/demod/async_wav_recorder_sink.h)
     if(WIN32)
+        add_executable(ASRTU1_SharedBridgeTest tests/shared_bridge_test.cpp)
+        target_include_directories(ASRTU1_SharedBridgeTest PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/integrations/sdrpp/asrtu_sink/src)
+        add_test(NAME shared_bridge COMMAND ASRTU1_SharedBridgeTest)
         add_executable(ASRTU1_SharedIqSourceTest
             tests/shared_iq_source_test.cpp
             libs/demod/shared_iq_source.cpp
@@ -524,11 +546,4 @@ set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
     "ASRTU series satellite receiver and decoder")
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "ASRTU Series Receiver")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
-set(CPACK_DEBIAN_PACKAGE_DEPENDS
-    "gnuradio (>= 3.10), libqwt-qt5-6, libqt5websockets5")
-set(CPACK_DEBIAN_PACKAGE_SECTION "hamradio")
-set(CPACK_RPM_PACKAGE_REQUIRES
-    "gnuradio >= 3.10, qwt-qt5, qt5-qtwebsockets")
-set(CPACK_RPM_PACKAGE_LICENSE "MIT and GPL-3.0-or-later")
-set(CPACK_RPM_PACKAGE_GROUP "Applications/Communications")
 include(CPack)

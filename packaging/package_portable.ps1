@@ -11,7 +11,19 @@ $doppler = Join-Path $BuildDir 'TinyDoppler.exe'
 $satnogsUploader = Join-Path $BuildDir 'ASRTU_SatnogsUploader.exe'
 $runtimeBin = Join-Path $RuntimeRoot 'Library\bin'
 $plugins = Join-Path $RuntimeRoot 'Library\plugins'
-$objdump = (Get-Command 'objdump.exe' -ErrorAction Stop).Source
+$objdump = Get-Command 'objdump.exe' -ErrorAction SilentlyContinue
+$dumpbin = Get-Command 'dumpbin.exe' -ErrorAction SilentlyContinue
+if (-not $objdump -and -not $dumpbin) {
+    $vswhere = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe'
+    if (Test-Path -LiteralPath $vswhere) {
+        $dumpbinPath = & $vswhere -latest -products '*' -find 'VC\Tools\MSVC\**\bin\Hostx64\x64\dumpbin.exe' |
+            Select-Object -First 1
+        if ($dumpbinPath) { $dumpbin = Get-Command $dumpbinPath }
+    }
+}
+if (-not $objdump -and -not $dumpbin) {
+    throw 'objdump.exe or Visual Studio dumpbin.exe is required to package module dependencies.'
+}
 
 if (-not (Test-Path -LiteralPath $exe)) { throw "EXE not found: $exe" }
 if (-not (Test-Path -LiteralPath $runtimeBin)) { throw "Runtime bin not found: $runtimeBin" }
@@ -22,6 +34,7 @@ if ($resolvedOutput.TrimEnd('\') -eq $resolvedRoot) {
     throw "Unsafe portable output directory: $resolvedOutput"
 }
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$sdrppSource = Join-Path $PSScriptRoot 'payload\sdrpp'
 $portableRoot = [IO.Path]::GetFullPath(
     (Join-Path $repoRoot 'portable')).TrimEnd('\') + '\'
 $payloadRoot = [IO.Path]::GetFullPath(
@@ -52,14 +65,30 @@ Copy-Item -LiteralPath $exe -Destination (Join-Path $OutputDir 'ASRTU1_Demod_CQt
 if (Test-Path -LiteralPath $launcher) {
     Copy-Item -LiteralPath $launcher -Destination (Join-Path $OutputDir 'ASRTU1_Launcher.exe') -Force
 }
-if (Test-Path -LiteralPath $doppler) {
-    Copy-Item -LiteralPath $doppler -Destination (Join-Path $OutputDir 'TinyDoppler.exe') -Force
-}
+if (-not (Test-Path -LiteralPath $doppler)) { throw "New TinyDoppler.exe not found: $doppler" }
+Copy-Item -LiteralPath $doppler -Destination (Join-Path $OutputDir 'TinyDoppler.exe') -Force
 if (-not (Test-Path -LiteralPath $satnogsUploader)) {
     throw "SatNOGS uploader not found: $satnogsUploader"
 }
 Copy-Item -LiteralPath $satnogsUploader `
     -Destination (Join-Path $OutputDir 'ASRTU_SatnogsUploader.exe') -Force
+if (Test-Path -LiteralPath (Join-Path $sdrppSource 'sdrpp.exe')) {
+    # Keep SDR++ beside the launcher in the portable tree. The launcher checks
+    # this location before any stale per-user installation.
+    Copy-Item -LiteralPath $sdrppSource -Destination (Join-Path $OutputDir 'sdrpp') -Recurse -Force
+    & (Join-Path $repoRoot 'integrations/sdrpp/configure_windows.ps1') -SdrppRoot (Join-Path $OutputDir 'sdrpp')
+}
+# The chooser offers the SDR# preset too. Ship the complete runtime and
+# updated bridge, not just a card pointing at a missing sibling directory.
+$sdrSharpSource = Join-Path $PSScriptRoot 'payload\sdrsharp'
+if (Test-Path -LiteralPath (Join-Path $sdrSharpSource 'SDRSharp.exe')) {
+    Copy-Item -LiteralPath $sdrSharpSource -Destination (Join-Path $OutputDir 'sdrsharp') -Recurse -Force
+}
+$plutoDriverSource = Join-Path $PSScriptRoot 'payload\plutosdr-driver'
+if (Test-Path -LiteralPath (Join-Path $plutoDriverSource 'dpinst.exe')) {
+    Copy-Item -LiteralPath $plutoDriverSource `
+        -Destination (Join-Path $OutputDir 'plutosdr-driver') -Recurse -Force
+}
 $converter = Join-Path $runtimeBin 'sndfile-convert.exe'
 if (-not (Test-Path -LiteralPath $converter)) { throw "Audio converter not found: $converter" }
 Copy-Item -LiteralPath $converter -Destination (Join-Path $OutputDir 'sndfile-convert.exe') -Force
@@ -96,9 +125,15 @@ $queue.Enqueue((Join-Path $OutputDir 'ASRTU_SatnogsUploader.exe'))
 $queue.Enqueue((Join-Path $OutputDir 'sndfile-convert.exe'))
 
 function Get-Dependencies([string]$binary) {
-    & $objdump -p $binary 2>$null |
-        Select-String 'DLL Name:\s*(.+)$' |
-        ForEach-Object { $_.Matches[0].Groups[1].Value.Trim() }
+    if ($objdump) {
+        & $objdump.Source -p $binary 2>$null |
+            Select-String 'DLL Name:\s*(.+)$' |
+            ForEach-Object { $_.Matches[0].Groups[1].Value.Trim() }
+    } else {
+        & $dumpbin.Source /DEPENDENTS $binary 2>$null |
+            Select-String '^\s+([A-Za-z0-9_.-]+\.dll)\s*$' |
+            ForEach-Object { $_.Matches[0].Groups[1].Value }
+    }
 }
 
 function Find-RuntimeDll([string]$name) {
@@ -165,6 +200,17 @@ if (Test-Path -LiteralPath $ssdvLicense) {
         -Destination (Join-Path $OutputDir 'SSDV_GPL-3.0.txt') -Force
 }
 
+# Keep the optional SDR++ integration recipe with local portable builds too.
+$sdrppSource = Join-Path $repoRoot 'integrations\sdrpp'
+if (Test-Path -LiteralPath $sdrppSource) {
+    $pluginSourceDir = Join-Path $OutputDir 'sdrpp-plugin'
+    New-Item -ItemType Directory -Force -Path $pluginSourceDir | Out-Null
+    foreach ($entry in @('README.md', 'configure_windows.ps1', 'asrtu_sink')) {
+        Copy-Item -LiteralPath (Join-Path $sdrppSource $entry) `
+            -Destination $pluginSourceDir -Recurse -Force
+    }
+}
+
 Set-Content -LiteralPath (Join-Path $OutputDir 'README.txt') -Encoding UTF8 -Value @(
     'Astro-series Satellite Demodulator C++/Qt portable build',
     '',
@@ -173,6 +219,8 @@ Set-Content -LiteralPath (Join-Path $OutputDir 'README.txt') -Encoding UTF8 -Val
     'TCP PDU output: 127.0.0.1:9985',
     'ZeroMQ PUB output: tcp://127.0.0.1:5555',
     'ASRTU_SatnogsUploader.exe provides the Windows/Linux SatNOGS frame, station and server-status window.',
+    'sdrpp-plugin/ contains the Windows SDR++ shared-memory I/Q and Doppler plugin source.',
+    'sdrpp/ contains the optional portable SDR++ receiver. The launcher discovers it automatically.',
     '',
     'This package contains GNU Radio, GPL-licensed OOT modules, the OpenHoshimi ASRTU soundmodem core and the DSLWP-compatible SSDV decoder.',
     'OpenHoshimi decoder credits: BG6HNY / Hyacinth Satellite Team and the upstream HIT LilacSat soundmodem authors.',

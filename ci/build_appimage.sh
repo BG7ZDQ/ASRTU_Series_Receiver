@@ -8,6 +8,7 @@ linuxdeploy=${LINUXDEPLOY:?missing linuxdeploy path}
 linuxdeploy_plugin_qt=${LINUXDEPLOY_PLUGIN_QT:?missing linuxdeploy Qt plugin path}
 version=${VERSION:?missing version}
 version=${version#v}
+artifact_name="ASRTU_Series_Receiver-${version}-LinuxAppImage.AppImage"
 output_dir=$(realpath -m "$output_dir")
 oot_prefix=$(realpath "$oot_prefix")
 tool_dir=$(dirname "$linuxdeploy")
@@ -61,4 +62,10 @@ NO_STRIP=1 ARCH=x86_64 "$linuxdeploy" \
 	--library "$appdir/usr/lib/libgnuradio-lilacsat.so" \
 	--plugin qt \
 	--output appimage
+generated=$(find "$output_dir" -maxdepth 1 -name '*.AppImage' -print -quit)
+if [[ -z "$generated" ]]; then
+	echo "linuxdeploy did not create an AppImage" >&2
+	exit 1
+fi
+mv "$generated" "$output_dir/$artifact_name"
 popd >/dev/null

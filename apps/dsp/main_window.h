@@ -48,6 +48,8 @@ private:
     QLabel* frequency_label_ = nullptr;
     QLabel* sync_label_ = nullptr;
     QTimer* status_timer_ = nullptr;
+    bool sync_display_valid_ = false;
+    bool sync_display_synced_ = false;
     QFile log_file_;
     QElapsedTimer snr_log_timer_;
     QString session_directory_;

@@ -10,6 +10,8 @@ The repository's MIT License covers only original ASRTU Series Receiver code own
 | Qt 5 | https://www.qt.io/ | Use under the license applicable to the selected Qt distribution, commonly LGPLv3/GPLv3 for open-source Qt builds |
 | Qwt | https://qwt.sourceforge.io/ | Qwt License 1.0 |
 | Tiny Doppler / SGP4 C99 | [Tiny Doppler](https://github.com/BG7ZDQ/TinyDoppler) submodule at `external/TinyDoppler/` | Tiny Doppler original code is MIT; its SGP4 copy is MIT with the full notice in `external/TinyDoppler/third_party/sgp4/SGP4_LICENSE.txt` |
+| SDR++ and device drivers | https://github.com/AlexandreRouma/SDRPlusPlus | GPL-3.0-or-later for SDR++ components; bundled libiio, libad9361, RTL-SDR, Airspy, AirspyHF+, LimeSuite and related files retain their upstream licenses |
+| PlutoSDR-M2K Windows driver | Analog Devices PlutoSDR-M2K installation | Original signed Analog Devices driver files and bundled notices; redistributed as an optional SDR++ driver component |
 | SDR# | https://airspy.com/download/ | Separate Airspy/SDR# terms; not covered by this repository's MIT License |
 | SDR# plugin reference API | supplied with the applicable SDR# SDK | Reference license; SDK source is not included in this repository |
 | Legacy Windows telemetry upload proxy | supplied by its owner | Separate bundled component; not relicensed by this project. This does not apply to the original Linux proxy source under `apps/proxy/` and `libs/proxy/`. |

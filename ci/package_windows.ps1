@@ -31,6 +31,10 @@ if (-not $scriptDir -and $MyInvocation.MyCommand.Path) {
 if (-not $RepoRoot) {
     $RepoRoot = Split-Path -Parent $scriptDir
 }
+$versionLine = Select-String -LiteralPath (Join-Path $RepoRoot 'CMakeLists.txt') `
+    -Pattern 'project\(ASRTU1Qt VERSION ([0-9.]+)' | Select-Object -First 1
+if (-not $versionLine) { throw 'Unable to read the application version from CMakeLists.txt' }
+$appVersion = $versionLine.Matches[0].Groups[1].Value
 if (-not $BuildDir) {
     $BuildDir = Join-Path $RepoRoot 'build-windows'
 }
@@ -228,6 +232,25 @@ Set-Content -LiteralPath (Join-Path $OutputDir 'qt.conf') -Encoding ASCII -Value
     'Plugins=.'
 )
 
+# Include the source-only SDR++ integration so the portable archive contains
+# the optional plugin recipe without redistributing SDR++ itself.
+$sdrppSource = Join-Path $RepoRoot 'integrations\sdrpp'
+if (Test-Path -LiteralPath $sdrppSource) {
+    $pluginSourceDir = Join-Path $OutputDir 'sdrpp-plugin'
+    New-Item -ItemType Directory -Force -Path $pluginSourceDir | Out-Null
+    foreach ($entry in @('README.md', 'configure_windows.ps1', 'asrtu_sink')) {
+        Copy-Item -LiteralPath (Join-Path $sdrppSource $entry) `
+            -Destination $pluginSourceDir -Recurse -Force
+    }
+}
+Set-Content -LiteralPath (Join-Path $OutputDir 'README.txt') -Encoding UTF8 -Value @(
+    'ASRTU Series Receiver Windows portable build',
+    '',
+    'Run ASRTU1_Launcher.exe. No radioconda or GNU Radio installation is required.',
+    'sdrpp-plugin/ contains the Windows SDR++ shared-memory I/Q and Doppler plugin source.',
+    'The plugin must be built against the exact SDR++ version installed on the target machine.'
+)
+
 # The GNU Radio qtgui module links a Qt 5 build of Qwt. Reject a Qt 6 qwt.dll
 # here because its QwtColorMap::colorTable256 export (QList<unsigned int>)
 # cannot satisfy the Qt 5 symbol (QVector<unsigned int>) that the qtgui module
@@ -246,7 +269,7 @@ if (Test-Path -LiteralPath $qwtPath) {
 # Zip the whole folder for the CI artifact.
 $zipDir = Split-Path -Parent $OutputDir
 New-Item -ItemType Directory -Force -Path $zipDir | Out-Null
-$zipPath = Join-Path $zipDir 'asrtu-windows-x64.zip'
+$zipPath = Join-Path $zipDir ("ASRTU_Series_Receiver-${appVersion}-WinPortable.zip")
 if (Test-Path -LiteralPath $zipPath) {
     Remove-Item -LiteralPath $zipPath -Force
 }

@@ -4,7 +4,9 @@
 #include <QClipboard>
 #include <QCoreApplication>
 #include <QDesktopServices>
+#include <QDir>
 #include <QFileInfo>
+#include <QProcess>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -151,6 +153,10 @@ SsdvImageWindow::SsdvImageWindow(QWidget* parent) : QDialog(parent)
 {
     setWindowTitle(tr("SSDV图像接收"));
     setWindowFlag(Qt::Window, true);
+    setWindowFlag(Qt::WindowSystemMenuHint, true);
+    setWindowFlag(Qt::WindowContextHelpButtonHint, false);
+    setWindowFlag(Qt::WindowMinimizeButtonHint, true);
+    setWindowFlag(Qt::WindowMaximizeButtonHint, true);
     resize(760, 680);
     setMinimumSize(520, 480);
     setStyleSheet(QStringLiteral(
@@ -289,9 +295,19 @@ void SsdvImageWindow::buildUi()
         showGalleryImage(gallery_index_ + 1);
     });
     connect(open_directory_button_, &QPushButton::clicked, this, [this] {
-        if (!image_path_.isEmpty())
-            QDesktopServices::openUrl(QUrl::fromLocalFile(
-                QFileInfo(image_path_).absolutePath()));
+        if (image_path_.isEmpty())
+            return;
+        const QString directory = QFileInfo(image_path_).absolutePath();
+        if (directory.isEmpty() || !QDir(directory).exists())
+            return;
+#ifdef Q_OS_WIN
+        // Explorer is more reliable than the generic URL handler for paths
+        // containing non-ASCII characters or spaces.
+        if (QProcess::startDetached(QStringLiteral("explorer.exe"),
+                                    {QDir::toNativeSeparators(directory)}))
+            return;
+#endif
+        QDesktopServices::openUrl(QUrl::fromLocalFile(directory));
     });
     connect(clearButton, &QPushButton::clicked, this, [this] {
         if (clear_callback_)
@@ -336,6 +352,10 @@ void SsdvImageWindow::updateImage(const SsdvImageUpdate& update)
         showGalleryImage(index);
     else
         showGalleryImage(gallery_index_);
+    // Keep updating the gallery while the window is minimized, but never
+    // restore or raise it just because another image arrived.
+    if (isMinimized())
+        return;
     if (!isVisible()) {
         show();
         raise();

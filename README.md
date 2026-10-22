@@ -29,13 +29,16 @@ Languages: **中文** · [English](README_EN.md) · [日本語](README_JA.md)
 
 | 输入模式 | 适用场景 | 信号要求 |
 | --- | --- | --- |
-| 本地内存共享 RAW 模式 I/Q 桥接 | 使用安装包内的 SDR# 和 ASRTU 插件 | SDR# 输出的零中频复数 RAW I/Q |
+| 本地共享内存 RAW 模式 I/Q 桥接（SDR# / SDR++） | 使用安装包内的任一 SDR 软件及其 ASRTU 插件 | 48 kHz 浮点复数 I/Q，共享内存与自动多普勒控制 |
 | 立体声零中频 RAW 模式 I/Q 输入 | SDR 软件通过虚拟声卡输出 I/Q | 左右声道分别为 I、Q，中心频率为 0 Hz |
 | 单声道实数域 12 kHz 电台 IF 输入 | 电台、接收机或录音设备输出实数中频 | 目标信号以 +12 kHz 为中心 |
 
 选择声卡模式时，在“声卡”中选择实际输入设备。运行中更换声卡，应先停止当前接收，再选择设备并重新启动。
 
-### 3. 使用 SDR# RAW I/Q 桥接
+### 3. 使用共享内存 RAW I/Q 桥接
+
+SDR# 与 SDR++ 使用同一个启动器输入选项和同一块共享内存。每次只启动其中一个桥接，
+不要同时启用两边的 ASRTU 插件。
 
 1. 点击 **打开 SDR# 遥测预设**。
 2. 在 SDR# 中选择接收设备、设置卫星下行频率并开始播放。
@@ -43,6 +46,22 @@ Languages: **中文** · [English](README_EN.md) · [日本語](README_JA.md)
 4. 回到启动器，选择 **本地内存共享 RAW 模式 I/Q 桥接**，点击 **启动接收**。
 
 如果 SDR# 尚未开始输出样本，解码器会保持 `NOSYNC`。暂停或关闭 SDR# 后，旧的 SNR 显示不应被当作仍在接收信号。
+
+### SDR++ 共享内存桥接（Windows）
+
+在 SDR++ 中选择 RAW 模式、48 kHz 带宽，并在 Sinks 中选择 **ASRTU Receiver**。
+启动器选择 **本地共享内存 RAW 模式 I/Q 桥接（SDR# / SDR++）** 后启动接收。
+打开 TinyDoppler，并在 SDR++ 插件中勾选 **Automatic Doppler tuning** 即可
+通过共享内存自动调频。音量和静音不会改变传输的 I/Q。
+
+安装包包含 PlutoSDR-M2K Windows 驱动入口。网络版 PlutoSDR 可在 SDR++ 的
+**PlutoSDR Source → IIO URI** 中填写 `ip:192.168.1.10` 这类地址，无需依赖
+自动发现。随包的 RTL-SDR 2.0.2 驱动同时用于 SDR++ 和 SDR#，支持
+RTL-SDR Blog V4 / R828D。
+
+SDR++ 与新版 SDR# 插件共用互斥保护；已有桥接插件启用时，第二个实例会提示
+占用并拒绝启动。先停止原桥接，再在另一边重试。详细步骤见
+[SDR++ 插件说明](integrations/sdrpp/README.md)。
 
 ### 4. 使用声卡输入
 
@@ -78,7 +97,7 @@ Languages: **中文** · [English](README_EN.md) · [日本語](README_JA.md)
 
 - 勾选自动录音后，每次接收会在 `ASRTU1_Records/<时间>/` 中保存 WAV 和日志。Windows 默认使用安装目录旁的文件夹，Linux 使用当前用户的数据目录。
 - 点击 **打开录音与日志** 可直接进入记录目录。
-- **播放录音文件** 用于选择任意受支持的录音；单声道文件按 12 kHz 实数中频处理，双声道文件按零中频 I/Q 处理。
+- **播放录音文件** 用于选择任意受支持的录音；单声道文件按 12 kHz 实数中频处理，双声道文件按零中频 I/Q 处理。非 WAV 格式需要 `sndfile-convert`：Windows 安装包已自带，Linux 需安装 `sndfile-tools`，否则对话框只提供 WAV。
 - **快速播放录音文件** 提供更直接的文件选择与回归检查入口，不会改用实时声卡。
 
 ### 9. 常见问题
@@ -104,7 +123,7 @@ Languages: **中文** · [English](README_EN.md) · [日本語](README_JA.md)
 
 ## 构建
 
-只安装 Visual Studio 2022 Build Tools 与 Inno Setup 6，即可从仓库根目录生成完整安装包：
+只安装 Visual Studio 2022 Build Tools 与 Inno Setup 6，即可从仓库根目录生成核心安装包；若 `packaging/payload/` 中带有 SDR++ 与 PlutoSDR 驱动载荷，则生成完整安装包：
 
 ```powershell
 .\build_installer.ps1

@@ -26,7 +26,7 @@
 输出的便携目录位于 `portable/ASRTU1_Demod_CQt`。
 
 Windows CI（`.github/workflows/ci.yml` 的 `windows` job）会在每次 push/PR 时
-构建自包含便携包并上传 `asrtu-windows-x64.zip` 产物：解压后即可在未安装
+构建自包含便携包并上传 `ASRTU_Series_Receiver-<版本>-WinPortable.zip` 产物：解压后即可在未安装
 radioconda/GNU Radio 的 Windows 上直接运行（无需安装器）。CI 在上传前会对
 打包产物做启动冒烟测试（启动器会话检查与解码器截图），并在 `windows-installer`
 job 中把同一份最新便携包组装为 Inno Setup 安装器。
@@ -100,17 +100,23 @@ Linux 当前范围与限制：
 - Doppler 窗口可以在 Linux 计算并显示跟踪结果；自动控制 SDR# 的共享内存
   发布仍是 Windows 专用功能。
 - Linux 实时声卡使用 GNU Radio 音频后端，需要在目标发行版实测。
+- Windows SDR++ 通过 `integrations/sdrpp/asrtu_sink` 共享内存插件传输 48 kHz
+  浮点 I/Q 和多普勒指令；解码器使用 `--shared-iq-bridge`。插件与新版 SDR#
+  插件共享所有权锁，拒绝第二个桥接实例。须针对目标 SDR++ 的头文件和核心库
+  编译，详见 `integrations/sdrpp/README.md`。Linux 暂不提供共享内存输入，
+  可使用声卡或录音文件输入。
 - SDR# 本地共享内存桥使用 Windows named mapping；Linux 构建中不提供该
   输入，需要改用声卡/录音，或另行实现跨平台共享传输。
 - Linux CI 会执行严格编译、单元测试、Cppcheck、Clang-Tidy、ASan、UBSan
-  和 TSan，并构建 AppImage、deb、rpm；Arch Linux 打包元数据由
+  和 TSan，并构建 AppImage；Arch Linux 打包元数据由
   `packaging/arch/PKGBUILD` 提供并在 CI 中校验。
-- GitHub 的 AppImage、deb、rpm 发行包任务在 Ubuntu 22.04 环境中构建；
+- GitHub 的 AppImage 发行包任务在 Ubuntu 22.04 环境中构建；
   AppImage 还会检查内部 ELF 和最终 AppImage 启动程序的 glibc 要求不高于
   2.35；未知的命名 ABI、私有 ABI 和无法解析的 ELF 都会使检查失败。CI 构建测试
   与发布包构建使用不同 runner，避免新系统的 ABI 混入发布包。
-- Linux 发行包属于 CI 产物，正式发布仅由 `v*` tag 触发；运行时硬件和 OOT
-  模块兼容性仍需在目标发行版上实测。
+- Linux 发行包按 `ASRTU_Series_Receiver-<版本>-LinuxAppImage.AppImage`
+  命名。Linux 发行包属于 CI 产物，正式发布仅由 `v*` tag 触发；运行时硬件和 OOT
+  模块兼容性仍需在目标发行版上实测。Debian/RPM 包不再构建。
 - `benchmark_main.cpp` 使用 Windows 进程统计 API，非 Windows 默认关闭
   `ASRTU_BUILD_BENCHMARK`。
 
@@ -158,12 +164,6 @@ python3 ci/check_linux_abi.py dist/appimage/AppDir dist/appimage/*.AppImage
 
 ### Arch Linux 打包工具
 
-本地生成 rpm 需要 `rpm-tools`，其中包含 `rpmbuild`：
-
-```bash
-sudo pacman -S --needed rpm-tools
-```
-
 本地生成 AppImage 需要 `linuxdeploy` 和 Qt plugin。可以下载官方
 AppImage 版本并赋予执行权限：
 
@@ -178,7 +178,7 @@ curl --fail --location --retry 3 \
 chmod +x "$HOME/.local/bin/linuxdeploy"*
 ```
 
-Arch 用户也应安装 `patchelf`、`desktop-file-utils`、`fuse2` 和 `rpm-tools`。
+Arch 用户也应安装 `patchelf`、`desktop-file-utils` 和 `fuse2`。
 构建 Linux 上传代理还需要 `qt5-websockets`。
 AppImage 运行时若系统启用了较新的 FUSE，使用 `APPIMAGE_EXTRACT_AND_RUN=1`
 可绕过 FUSE 挂载限制。

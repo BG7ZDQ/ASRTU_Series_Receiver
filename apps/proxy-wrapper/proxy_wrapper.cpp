@@ -65,6 +65,13 @@ void applyTaskbarIdentity()
 
 int wmain()
 {
+    HANDLE singleton = CreateMutexW(
+        nullptr, FALSE, L"Local\\ASRTU_MMT_PROXY_SINGLE_INSTANCE");
+    if (singleton && GetLastError() == ERROR_ALREADY_EXISTS) {
+        CloseHandle(singleton);
+        return 3;
+    }
+
     applyTaskbarIdentity();
 
     wchar_t modulePath[MAX_PATH]{};
@@ -93,5 +100,7 @@ int wmain()
     DWORD exitCode = 1;
     GetExitCodeProcess(process.hProcess, &exitCode);
     CloseHandle(process.hProcess);
+    if (singleton)
+        CloseHandle(singleton);
     return int(exitCode);
 }

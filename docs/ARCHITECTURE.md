@@ -18,7 +18,9 @@ WAV/OGG playback ───┘                                      └─> Viter
                                                    └────── SatNOGS uploader/HTTPS
 ```
 
-单声道实数中频的输入瀑布图和输入频谱在 `float` 转为复数之前取样，并把 12 kHz 显示为图中的 0 Hz；解调支路再完成频移与复数化。
+输入频谱和输入瀑布图统一从主解调链的 AGC 输出取样。单声道实数中频先完成
+12 kHz 中心频率搬移、低通滤波、固定增益和 AGC，再同时送往频谱/瀑布图与
+FLL/时钟/Costas 解调链。
 
 ## 进程间通信
 
@@ -28,7 +30,7 @@ WAV/OGG playback ───┘                                      └─> Viter
   假定或直接跳过固定长度的序列化头。
 - SatNOGS 上传程序设置最多 4 个并发请求和 128 帧等待队列，避免网络变慢时
   无限制占用内存。文件回放不会启用网络输出，因此不会上传历史帧。
-- SDR# RAW I/Q：Windows 本地共享内存
+- SDR# / SDR++ RAW I/Q：Windows 共用本地共享内存
 - 自动多普勒：`Local\\ASRTU_DOPPLER_CONTROL_V1` 共享内存映射
 
 ## 运行数据

@@ -220,7 +220,8 @@ jobs:
       - name: Prepare portable installer payload
         shell: pwsh
         run: |
-          $archive = "dist/windows/asrtu-windows-x64.zip"
+          $archive = Get-ChildItem -LiteralPath "dist/windows" -Filter '*-WinPortable.zip' |
+            Select-Object -First 1 -ExpandProperty FullName
           $portable = Join-Path $env:RUNNER_TEMP "asrtu-portable"
           if (-not (Test-Path -LiteralPath $archive)) {
             throw "Windows portable archive not found: $archive"
@@ -265,7 +266,7 @@ jobs:
             throw 'Unable to read the application version from CMakeLists.txt'
           }
           $appVersion = $versionLine.Matches[0].Groups[1].Value
-          $installer = "packaging/inno/dist/ASRTU_Series_Receiver_Setup_${appVersion}.exe"
+          $installer = "packaging/inno/dist/ASRTU_Series_Receiver-${appVersion}-WinInstaller(Recommend).exe"
           if (-not (Test-Path -LiteralPath $installer)) {
             throw "Inno Setup installer was not created: $installer"
           }
@@ -278,11 +279,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: asrtu-windows-installer
-          path: packaging/inno/dist/ASRTU_Series_Receiver_Setup_*.exe
+          path: packaging/inno/dist/*-WinInstaller(Recommend)*.exe
           if-no-files-found: error
 
   packages:
-    name: Linux packages
+    name: Linux AppImage
     # Build portable artifacts on the oldest supported Ubuntu baseline.
     # Binaries built on 24.04 may require a newer glibc than 22.04 provides.
     runs-on: ubuntu-22.04
@@ -304,10 +305,6 @@ jobs:
         run: |
           cmake --build build-package --parallel
           ctest --test-dir build-package --output-on-failure
-      - name: Create deb and rpm packages
-        run: |
-          cpack --config build-package/CPackConfig.cmake -G DEB -B dist/packages
-          cpack --config build-package/CPackConfig.cmake -G RPM -B dist/packages
       - name: Download linuxdeploy
         run: |
           mkdir -p dist/tools
@@ -378,14 +375,11 @@ jobs:
             appimage-launch.log; then
             exit 1
           fi
-      - name: Upload Linux packages
+      - name: Upload Linux AppImage
         uses: actions/upload-artifact@v4
         with:
-          name: asrtu-linux-packages
-          path: |
-            dist/packages/*.deb
-            dist/packages/*.rpm
-            dist/appimage/*.AppImage
+          name: asrtu-linux-appimage
+          path: dist/appimage/*.AppImage
           if-no-files-found: error
 
   release:
@@ -396,10 +390,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Download Linux packages
+      - name: Download Linux AppImage
         uses: actions/download-artifact@v4
         with:
-          name: asrtu-linux-packages
+          name: asrtu-linux-appimage
           path: dist/linux
       - name: Download Windows package
         uses: actions/download-artifact@v4
@@ -415,8 +409,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/**/*.deb
-            dist/**/*.rpm
             dist/**/*.AppImage
             dist/**/*.zip
             dist/**/*.exe

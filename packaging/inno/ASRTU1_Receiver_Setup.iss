@@ -6,6 +6,7 @@
 #define AppBuildSuffix ""
 #endif
 
+
 [Setup]
 AppId={{957BAE5B-4E42-4ACB-932D-9759FB28DD44}
 AppName={cm:ProgramGroup}
@@ -21,7 +22,7 @@ UninstallDisplayName={cm:ProgramGroup}
 UninstallDisplayIcon={app}\launcher\ASRTU1_Launcher.exe
 SetupIconFile=..\..\assets\branding\astro_series_launcher.ico
 OutputDir=dist
-OutputBaseFilename=ASRTU_Series_Receiver_Setup_{#AppVersion}{#AppBuildSuffix}
+OutputBaseFilename=ASRTU_Series_Receiver-{#AppVersion}-WinInstaller(Recommend){#AppBuildSuffix}
 Compression=lzma2/ultra64
 SolidCompression=yes
 MergeDuplicateFiles=yes
@@ -68,6 +69,15 @@ japanese.LauncherShortcut=ASRTUシリーズ衛星ランチャー
 english.SdrShortcut=SDR# Telemetry Preset
 chinesesimp.SdrShortcut=SDR# 遥测预设版
 japanese.SdrShortcut=SDR#テレメトリプリセット
+english.SdrppComponent=SDR++ v1.3.0 Nightly telemetry preset (shared-memory I/Q + Doppler; more SDR devices)
+chinesesimp.SdrppComponent=SDR++ Ver1.3.0 Nightly 遥测预设版（含共享内存 I/Q 与多普勒插件，支持更多 SDR 设备）
+japanese.SdrppComponent=SDR++ Ver1.3.0 Nightly テレメトリプリセット（共有メモリ I/Q・ドップラー、対応SDR機器を拡大）
+english.SdrppShortcut=SDR++ ASRTU Receiver
+chinesesimp.SdrppShortcut=SDR++ ASRTU 接收
+japanese.SdrppShortcut=SDR++ ASRTU受信
+english.InstallPlutoDriver=Install PlutoSDR Windows driver
+chinesesimp.InstallPlutoDriver=安装 PlutoSDR Windows 驱动
+japanese.InstallPlutoDriver=PlutoSDR Windowsドライバーをインストール
 english.OpenLauncher=Open the ASRTU Series Satellite Launcher
 chinesesimp.OpenLauncher=打开阿斯图系列卫星启动器
 japanese.OpenLauncher=ASRTUシリーズ衛星ランチャーを開く
@@ -118,12 +128,28 @@ Name: "custom"; Description: "{cm:CustomInstall}"; Flags: iscustom
 
 [Components]
 Name: "core"; Description: "{cm:CoreComponent}"; Types: full compact custom; Flags: fixed
-Name: "sdrsharp"; Description: "{cm:SdrComponent}"; Types: full
+Name: "sdrsharp"; Description: "{cm:SdrComponent}"; Types: full compact
+#ifdef SdrppAvailable
+Name: "sdrpp"; Description: "{cm:SdrppComponent}"; Types: full compact
+#endif
 
 [Files]
 #include "stage\core-files.iss"
 Source: "stage\proxy\*"; DestDir: "{app}\proxy"; Excludes: "config.cfg"; Components: core; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "stage\sdrsharp\*"; DestDir: "{app}\sdrsharp"; Components: sdrsharp; Flags: ignoreversion recursesubdirs createallsubdirs
+#ifdef SdrppAvailable
+Source: "stage\sdrpp\*"; DestDir: "{app}\sdrpp"; Excludes: "*.json"; Components: sdrpp; Flags: ignoreversion recursesubdirs createallsubdirs
+; Resource JSON is application data, not user settings. The exclusion above
+; applies recursively, so explicitly include the complete resource tree.
+Source: "stage\sdrpp\res\*"; DestDir: "{app}\sdrpp\res"; Components: sdrpp; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "stage\sdrpp\*.json"; DestDir: "{app}\sdrpp"; Components: sdrpp; Flags: ignoreversion onlyifdoesntexist
+#endif
+#ifdef SdrppAvailable
+#ifdef PlutoAvailable
+Source: "stage\plutosdr-driver\*"; DestDir: "{app}\drivers\plutosdr"; Components: sdrpp; Flags: ignoreversion recursesubdirs createallsubdirs
+#endif
+#endif
+Source: "..\..\assets\icons\sdrsharp.ico"; DestDir: "{app}\launcher"; Components: sdrsharp; Flags: ignoreversion
 Source: "README.txt"; DestDir: "{app}"; Components: core; Flags: ignoreversion
 Source: "SDRSHARP_NOTICE.txt"; DestDir: "{app}"; Languages: chinesesimp; Flags: ignoreversion
 Source: "SDRSHARP_NOTICE.en.txt"; DestDir: "{app}"; DestName: "SDRSHARP_NOTICE.txt"; Languages: english; Flags: ignoreversion
@@ -135,7 +161,15 @@ Source: "THIRD_PARTY_NOTICE.ja.txt"; DestDir: "{app}"; DestName: "THIRD_PARTY_NO
 [Icons]
 Name: "{autoprograms}\{cm:ProgramGroup}\{cm:LauncherShortcut}"; Filename: "{app}\launcher\ASRTU1_Launcher.exe"; WorkingDir: "{app}\launcher"
 Name: "{autodesktop}\{cm:LauncherShortcut}"; Filename: "{app}\launcher\ASRTU1_Launcher.exe"; WorkingDir: "{app}\launcher"
-Name: "{autoprograms}\{cm:ProgramGroup}\{cm:SdrShortcut}"; Filename: "{app}\launcher\ASRTU1_Launcher.exe"; Parameters: "--sdrsharp"; WorkingDir: "{app}\launcher"; Components: sdrsharp
+Name: "{autoprograms}\{cm:ProgramGroup}\{cm:SdrShortcut}"; Filename: "{app}\launcher\ASRTU1_Launcher.exe"; Parameters: "--sdrsharp"; WorkingDir: "{app}\launcher"; IconFilename: "{app}\launcher\sdrsharp.ico"; Components: sdrsharp
+#ifdef SdrppAvailable
+Name: "{autoprograms}\{cm:ProgramGroup}\{cm:SdrppShortcut}"; Filename: "{app}\launcher\ASRTU1_Launcher.exe"; Parameters: "--sdrpp"; WorkingDir: "{app}\launcher"; IconFilename: "{app}\sdrpp\res\icons\sdrpp.ico"; Components: sdrpp
+#endif
+#ifdef SdrppAvailable
+#ifdef PlutoAvailable
+Name: "{autoprograms}\{cm:ProgramGroup}\{cm:InstallPlutoDriver}"; Filename: "{app}\drivers\plutosdr\install-driver.cmd"; WorkingDir: "{app}\drivers\plutosdr"; IconFilename: "{app}\drivers\plutosdr\dpinst.exe"; Components: sdrpp
+#endif
+#endif
 
 [INI]
 Filename: "{app}\launcher\ui-language.ini"; Section: "UI"; Key: "Language"; String: "{cm:UiLanguage}"; Flags: uninsdeleteentry uninsdeletesectionifempty
@@ -147,16 +181,19 @@ Filename: "{app}\satnogs-uploader\ui-language.ini"; Section: "UI"; Key: "Languag
 Filename: "{app}\launcher\ASRTU1_Launcher.exe"; Parameters: "--language={cm:UiLanguage}"; Description: "{cm:OpenLauncher}"; Flags: nowait postinstall skipifsilent
 
 [InstallDelete]
+#include "stage\core-stale.iss"
 Type: files; Name: "{app}\decoder\ASRTU1_Launcher.exe"
 Type: files; Name: "{app}\decoder\TinyDoppler.exe"
 Type: files; Name: "{app}\decoder\ASRTU_SatnogsUploader.exe"
+Type: files; Name: "{app}\sdrsharp\VCRUNTIME140_1.dll"
 
 [UninstallDelete]
-Type: files; Name: "{app}\proxy\config.cfg"
+Type: filesandordirs; Name: "{app}\gnuradio-cache"
 Type: dirifempty; Name: "{app}\proxy"
 Type: dirifempty; Name: "{app}\decoder"
 Type: dirifempty; Name: "{app}\launcher"
 Type: dirifempty; Name: "{app}\doppler"
+Type: dirifempty; Name: "{app}\sdrpp"
 Type: dirifempty; Name: "{app}\satnogs-uploader"
 Type: dirifempty; Name: "{app}"
 
@@ -362,15 +399,79 @@ begin
   end;
 end;
 
+procedure SetSdrppAmplitudeRange;
+var
+  Lines: TArrayOfString;
+  I: Integer;
+  ConfigPath: String;
+begin
+  ConfigPath := ExpandConstant('{app}\sdrpp\config.json');
+  if not FileExists(ConfigPath) then
+    Exit;
+  if not LoadStringsFromFile(ConfigPath, Lines) then
+    Exit;
+  for I := 0 to GetArrayLength(Lines) - 1 do
+  begin
+    if Pos('"min"', Lines[I]) > 0 then
+    begin
+      if Pos(',', Lines[I]) > 0 then
+        Lines[I] := '    "min": -150.0,'
+      else
+        Lines[I] := '    "min": -150.0';
+    end
+    else if Pos('"max"', Lines[I]) > 0 then
+    begin
+      if Pos(',', Lines[I]) > 0 then
+        Lines[I] := '    "max": -65.0,'
+      else
+        Lines[I] := '    "max": -65.0';
+    end;
+  end;
+  SaveStringsToFile(ConfigPath, Lines, False);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ConfigText: String;
+  LegacySdrpp, NewSdrpp, Destination: String;
+  ConfigFile: TFindRec;
 begin
+#ifdef SdrppAvailable
+  if (CurStep = ssInstall) and WizardIsComponentSelected('sdrpp') then
+  begin
+    { Preserve existing presets when migrating from the old separate folder.
+      Copy only top-level settings; resources always come from this release. }
+    LegacySdrpp := ExpandConstant('{localappdata}\ASRTU Series Receiver\sdrpp');
+    NewSdrpp := ExpandConstant('{app}\sdrpp');
+    ForceDirectories(NewSdrpp);
+    if FindFirst(LegacySdrpp + '\*.json', ConfigFile) then
+    begin
+      try
+        repeat
+          if (ConfigFile.Attributes and FILE_ATTRIBUTE_DIRECTORY) = 0 then
+          begin
+            Destination := NewSdrpp + '\' + ConfigFile.Name;
+            if not FileExists(Destination) then
+              if not FileCopy(LegacySdrpp + '\' + ConfigFile.Name, Destination, True) then
+                RaiseException('Unable to preserve SDR++ settings: ' + ConfigFile.Name);
+          end;
+        until not FindNext(ConfigFile);
+      finally
+        FindClose(ConfigFile);
+      end;
+    end;
+  end;
+#endif
   if CurStep <> ssPostInstall then
     Exit;
 
   { Keep module-local DLL paths while sharing identical runtime files on disk. }
   CollapseDuplicateFiles;
+
+#ifdef SdrppAvailable
+  if WizardIsComponentSelected('sdrpp') then
+    SetSdrppAmplitudeRange;
+#endif
 
   { The launcher owns the runtime satellite selection. ASRTU-1 is only the
     initial profile shown on first launch. }
@@ -392,4 +493,61 @@ begin
   if not SaveStringToFile(ExpandConstant('{app}\proxy\config.cfg'),
                           ConfigText, False) then
     MsgBox(CustomMessage('ConfigWriteFailed'), mbError, MB_OK);
+end;
+
+var
+  RemoveAllUserData: Boolean;
+
+function AppUserDataExists: Boolean;
+begin
+  Result :=
+    FileExists(ExpandConstant('{app}\proxy\config.cfg')) or
+    FileExists(ExpandConstant('{app}\satellites.json')) or
+    FileExists(ExpandConstant('{app}\tracker.ini')) or
+    FileExists(ExpandConstant('{app}\standalone-tracker.ini')) or
+    FileExists(ExpandConstant('{app}\ephemerides.json')) or
+    DirExists(ExpandConstant('{app}\ASRTU1_Records')) or
+    DirExists(ExpandConstant('{localappdata}\BG7ZDQ\TinyDoppler')) or
+    DirExists(ExpandConstant('{userappdata}\BG7ZDQ\TinyDoppler')) or
+    RegKeyExists(HKCU, 'Software\ASRTU\AstroSeriesLauncher') or
+    RegKeyExists(HKCU, 'Software\ASRTU\ASRTU1_Demod_CQt_v3') or
+    RegKeyExists(HKCU, 'Software\TinyDoppler') or
+    RegKeyExists(HKCU, 'Software\ASRTU\AstroSeriesTracker');
+end;
+
+function InitializeUninstall(): Boolean;
+begin
+  RemoveAllUserData := False;
+  if AppUserDataExists then
+    RemoveAllUserData :=
+      MsgBox('是否删除所有 ASRTU 用户数据？' + #13#10 +
+             '包括呼号、经纬度、TinyDoppler 卫星/频率/星历、' +
+             '录音日志以及启动器/解码器设置。' + #13#10 +
+             '选择“否”将保留这些数据，重新安装后仍可使用。',
+             mbConfirmation, MB_YESNO) = IDYES;
+  Result := True;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if (CurUninstallStep = usUninstall) and RemoveAllUserData then
+  begin
+    DeleteFile(ExpandConstant('{app}\proxy\config.cfg'));
+    DeleteFile(ExpandConstant('{app}\satellites.json'));
+    DeleteFile(ExpandConstant('{app}\tracker.ini'));
+    DeleteFile(ExpandConstant('{app}\standalone-tracker.ini'));
+    DeleteFile(ExpandConstant('{app}\ephemerides.json'));
+    DelTree(ExpandConstant('{app}\ASRTU1_Records'), True, True, True);
+    DelTree(ExpandConstant('{localappdata}\BG7ZDQ\TinyDoppler'),
+            True, True, True);
+    DelTree(ExpandConstant('{userappdata}\BG7ZDQ\TinyDoppler'),
+            True, True, True);
+    RegDeleteKeyIncludingSubkeys(HKCU,
+                                 'Software\ASRTU\AstroSeriesLauncher');
+    RegDeleteKeyIncludingSubkeys(HKCU,
+                                 'Software\ASRTU\ASRTU1_Demod_CQt_v3');
+    RegDeleteKeyIncludingSubkeys(HKCU, 'Software\TinyDoppler');
+    RegDeleteKeyIncludingSubkeys(HKCU,
+                                 'Software\ASRTU\AstroSeriesTracker');
+  end;
 end;

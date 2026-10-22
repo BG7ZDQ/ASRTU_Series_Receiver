@@ -6,8 +6,10 @@
 
 #include <QApplication>
 #include <QCoreApplication>
+#include <QDir>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QLockFile>
 #include <QString>
 #include <QStringList>
 #include <QTranslator>
@@ -60,6 +62,9 @@ int main(int argc, char *argv[])
 {
 	QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
 	QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
+	QCoreApplication::setAttribute(Qt::AA_DisableWindowContextHelpButton);
+#endif
 #if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
 	QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
 	    Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
@@ -73,13 +78,27 @@ int main(int argc, char *argv[])
 	}
 	if (graphical) {
 		QApplication application(argc, argv);
+		// Share the launcher's AppConfigLocation so a direct
+		// ASRTU_UploadProxy start finds the same config.cfg.
+		QCoreApplication::setOrganizationName(QStringLiteral("ASRTU"));
 		QCoreApplication::setApplicationName(
-		    QStringLiteral("ASRTU Upload Proxy"));
+		    QStringLiteral("ASRTU1_Launcher"));
+		QLockFile instanceLock(
+		    QDir::temp().filePath(QStringLiteral("asrtu-mmt-proxy.lock")));
+		instanceLock.setStaleLockTime(0);
+		if (!instanceLock.tryLock(100))
+			return 3;
 		QTranslator translator;
 		installSystemTranslation(application, translator);
 		return runProxy(application, true);
 	}
 	QCoreApplication application(argc, argv);
-	QCoreApplication::setApplicationName(QStringLiteral("ASRTU Upload Proxy"));
+	QCoreApplication::setOrganizationName(QStringLiteral("ASRTU"));
+	QCoreApplication::setApplicationName(QStringLiteral("ASRTU1_Launcher"));
+	QLockFile instanceLock(
+	    QDir::temp().filePath(QStringLiteral("asrtu-mmt-proxy.lock")));
+	instanceLock.setStaleLockTime(0);
+	if (!instanceLock.tryLock(100))
+		return 3;
 	return runProxy(application, false);
 }
