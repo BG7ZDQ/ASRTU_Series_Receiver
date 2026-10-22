@@ -67,6 +67,18 @@ if (-not (Test-Path -LiteralPath (
     throw "New TinyDoppler.exe not found in decoder payload: $DecoderSource"
 }
 
+# Refuse a new installer label around stale receiver executables.
+$versionLine = Select-String -LiteralPath (Join-Path $repoRoot 'CMakeLists.txt') `
+    -Pattern 'project\(ASRTU1Qt VERSION ([0-9.]+)' | Select-Object -First 1
+$appVersion = $versionLine.Matches[0].Groups[1].Value
+foreach ($name in @('ASRTU1_Demod_CQt.exe', 'ASRTU1_Launcher.exe', 'ASRTU_SatnogsUploader.exe')) {
+    $binary = Join-Path $DecoderSource $name
+    $actual = (Get-Item -LiteralPath $binary).VersionInfo.ProductVersion
+    if ($actual -ne $appVersion) {
+        throw "Stale installer input $name ($actual, expected $appVersion). Run with -RebuildDsp."
+    }
+}
+
 # Rebuild the legacy SDR# bridge using Roslyn from Visual Studio Build Tools.
 & $iqBridgeBuild -SdrSharpApiRoot $SdrSharpApiRoot -Configuration Release
 if ($LASTEXITCODE -ne 0) { throw 'SDR# I/Q bridge plugin build failed.' }

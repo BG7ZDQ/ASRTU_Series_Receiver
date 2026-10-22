@@ -1,3 +1,4 @@
+#include "../common/audio_devices.h"
 #include "flowgraph.h"
 #include "async_wav_recorder_sink.h"
 #include "fec_candidate_sink.h"
@@ -346,11 +347,23 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options &options)
 		source = winmm_iq_source_;
 		sourceHasSecondOutput = !options.real_if_12khz;
 #else
+#ifdef __APPLE__
+		std::string device;
+		const auto devices = asrtu::macInputDevices();
+		if (options.audio_device_id >= 0) {
+			if (size_t(options.audio_device_id) >= devices.size())
+				throw std::runtime_error(
+				    "Audio input device is no longer "
+				    "available");
+			device = devices[size_t(options.audio_device_id)].name;
+		}
+#else
 		const std::string device =
 		    options.audio_device_id < 0
 			? std::string{}
 			: "plughw:" + std::to_string(options.audio_device_id) +
 			      ",0";
+#endif
 		source = gr::audio::source::make(48000, device, true);
 		sourceHasSecondOutput = !options.real_if_12khz;
 #endif

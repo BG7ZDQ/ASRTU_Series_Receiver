@@ -344,6 +344,13 @@ bool SsdvReceiver::processFrame(const QByteArray &frame,
 
 	if (sessionChanged) {
 		savePacketBin();
+		// A worker batch may contain the end of one image and the start
+		// of another. Persist the final preview before replacing its
+		// state.
+		if (!packets_.empty()) {
+			last_image_save_ = {};
+			rebuildImage(true, false);
+		}
 		packets_.clear();
 		bin_packets_.clear();
 		crc_failed_packet_ids_.clear();

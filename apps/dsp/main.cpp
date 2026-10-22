@@ -1,3 +1,8 @@
+#ifdef __APPLE__
+#include <libproc.h>
+#include <signal.h>
+#include <cerrno>
+#endif
 #include "main_window.h"
 #include "translation.h"
 
@@ -60,6 +65,12 @@ bool lockOwnerIsLiveDecoder(QLockFile *lock)
 		.fileName();
 	return name.compare(QStringLiteral("ASRTU1_Demod_CQt.exe"),
 			    Qt::CaseInsensitive) == 0;
+#elif defined(Q_OS_MACOS)
+	char path[PROC_PIDPATHINFO_MAXSIZE] = {};
+	if (proc_pidpath(int(pid), path, sizeof(path)) <= 0)
+		return kill(pid_t(pid), 0) == 0 || errno == EPERM;
+	return QFileInfo(QString::fromUtf8(path)).fileName() ==
+	       QStringLiteral("ASRTU1_Demod_CQt");
 #else
 	const QFileInfo process(QStringLiteral("/proc/%1/comm").arg(pid));
 	if (!process.exists())

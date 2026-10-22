@@ -1,4 +1,4 @@
-# SDR++ shared-memory bridge (Windows)
+# SDR++ shared-memory bridge (Windows, Linux, macOS)
 
 `asrtu_sink` registers the **ASRTU Receiver** sink. It sends 48 kHz complex
 float32 I/Q to the existing ASRTU V1 shared-memory ring and reads TinyDoppler
@@ -86,13 +86,19 @@ unchanged even sequences. Use the updated TinyDoppler for coherent updates.
 
 ## Build
 
-This implementation uses Windows named shared memory, matching the existing
-receiver and tracker. Linux has no shared-memory decoder input yet; use the
-audio or recorded-file inputs until a cross-platform transport is added.
+Windows uses named shared memory; Linux/macOS use a per-user mmap file at
+`/tmp/asrtu-iq-<uid>.v1`, with an exclusive producer lock. Unix heartbeat values
+are monotonic nanoseconds. The decoder opens the same file read-only. Existing
+SDR++ Rigctl Server tuning stays on port 4532; the Unix plugin does not add a
+second tuning path. Windows keeps its shared-memory Doppler control.
 
-For an in-tree build, add this directory after SDR++ creates its `sdrpp_core`
-target and set `SDRPP_CORE_ROOT` to the source tree's **core** directory.
-For a standalone build:
+CI builds the plugin for Windows x64, Linux x86_64/arm64 and macOS x86_64/arm64.
+See [artifact layout](../../docs/RELEASE_LAYOUT.md). Each binary records the
+SDR++ source revision and dependencies. On Unix install the matching VOLK
+runtime; on macOS bundled dependent dylibs stay beside the plugin. Windows
+plugins target the bundled SDR++ host. A different host ABI requires rebuilding.
+
+Standalone Windows example:
 
 ```powershell
 cmake -S integrations/sdrpp/asrtu_sink -B integrations/sdrpp/build -A x64 `

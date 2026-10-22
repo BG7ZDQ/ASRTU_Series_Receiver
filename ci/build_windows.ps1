@@ -80,7 +80,6 @@ if ($LASTEXITCODE -ne 0) {
     throw "CTest failed with exit code $LASTEXITCODE"
 }
 
-# Package the CI build into a self-contained portable folder and zip. The
-# zip artifact is what users download from the Actions run; the bare EXEs
-# cannot start without the conda runtime DLLs, Qt plugins and translations.
+# Collect the tested runtime as an internal installer input. No portable
+# release archive is created.
 & "$PSScriptRoot\package_windows.ps1" -BuildDir $buildDir

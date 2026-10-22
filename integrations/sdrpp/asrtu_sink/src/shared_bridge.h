@@ -1,5 +1,9 @@
 #pragma once
 
+#ifndef _WIN32
+#include "posix_bridge.h"
+#else
+
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -254,3 +258,5 @@ class DopplerReader
 	const std::uint8_t *base_ = nullptr;
 };
 } // namespace asrtu
+
+#endif

@@ -123,14 +123,16 @@ SDR++ 与新版 SDR# 插件共用互斥保护；已有桥接插件启用时，�
 
 ## 构建
 
-只安装 Visual Studio 2022 Build Tools 与 Inno Setup 6，即可从仓库根目录生成核心安装包；若 `packaging/payload/` 中带有 SDR++ 与 PlutoSDR 驱动载荷，则生成完整安装包：
+当前改进属于 **1.5.5 开发版**，尚未正式发布。安装 Visual Studio 2022 Build Tools、
+Inno Setup 6 和 radioconda/GNU Radio 开发依赖后，从源码构建安装器：
 
 ```powershell
-.\build_installer.ps1
+.\packaging\inno\build_installer.ps1 -RebuildDsp
 ```
 
-如需从源码重编 DSP（而非使用仓库中的便携运行包），使用
-`.\packaging\inno\build_installer.ps1 -RebuildDsp`，并另行安装 radioconda/GNU Radio 开发依赖。
+打包脚本拒绝将旧版 payload 标为新版本。Windows 不再构建便携发布 ZIP。
+[电台控频](docs/RADIO_CONTROL.md)通过 Hamlib 接入；
+[macOS](docs/MACOS_STATUS.md)与跨平台 SDR++ 插件正在 1.5.5 中验证。
 
 完整环境、Linux/macOS 现状及依赖说明见 [docs/BUILDING.md](docs/BUILDING.md)。安装包构建见 [docs/PACKAGING.md](docs/PACKAGING.md)。
 

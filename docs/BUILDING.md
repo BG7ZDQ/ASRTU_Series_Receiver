@@ -23,13 +23,11 @@
   -BuildDir C:\build\asrtu
 ```
 
-输出的便携目录位于 `portable/ASRTU1_Demod_CQt`。
-
-Windows CI（`.github/workflows/ci.yml` 的 `windows` job）会在每次 push/PR 时
-构建自包含便携包并上传 `ASRTU_Series_Receiver-<版本>-WinPortable.zip` 产物：解压后即可在未安装
-radioconda/GNU Radio 的 Windows 上直接运行（无需安装器）。CI 在上传前会对
-打包产物做启动冒烟测试（启动器会话检查与解码器截图），并在 `windows-installer`
-job 中把同一份最新便携包组装为 Inno Setup 安装器。
+本地脚本的 `portable/ASRTU1_Demod_CQt` 目录仅作为安装器输入。
+1.5.5 起取消 Windows 便携 ZIP 构建与发布。CI 先构建并冒烟测试运行目录，
+再通过 `asrtu-windows-installer-input` 内部 artifact 交给 Inno Setup。
+跨平台插件目录布局见 [RELEASE_LAYOUT.md](RELEASE_LAYOUT.md)，
+macOS 构建见 [MACOS_STATUS.md](MACOS_STATUS.md)。
 
 ## SDR# 插件
 

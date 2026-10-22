@@ -5,6 +5,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QTemporaryDir>
+#include <QImage>
 
 #include <algorithm>
 #include <chrono>
@@ -296,6 +297,54 @@ int main(int argc, char* argv[])
         std::cerr << "SSDV damaged frame was lost from the capture\n";
         return 15;
     }
+    // Real JAMX audio: SatNOGS observation 14907288, JF6FYI, 2026-08-30.
+    // 97 CRC-valid received frames contain 56 distinct packets of image 0.
+    const QDir fixtures(QFileInfo(QStringLiteral(ASRTU_TEST_FIXTURE)).dir());
+    QFile jamxInput(
+	fixtures.filePath(QStringLiteral("jamx_satnogs_14907288.b64")));
+    if (!jamxInput.open(QIODevice::ReadOnly))
+	    return 17;
+    const QByteArray realJamx = QByteArray::fromBase64(jamxInput.readAll());
+    QTemporaryDir jamxOutput;
+    SsdvReceiver jamxReceiver(jamxOutput.path(), {});
+    for (int offset = 0; offset < realJamx.size(); offset += 223)
+	    jamxReceiver.ingestFrame(realJamx.mid(offset, 223));
+    jamxReceiver.finish();
+    const QDir jamxDir(jamxOutput.path());
+    const auto images =
+	jamxDir.entryList({QStringLiteral("*.jpg")}, QDir::Files);
+    const auto bins =
+	jamxDir.entryList({QStringLiteral("*ID*.bin")}, QDir::Files);
+    if (realJamx.size() != 97 * 223 || images.size() != 1 || bins.size() != 1 ||
+	QImage(jamxDir.filePath(images.first())).size() != QSize(640, 480) ||
+	QFileInfo(jamxDir.filePath(images.first())).size() < 12000 ||
+	QFileInfo(jamxDir.filePath(bins.first())).size() != 56 * 218) {
+	    std::cerr << "Real JAMX recording reconstruction failed\n";
+	    return 18;
+    }
+
+    // Crossing image boundaries while draining must save the full preceding
+    // image, even when a preview was written only milliseconds earlier.
+    QTemporaryDir batchOutput;
+    SsdvReceiver batchReceiver(batchOutput.path(), {});
+    QByteArray nextImage = data;
+    for (int offset = 0; offset < nextImage.size(); offset += 223)
+	    nextImage[offset + 5] = char(44);
+    nextImage = convertToJamxCrc(nextImage);
+    for (const auto &frames : {data, nextImage})
+	    for (int offset = 0; offset < frames.size(); offset += 223)
+		    batchReceiver.ingestFrame(frames.mid(offset, 223));
+    batchReceiver.finish();
+    const QDir batchDir(batchOutput.path());
+    const auto batchImages =
+	batchDir.entryList({QStringLiteral("*.jpg")}, QDir::Files);
+    if (batchImages.size() != 2)
+	    return 19;
+    for (const auto &name : batchImages)
+	    if (QFileInfo(batchDir.filePath(name)).size() < 6000) {
+		    std::cerr << "Image boundary left a stale preview\n";
+		    return 20;
+	    }
     std::cout << "SSDV OK: " << result.path.toLocal8Bit().constData() << '\n';
     return 0;
 }

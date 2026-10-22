@@ -36,6 +36,8 @@ private:
 
 #ifdef _WIN32
     HANDLE mapping_ = nullptr;
+#else
+    int mapping_ = -1;
 #endif
     const std::uint8_t* base_ = nullptr;
     std::uint64_t read_index_ = 0;

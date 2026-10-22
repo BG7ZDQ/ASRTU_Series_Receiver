@@ -86,6 +86,7 @@ if(MSVC)
 endif()
 
 set(ASRTU_DEMOD_SOURCES
+    libs/common/audio_devices.cpp
     apps/dsp/main.cpp
     apps/dsp/main_window.cpp
     apps/dsp/main_window.h
@@ -188,6 +189,7 @@ if(UNIX AND NOT APPLE)
 endif()
 
 add_executable(ASRTU1_Launcher
+    libs/common/audio_devices.cpp
     apps/launcher/suite_launcher.cpp
     libs/common/translation.cpp
     libs/common/translation.h
@@ -382,7 +384,7 @@ asrtu_enable_strict_warnings(ASRTU1_Benchmark)
 endif()
 
 if(BUILD_TESTING)
-    add_executable(ASRTU1_LauncherSdrTest tests/launcher_sdr_test.cpp
+    add_executable(ASRTU1_LauncherSdrTest tests/launcher_sdr_test.cpp libs/common/audio_devices.cpp
         libs/common/translation.cpp libs/common/runtime_paths.cpp
         apps/launcher/launcher_resources.qrc apps/dsp/application_icons.qrc)
     target_include_directories(ASRTU1_LauncherSdrTest PRIVATE libs/common)
@@ -489,6 +491,7 @@ if(BUILD_TESTING)
     target_include_directories(ASRTU1_SatnogsUploaderTest PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/apps/satnogs-uploader
         ${CMAKE_CURRENT_SOURCE_DIR}/libs/proxy
+        ${CMAKE_CURRENT_SOURCE_DIR}/libs/common
         ${ASRTU_ZMQ_INCLUDE_DIR})
     target_link_libraries(ASRTU1_SatnogsUploaderTest PRIVATE
         Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network
@@ -551,3 +554,18 @@ set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "ASRTU Series Receiver")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
 include(CPack)
+
+# CoreAudio enumeration uses device names expected by GNU Radio's macOS backend.
+if(APPLE)
+    foreach(target ASRTU1_Demod_CQt ASRTU1_Launcher ASRTU1_LauncherSdrTest)
+        if(TARGET ${target})
+            target_link_libraries(${target} PRIVATE "-framework CoreAudio" "-framework CoreFoundation")
+        endif()
+    endforeach()
+endif()
+
+if(BUILD_TESTING AND UNIX)
+    add_executable(ASRTU_PosixBridgeTest tests/posix_bridge_test.cpp)
+    asrtu_enable_strict_warnings(ASRTU_PosixBridgeTest)
+    add_test(NAME posix_bridge COMMAND ASRTU_PosixBridgeTest)
+endif()

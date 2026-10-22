@@ -40,6 +40,7 @@ int main(int argc, char* argv[])
     std::mutex frameMutex;
     std::vector<QByteArray> frameHashes;
     std::vector<int> frameLengths;
+    QByteArray capturedFrames;
     QString firstFrameLog;
 
     AsrtuFlowgraph::Options options;
@@ -67,8 +68,10 @@ int main(int argc, char* argv[])
         if (std::find(frameHashes.begin(), frameHashes.end(), hash) !=
             frameHashes.end())
             return;
-        frameLengths.push_back(int(payload.size()));
-        frameHashes.push_back(hash);
+	if (bytes.size() == 223)
+		capturedFrames.append(bytes);
+	frameLengths.push_back(int(payload.size()));
+	frameHashes.push_back(hash);
     };
 
     FILETIME createBefore{}, exitBefore{}, kernelBefore{}, userBefore{};
@@ -134,6 +137,11 @@ int main(int argc, char* argv[])
         { QStringLiteral("frame_hashes"), hashes }
     };
 
+    QFile frames(outputPath + QStringLiteral(".frames223.bin"));
+    if (!frames.open(QIODevice::WriteOnly) ||
+	frames.write(capturedFrames) != capturedFrames.size())
+	    return 4;
+    frames.close();
     QFile output(outputPath);
     if (!output.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
         std::cerr << "Cannot write result JSON\n";

@@ -1,3 +1,4 @@
+#include "version.h"
 #include "satnogs_uploader_window.h"
 
 #include "pmt_frame_decoder.h"
@@ -394,7 +395,7 @@ void SatnogsUploaderWindow::submitFrame(PendingFrame frame)
     QNetworkRequest request{QUrl(config_.apiAddress)};
     request.setHeader(QNetworkRequest::ContentTypeHeader,
                       QStringLiteral("application/x-www-form-urlencoded"));
-    request.setRawHeader("User-Agent", "ASRTU-Series-Receiver/1.5.4");
+    request.setRawHeader("User-Agent", "ASRTU-Series-Receiver/" ASRTU_VERSION);
     ++inFlight_;
     QNetworkReply* reply = network_->post(
         request, form.query(QUrl::FullyEncoded).toUtf8());

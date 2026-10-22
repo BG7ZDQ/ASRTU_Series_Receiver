@@ -1,3 +1,7 @@
+#ifdef __APPLE__
+#include <libproc.h>
+#endif
+#include "audio_devices.h"
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
@@ -131,6 +135,25 @@ bool sdrProcessRunning(const QString &executable)
 	}
 	CloseHandle(snapshot);
 	return found;
+#elif defined(Q_OS_MACOS)
+	const QString target = QFileInfo(executable).canonicalFilePath();
+	if (target.isEmpty())
+		return false;
+	const int bytes = proc_listpids(PROC_ALL_PIDS, 0, nullptr, 0);
+	if (bytes <= 0)
+		return false;
+	QVector<pid_t> pids(bytes / int(sizeof(pid_t)) + 32);
+	const int count = proc_listpids(PROC_ALL_PIDS, 0, pids.data(),
+					pids.size() * int(sizeof(pid_t))) /
+			  int(sizeof(pid_t));
+	for (int index = 0; index < count; ++index) {
+		char path[PROC_PIDPATHINFO_MAXSIZE] = {};
+		if (proc_pidpath(pids[index], path, sizeof(path)) > 0 &&
+		    QFileInfo(QString::fromUtf8(path)).canonicalFilePath() ==
+			target)
+			return true;
+	}
+	return false;
 #else
 	const QString target = QFileInfo(executable).canonicalFilePath();
 	if (target.isEmpty())
@@ -1655,11 +1678,7 @@ bool startSuite(bool enableProxy, int inputMode, const QString &wavPath,
 	if (inputMode == 1)
 		decoderArguments << QStringLiteral("--real-if-12k");
 	else if (inputMode == 2)
-#ifdef Q_OS_WIN
 		decoderArguments << QStringLiteral("--shared-iq-bridge");
-#else
-		decoderArguments << QStringLiteral("--sdrsharp-iq-bridge");
-#endif
 	if (playbackPath.isEmpty() && inputMode != 2)
 		decoderArguments << QStringLiteral("--audio-device")
 				 << QString::number(audioDeviceId);
@@ -1859,21 +1878,10 @@ class LauncherWindow final : public QWidget
 				input_mode_->model()))
 				model->item(0)->setEnabled(false);
 #else
-		const bool sdrSharpBridgeAvailable =
-		    QFileInfo::exists(sdrSharpDirectory() +
-				      QStringLiteral("/SDRSharp.exe")) &&
-		    QFileInfo::exists(
-			sdrSharpDirectory() +
-			QStringLiteral(
-			    "/Plugins/SDRSharp.AstroSeriesBridge.dll"));
 		input_mode_->addItem(
 		    QCoreApplication::translate(
 			"ASRTU", "本地内存共享 RAW 模式 I/Q 桥接"),
 		    2);
-		if (!sdrSharpBridgeAvailable)
-			if (auto *model = qobject_cast<QStandardItemModel *>(
-				input_mode_->model()))
-				model->item(0)->setEnabled(false);
 #endif
 		input_mode_->addItem(
 		    QCoreApplication::translate(
@@ -2477,6 +2485,12 @@ class LauncherWindow final : public QWidget
 				     int(id), int(caps.wChannels)});
 			}
 		}
+#elif defined(Q_OS_MACOS)
+		const auto macDevices = asrtu::macInputDevices();
+		for (size_t id = 0; id < macDevices.size(); ++id)
+			devices.append(
+			    {QString::fromStdString(macDevices[id].name),
+			     int(id), macDevices[id].channels});
 #endif
 		bool unchanged =
 		    audio_device_ && audio_device_->count() == devices.size();

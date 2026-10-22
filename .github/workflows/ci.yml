@@ -191,7 +191,7 @@ jobs:
           $satnogsShot = Join-Path $env:RUNNER_TEMP "asrtu-satnogs-smoke.png"
           $satnogs = Join-Path $portable "ASRTU_SatnogsUploader.exe"
           $process = Start-Process -FilePath $satnogs -ArgumentList @(
-            '--satellite', 'JAMX', '--norad-id', '98248',
+            '--satellite', 'JAMX', '--norad-id', '100470',
             '--source', 'CI-TEST', '--longitude', '0', '--latitude', '0',
             '--altitude', '0', '--screenshot', $satnogsShot) -PassThru
           if (-not $process.WaitForExit(30000)) {
@@ -202,11 +202,11 @@ jobs:
               -not (Test-Path -LiteralPath $satnogsShot)) {
             throw "SatNOGS uploader smoke test failed"
           }
-      - name: Upload Windows binaries
+      - name: Upload tested installer input
         uses: actions/upload-artifact@v4
         with:
-          name: asrtu-windows-x64
-          path: dist/windows/*.zip
+          name: asrtu-windows-installer-input
+          path: dist/windows/portable/
           if-no-files-found: error
 
   windows-installer:
@@ -220,29 +220,19 @@ jobs:
       - name: Download tested Windows package
         uses: actions/download-artifact@v4
         with:
-          name: asrtu-windows-x64
+          name: asrtu-windows-installer-input
           path: dist/windows
-      - name: Prepare portable installer payload
+      - name: Locate tested installer input
         shell: pwsh
         run: |
-          $archive = Get-ChildItem -LiteralPath "dist/windows" -Filter '*-WinPortable.zip' |
-            Select-Object -First 1 -ExpandProperty FullName
-          $portable = Join-Path $env:RUNNER_TEMP "asrtu-portable"
-          if (-not (Test-Path -LiteralPath $archive)) {
-            throw "Windows portable archive not found: $archive"
-          }
-          Expand-Archive -LiteralPath $archive -DestinationPath $portable
-          foreach ($required in @(
-              'ASRTU1_Demod_CQt.exe',
-              'ASRTU1_Launcher.exe',
-              'TinyDoppler.exe',
-              'ASRTU_SatnogsUploader.exe')) {
-            if (-not (Test-Path -LiteralPath (Join-Path $portable $required))) {
-              throw "Portable installer input is incomplete: $required"
+          $payload = (Resolve-Path 'dist/windows').Path
+          foreach ($required in @('ASRTU1_Demod_CQt.exe', 'ASRTU1_Launcher.exe',
+                                  'TinyDoppler.exe', 'ASRTU_SatnogsUploader.exe')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $payload $required))) {
+              throw "Installer input is incomplete: $required"
             }
           }
-          "ASRTU_PORTABLE=$portable" | Out-File `
-            -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ASRTU_PORTABLE=$payload" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Resolve Inno Setup compiler
         shell: pwsh
         run: |
@@ -347,7 +337,7 @@ jobs:
             QT_PLUGIN_PATH="$appdir/usr/plugins" \
             timeout 30 xvfb-run --auto-servernum \
             "$appdir/usr/bin/ASRTU_SatnogsUploader" \
-            --satellite JAMX --norad-id 98248 --source CI-TEST \
+            --satellite JAMX --norad-id 100470 --source CI-TEST \
             --longitude 0 --latitude 0 --altitude 0 \
             --screenshot "$uploader_shot"
           test -s "$uploader_shot"
@@ -387,51 +377,133 @@ jobs:
           path: dist/appimage/*.AppImage
           if-no-files-found: error
 
-  plugins:
-    name: SDR# and SDR++ plugins
-    runs-on: windows-2022
+  plugin-native:
+    name: SDR++ ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: windows-2022, platform: Windows-x64}
+          - {runner: ubuntu-24.04, platform: Linux-x86_64}
+          - {runner: ubuntu-24.04-arm, platform: Linux-arm64}
+          - {runner: macos-15-intel, platform: macOS-x86_64}
+          - {runner: macos-14, platform: macOS-arm64}
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Package standalone plugins
+      - uses: actions/checkout@v4
+        with:
+          repository: AlexandreRouma/SDRPlusPlus
+          ref: 53230af19102e600148a18af9d21e8a92b8701d0
+          path: work/sdrpp-source
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+      - uses: mamba-org/setup-micromamba@v2
+        if: runner.os == 'Windows'
+        with:
+          environment-name: plugin
+          create-args: python=3.11 cmake volk fftw -c conda-forge
+          cache-environment: true
+      - name: Install Linux headers
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y cmake libvolk2-dev libfftw3-dev
+      - name: Install macOS headers
+        if: runner.os == 'macOS'
+        run: brew install cmake volk fftw pkg-config
+      - name: Build Unix bridge
+        if: runner.os != 'Windows'
+        run: python3 ci/build_sdrpp_plugin.py --source work/sdrpp-source --build work/plugin-build --output "dist/plugin/SDR++/${{ matrix.platform }}"
+      - name: Build Windows bridges
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $versionLine = Select-String -LiteralPath 'CMakeLists.txt' `
-            -Pattern 'project\(ASRTU1Qt VERSION ([0-9.]+)' | Select-Object -First 1
-          if (-not $versionLine) {
-            throw 'Unable to read the application version from CMakeLists.txt'
-          }
-          $version = $versionLine.Matches[0].Groups[1].Value
-          $root = Join-Path $env:RUNNER_TEMP 'asrtu-plugins'
-          New-Item -ItemType Directory -Path $root -Force | Out-Null
-          Copy-Item -LiteralPath 'packaging/payload/sdrsharp/Plugins/SDRSharp.AstroSeriesBridge.dll' `
-            -Destination (Join-Path $root 'SDRSharp.AstroSeriesBridge.dll') -Force
-          Copy-Item -LiteralPath 'packaging/payload/sdrpp/modules/asrtu_sink.dll' `
-            -Destination (Join-Path $root 'asrtu_sink.dll') -Force
-          Copy-Item -LiteralPath 'external/TinyDoppler/plugin/README.md' `
-            -Destination (Join-Path $root 'SDRSharp-bridge-README.md') -Force
-          Copy-Item -LiteralPath 'integrations/sdrpp/README.md' `
-            -Destination (Join-Path $root 'SDRpp-asrtu_sink-README.md') -Force
-          $zip = "ASRTU_Plugins-${version}.zip"
-          Compress-Archive -Path (Join-Path $root '*') -DestinationPath $zip -Force
-          if (-not (Test-Path -LiteralPath $zip)) {
-            throw 'Plugin package was not created'
-          }
-          New-Item -ItemType Directory -Path 'dist/plugins' -Force | Out-Null
-          Move-Item -LiteralPath $zip -Destination 'dist/plugins' -Force
-          Get-Item -LiteralPath (Join-Path 'dist/plugins' $zip) | Select-Object FullName, Length
-      - name: Upload standalone plugins
-        uses: actions/upload-artifact@v4
+          micromamba run -n plugin python ci/build_sdrpp_plugin.py --source work/sdrpp-source --build work/plugin-build --output 'dist/plugin/SDR++/Windows-x64' --dependency-prefix "$env:MAMBA_ROOT_PREFIX/envs/plugin/Library"
+          if ($LASTEXITCODE) { throw 'SDR++ build failed' }
+          ./external/TinyDoppler/plugin/build_legacy.ps1 -SdrSharpApiRoot ./packaging/payload/sdrsharp-api
+          New-Item -ItemType Directory -Force 'dist/plugin/SDR#/Windows-x86' | Out-Null
+          Copy-Item external/TinyDoppler/plugin/bin/Release/net46/SDRSharp.AstroSeriesBridge.dll 'dist/plugin/SDR#/Windows-x86/'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plugin-${{ matrix.platform }}
+          path: dist/plugin/
+          if-no-files-found: error
+
+  plugins:
+    name: Assemble cross-platform plugins
+    needs: plugin-native
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: plugin-*
+          merge-multiple: true
+          path: work/plugins
+      - name: Verify complete platform matrix and package
+        run: |
+          cp integrations/sdrpp/README.md 'work/plugins/SDR++/README.md'
+          cp external/TinyDoppler/plugin/README.md 'work/plugins/SDR#/README.md'
+          python3 ci/package_plugins.py work/plugins dist/plugins
+      - uses: actions/upload-artifact@v4
         with:
           name: asrtu-plugins
           path: dist/plugins/*.zip
           if-no-files-found: error
 
+  macos:
+    name: macOS receiver ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: macos-15-intel, arch: x86_64}
+          - {runner: macos-14, arch: arm64}
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-name: asrtu
+          create-args: >-
+            python=3.11 cmake ninja pkg-config gnuradio=3.10 qt-main=5 qwt=6.2
+            boost-cpp fftw libsndfile zeromq -c conda-forge
+          cache-environment: true
+          init-shell: bash
+      - name: Build and test
+        run: |
+          bash ci/install_linux_oot.sh "$PWD/work/oot-install" "$PWD/work/oot"
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$PWD/work/oot-install;$CONDA_PREFIX" \
+            -DASRTU_BUILD_BENCHMARK=OFF -DBUILD_TESTING=ON
+          cmake --build build --parallel 3
+          QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
+      - name: Assemble and verify app bundle
+        run: |
+          python3 ci/build_macos_app.py --build-dir build --output dist/macos \
+            --dep-prefix "$CONDA_PREFIX" --dep-prefix "$PWD/work/oot-install"
+          env -u DYLD_LIBRARY_PATH -u QT_PLUGIN_PATH \
+            'dist/macos/ASRTU Series Receiver.app/Contents/MacOS/ASRTU1_Launcher' --check-session-directory
+          ditto -c -k --sequesterRsrc --keepParent 'dist/macos/ASRTU Series Receiver.app' \
+            'dist/macos/ASRTU_Series_Receiver-macOS-${{ matrix.arch }}.zip'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: asrtu-macos-${{ matrix.arch }}
+          path: dist/macos/*.zip
+          if-no-files-found: error
+
   release:
     name: Publish tag artifacts
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [windows, windows-installer, packages, plugins]
+    needs: [windows, windows-installer, packages, plugins, macos]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -441,11 +513,12 @@ jobs:
         with:
           name: asrtu-linux-appimage
           path: dist/linux
-      - name: Download Windows package
+      - name: Download macOS apps
         uses: actions/download-artifact@v4
         with:
-          name: asrtu-windows-x64
-          path: dist/windows
+          pattern: asrtu-macos-*
+          merge-multiple: true
+          path: dist/macos
       - name: Download Windows installer
         uses: actions/download-artifact@v4
         with:

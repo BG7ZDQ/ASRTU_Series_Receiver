@@ -216,7 +216,7 @@ foreach ($name in @('asrtu_en.qm', 'asrtu_ja.qm')) {
     Copy-Item -LiteralPath $source -Destination (Join-Path $translationsDir $name) -Force
 }
 
-# Licenses shipped with the local portable package.
+# Licenses shipped with the installer input.
 foreach ($license in @(
         @{ Source = 'external\TinyDoppler\third_party\sgp4\SGP4_LICENSE.txt'; Destination = 'SGP4_LICENSE.txt' },
         @{ Source = 'third_party\ssdv_dslwp\COPYING'; Destination = 'SSDV_GPL-3.0.txt' })) {
@@ -232,7 +232,7 @@ Set-Content -LiteralPath (Join-Path $OutputDir 'qt.conf') -Encoding ASCII -Value
     'Plugins=.'
 )
 
-# Include the source-only SDR++ integration so the portable archive contains
+# Include the source-only SDR++ integration so the installer input contains
 # the optional plugin recipe without redistributing SDR++ itself.
 $sdrppSource = Join-Path $RepoRoot 'integrations\sdrpp'
 if (Test-Path -LiteralPath $sdrppSource) {
@@ -244,7 +244,7 @@ if (Test-Path -LiteralPath $sdrppSource) {
     }
 }
 Set-Content -LiteralPath (Join-Path $OutputDir 'README.txt') -Encoding UTF8 -Value @(
-    'ASRTU Series Receiver Windows portable build',
+    'ASRTU Series Receiver Windows installer input',
     '',
     'Run ASRTU1_Launcher.exe. No radioconda or GNU Radio installation is required.',
     'sdrpp-plugin/ contains the Windows SDR++ shared-memory I/Q and Doppler plugin source.',
@@ -266,18 +266,8 @@ if (Test-Path -LiteralPath $qwtPath) {
 }
 
 
-# Zip the whole folder for the CI artifact.
-$zipDir = Split-Path -Parent $OutputDir
-New-Item -ItemType Directory -Force -Path $zipDir | Out-Null
-$zipPath = Join-Path $zipDir ("ASRTU_Series_Receiver-${appVersion}-WinPortable.zip")
-if (Test-Path -LiteralPath $zipPath) {
-    Remove-Item -LiteralPath $zipPath -Force
-}
-Compress-Archive -Path (Join-Path $OutputDir '*') -DestinationPath $zipPath `
-    -CompressionLevel Optimal
-
+# This directory is an internal installer input, not a portable release.
 $files = Get-ChildItem -LiteralPath $OutputDir -File -Recurse
 $bytes = ($files | Measure-Object Length -Sum).Sum
-Write-Host ("Windows portable package: {0}" -f $OutputDir)
-Write-Host ("Archive: {0}" -f $zipPath)
+Write-Host ("Windows installer input: {0}" -f $OutputDir)
 Write-Host ("Files: {0}; Size: {1:N1} MiB" -f $files.Count, ($bytes / 1MB))

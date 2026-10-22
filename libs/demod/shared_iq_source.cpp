@@ -1,4 +1,7 @@
 #include "shared_iq_source.h"
+#ifndef _WIN32
+#include "../../integrations/sdrpp/asrtu_sink/src/posix_bridge.h"
+#endif
 
 #include <gnuradio/gr_complex.h>
 #include <gnuradio/io_signature.h>
@@ -11,7 +14,9 @@
 #include <thread>
 
 namespace {
+#ifdef _WIN32
 constexpr wchar_t kMappingName[] = L"Local\\ASRTU_IQ_BRIDGE_V1";
+#endif
 constexpr std::uint32_t kMagic = 0x42514941;
 constexpr std::uint32_t kVersion = 1;
 constexpr std::size_t kHeaderBytes = 64;
@@ -114,7 +119,34 @@ bool SharedIqSource::openMapping()
     read_index_ = writeIndex();
     return true;
 #else
-    return false;
+	if (base_)
+		return true;
+	mapping_ =
+	    open(asrtu::iqPath().c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+	struct stat info{};
+	if (mapping_ < 0 || fstat(mapping_, &info) || !S_ISREG(info.st_mode) ||
+	    info.st_uid != getuid() ||
+	    info.st_size != static_cast<off_t>(kMappingBytes)) {
+		closeMapping();
+		return false;
+	}
+	void *view =
+	    mmap(nullptr, kMappingBytes, PROT_READ, MAP_SHARED, mapping_, 0);
+	if (view == MAP_FAILED) {
+		closeMapping();
+		return false;
+	}
+	base_ = static_cast<const std::uint8_t *>(view);
+	if (readValue<std::uint32_t>(base_, 0) != kMagic ||
+	    readValue<std::uint32_t>(base_, 4) != kVersion ||
+	    readValue<std::uint32_t>(base_, 16) != kCapacitySamples ||
+	    readValue<std::uint32_t>(base_, 20) != kComplexBytes ||
+	    readValue<double>(base_, 8) != 48000.0) {
+		closeMapping();
+		return false;
+	}
+	read_index_ = writeIndex();
+	return true;
 #endif
 }
 
@@ -128,7 +160,12 @@ void SharedIqSource::closeMapping()
         CloseHandle(mapping_);
     mapping_ = nullptr;
 #else
-    base_ = nullptr;
+	if (base_)
+		munmap(const_cast<std::uint8_t *>(base_), kMappingBytes);
+	base_ = nullptr;
+	if (mapping_ >= 0)
+		::close(mapping_);
+	mapping_ = -1;
 #endif
     read_index_ = 0;
     producer_was_active_ = false;
@@ -150,7 +187,7 @@ std::uint64_t SharedIqSource::writeIndex() const
     MemoryBarrier();
     return static_cast<std::uint64_t>(value);
 #else
-    return readValue<std::uint64_t>(base_, 24);
+    return asrtu::loadShared<std::uint64_t>(base_, 24);
 #endif
 }
 
@@ -178,7 +215,14 @@ bool SharedIqSource::producerActive() const
     const auto ageMs = ageTicks * 1000 / frequency.QuadPart;
     return ageMs <= kProducerTimeout.count();
 #else
-    return false;
+	if (!base_ || asrtu::loadShared<std::uint32_t>(base_, 40) == 0)
+		return false;
+	const auto stamp = asrtu::loadShared<std::int64_t>(base_, 48);
+	const auto age = asrtu::monotonicNs() - stamp;
+	return stamp > 0 && age >= 0 &&
+	       age <= std::chrono::duration_cast<std::chrono::nanoseconds>(
+			  kProducerTimeout)
+			  .count();
 #endif
 }
 
