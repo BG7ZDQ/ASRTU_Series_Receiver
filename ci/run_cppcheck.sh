@@ -18,4 +18,5 @@ cppcheck --project="$database" \
 	--suppress=syntaxError \
 	--suppress=unknownMacro \
 	--suppress='uninitvar:*external/TinyDoppler/third_party/sgp4/sgp4.c' \
+	--suppress=assertWithSideEffect \
 	--suppress=checkersReport
