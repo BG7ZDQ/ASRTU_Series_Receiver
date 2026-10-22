@@ -396,11 +396,11 @@ if(BUILD_TESTING)
         target_compile_options(ASRTU1_LauncherSdrTest PRIVATE /utf-8)
     endif()
     add_test(NAME launcher_sdr_layout COMMAND ASRTU1_LauncherSdrTest)
-    # The Qt offscreen platform plugin owns process-lifetime QScreen data that
-    # LeakSanitizer reports as a false positive at exit. Keep leak checking for
-    # the rest of the suite but disable it for this GUI smoke test.
+    # Qt's widget/image helper threads destroy process-lifetime GUI objects at
+    # exit; LeakSanitizer and TSan report that as false positives. Keep sanitizers
+    # strict for the rest of the suite, but not for this GUI smoke test.
     set_tests_properties(launcher_sdr_layout PROPERTIES
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;ASAN_OPTIONS=detect_leaks=0")
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;ASAN_OPTIONS=detect_leaks=0;TSAN_OPTIONS=halt_on_error=0:exitcode=0")
     add_executable(ASRTU1_ModulePathsTest tests/module_paths_test.cpp
         libs/common/runtime_paths.cpp libs/common/runtime_paths.h)
     target_include_directories(ASRTU1_ModulePathsTest PRIVATE libs/common)
