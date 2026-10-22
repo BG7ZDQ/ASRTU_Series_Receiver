@@ -29,8 +29,11 @@ int runProxy(QCoreApplication &application, bool graphical)
 			   argument.startsWith(QStringLiteral("--language="))) {
 			continue;
 		} else {
-			qCritical("usage: %s [--config PATH] [--gui] [--language=LANG]",
-				  application.applicationFilePath().toLocal8Bit().constData());
+			qCritical("usage: %s [--config PATH] [--gui] "
+				  "[--language=LANG]",
+				  application.applicationFilePath()
+				      .toLocal8Bit()
+				      .constData());
 			return 2;
 		}
 	}
@@ -71,7 +74,8 @@ int main(int argc, char *argv[])
 #endif
 	bool graphical = false;
 	for (int index = 1; index < argc; ++index) {
-		if (QString::fromLocal8Bit(argv[index]) == QStringLiteral("--gui")) {
+		if (QString::fromLocal8Bit(argv[index]) ==
+		    QStringLiteral("--gui")) {
 			graphical = true;
 			break;
 		}
@@ -83,8 +87,8 @@ int main(int argc, char *argv[])
 		QCoreApplication::setOrganizationName(QStringLiteral("ASRTU"));
 		QCoreApplication::setApplicationName(
 		    QStringLiteral("ASRTU1_Launcher"));
-		QLockFile instanceLock(
-		    QDir::temp().filePath(QStringLiteral("asrtu-mmt-proxy.lock")));
+		QLockFile instanceLock(QDir::temp().filePath(
+		    QStringLiteral("asrtu-mmt-proxy.lock")));
 		instanceLock.setStaleLockTime(0);
 		if (!instanceLock.tryLock(100))
 			return 3;

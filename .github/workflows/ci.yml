@@ -42,7 +42,12 @@ jobs:
       - name: Check changed C and C++ formatting
         run: |
           BASE_SHA=${{ steps.base.outputs.sha }}
-          git diff --check "$BASE_SHA" HEAD
+          # Vendored payloads are third-party release binaries/resources; their
+          # upstream whitespace is not part of this project's style contract.
+          git diff --check "$BASE_SHA" HEAD -- . \
+            ':(exclude)packaging/payload/sdrpp/**' \
+            ':(exclude)packaging/payload/sdrsharp/**' \
+            ':(exclude)packaging/payload/plutosdr-driver/**'
           ci/check_format.sh "$BASE_SHA"
 
   linux:
@@ -382,10 +387,51 @@ jobs:
           path: dist/appimage/*.AppImage
           if-no-files-found: error
 
+  plugins:
+    name: SDR# and SDR++ plugins
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Package standalone plugins
+        shell: pwsh
+        run: |
+          $versionLine = Select-String -LiteralPath 'CMakeLists.txt' `
+            -Pattern 'project\(ASRTU1Qt VERSION ([0-9.]+)' | Select-Object -First 1
+          if (-not $versionLine) {
+            throw 'Unable to read the application version from CMakeLists.txt'
+          }
+          $version = $versionLine.Matches[0].Groups[1].Value
+          $root = Join-Path $env:RUNNER_TEMP 'asrtu-plugins'
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+          Copy-Item -LiteralPath 'packaging/payload/sdrsharp/Plugins/SDRSharp.AstroSeriesBridge.dll' `
+            -Destination (Join-Path $root 'SDRSharp.AstroSeriesBridge.dll') -Force
+          Copy-Item -LiteralPath 'packaging/payload/sdrpp/modules/asrtu_sink.dll' `
+            -Destination (Join-Path $root 'asrtu_sink.dll') -Force
+          Copy-Item -LiteralPath 'external/TinyDoppler/plugin/README.md' `
+            -Destination (Join-Path $root 'SDRSharp-bridge-README.md') -Force
+          Copy-Item -LiteralPath 'integrations/sdrpp/README.md' `
+            -Destination (Join-Path $root 'SDRpp-asrtu_sink-README.md') -Force
+          $zip = "ASRTU_Plugins-${version}.zip"
+          Compress-Archive -Path (Join-Path $root '*') -DestinationPath $zip -Force
+          if (-not (Test-Path -LiteralPath $zip)) {
+            throw 'Plugin package was not created'
+          }
+          New-Item -ItemType Directory -Path 'dist/plugins' -Force | Out-Null
+          Move-Item -LiteralPath $zip -Destination 'dist/plugins' -Force
+          Get-Item -LiteralPath (Join-Path 'dist/plugins' $zip) | Select-Object FullName, Length
+      - name: Upload standalone plugins
+        uses: actions/upload-artifact@v4
+        with:
+          name: asrtu-plugins
+          path: dist/plugins/*.zip
+          if-no-files-found: error
+
   release:
     name: Publish tag artifacts
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [windows, windows-installer, packages]
+    needs: [windows, windows-installer, packages, plugins]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -405,6 +451,11 @@ jobs:
         with:
           name: asrtu-windows-installer
           path: dist/windows-installer
+      - name: Download standalone plugins
+        uses: actions/download-artifact@v4
+        with:
+          name: asrtu-plugins
+          path: dist/plugins
       - name: Publish tag artifacts
         uses: softprops/action-gh-release@v2
         with:

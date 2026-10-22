@@ -39,32 +39,31 @@ struct SsdvImageUpdate {
 
 class SsdvReceiver final
 {
-public:
-	using ImageCallback = std::function<void(const SsdvImageUpdate&)>;
-	using LogCallback = std::function<void(const QString&)>;
+      public:
+	using ImageCallback = std::function<void(const SsdvImageUpdate &)>;
+	using LogCallback = std::function<void(const QString &)>;
 
-	SsdvReceiver(QString sessionDirectory,
-		     ImageCallback imageCallback,
+	SsdvReceiver(QString sessionDirectory, ImageCallback imageCallback,
 		     LogCallback logCallback = {});
 	~SsdvReceiver();
 
-	void ingestFrame(const QByteArray& frame);
+	void ingestFrame(const QByteArray &frame);
 	void clear();
 	// Drain already-ingested frames, save the final packet/image files, and
 	// join the worker. Safe to call more than once.
 	void finish();
 
-private:
+      private:
 	struct QueuedFrame {
 		QByteArray frame;
 		std::uint64_t generation = 0;
 	};
 
 	void workerLoop();
-	bool processFrame(const QByteArray& frame, std::uint64_t generation);
+	bool processFrame(const QByteArray &frame, std::uint64_t generation);
 	bool rebuildImage(bool allowStopped = false, bool publish = true);
 	bool savePacketBin();
-	void appendRawFrame(const QByteArray& frame);
+	void appendRawFrame(const QByteArray &frame);
 	void clearState(std::uint64_t generation);
 	bool isCurrentGeneration(std::uint64_t generation);
 

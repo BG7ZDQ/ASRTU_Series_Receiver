@@ -13,7 +13,8 @@ extern "C" {
 #include <limits>
 #include <vector>
 
-namespace {
+namespace
+{
 constexpr int kCcsdsFrameSize = 223;
 constexpr int kCcsdsShortHeaderSize = 5;
 constexpr int kDslwpPacketSize = 218;
@@ -24,50 +25,50 @@ constexpr auto kPreviewRefreshInterval = std::chrono::milliseconds(500);
 constexpr auto kImageSaveInterval = std::chrono::milliseconds(1000);
 constexpr std::uint32_t kJamxCrcInitialValue = 0x6AAAC1C5U;
 
-std::uint32_t ssdvCrc32(const char* data, std::size_t length,
+std::uint32_t ssdvCrc32(const char *data, std::size_t length,
 			std::uint32_t initialValue)
 {
 	std::uint32_t crc = initialValue;
 	for (std::size_t offset = 0; offset < length; ++offset) {
 		std::uint32_t value =
-			(crc ^ std::uint8_t(data[offset])) & 0xFFU;
+		    (crc ^ std::uint8_t(data[offset])) & 0xFFU;
 		for (int bit = 0; bit < 8; ++bit)
-			value = (value & 1U) != 0U
-					? (value >> 1U) ^ 0xEDB88320U
-					: value >> 1U;
+			value = (value & 1U) != 0U ? (value >> 1U) ^ 0xEDB88320U
+						   : value >> 1U;
 		crc = (crc >> 8U) ^ value;
 	}
 	return crc ^ 0xFFFFFFFFU;
 }
 
-bool hasJamxCrc(const QByteArray& packet)
+bool hasJamxCrc(const QByteArray &packet)
 {
 	if (packet.size() != kDslwpPacketSize)
 		return false;
-	const auto* bytes = reinterpret_cast<const std::uint8_t*>(packet.constData());
+	const auto *bytes =
+	    reinterpret_cast<const std::uint8_t *>(packet.constData());
 	const std::uint32_t expected =
-		(std::uint32_t(bytes[kDslwpCrcDataSize]) << 24U) |
-		(std::uint32_t(bytes[kDslwpCrcDataSize + 1]) << 16U) |
-		(std::uint32_t(bytes[kDslwpCrcDataSize + 2]) << 8U) |
-		std::uint32_t(bytes[kDslwpCrcDataSize + 3]);
+	    (std::uint32_t(bytes[kDslwpCrcDataSize]) << 24U) |
+	    (std::uint32_t(bytes[kDslwpCrcDataSize + 1]) << 16U) |
+	    (std::uint32_t(bytes[kDslwpCrcDataSize + 2]) << 8U) |
+	    std::uint32_t(bytes[kDslwpCrcDataSize + 3]);
 	return ssdvCrc32(packet.constData(), kDslwpCrcDataSize,
 			 kJamxCrcInitialValue) == expected;
 }
 
-bool plausibleSsdvHeader(const ssdv_packet_info_t& info)
+bool plausibleSsdvHeader(const ssdv_packet_info_t &info)
 {
 	if (info.width == 0 || info.height == 0 || info.width > 8192 ||
 	    info.height > 8192 || info.mcu_count == 0 ||
-	    info.mcu_count > std::uint32_t(std::numeric_limits<std::uint16_t>::max()))
+	    info.mcu_count >
+		std::uint32_t(std::numeric_limits<std::uint16_t>::max()))
 		return false;
 	if (info.mcu_id != 0xFFFF &&
-	    (info.mcu_id >= info.mcu_count ||
-	     info.mcu_offset >= 205))
+	    (info.mcu_id >= info.mcu_count || info.mcu_offset >= 205))
 		return false;
 	return true;
 }
 
-int virtualChannelId(const QByteArray& frame)
+int virtualChannelId(const QByteArray &frame)
 {
 	const auto word = (std::uint16_t(std::uint8_t(frame[0])) << 8) |
 			  std::uint8_t(frame[1]);
@@ -85,17 +86,16 @@ QString satelliteName(std::uint16_t header, bool jamxMode)
 		return QStringLiteral("BY-04");
 
 	return QStringLiteral("Unknown (header %1)")
-		.arg(header, 4, 16, QLatin1Char('0')).toUpper();
+	    .arg(header, 4, 16, QLatin1Char('0'))
+	    .toUpper();
 }
-}
+} // namespace
 
 SsdvReceiver::SsdvReceiver(QString sessionDirectory,
-			   ImageCallback imageCallback,
-			   LogCallback logCallback)
-	: session_directory_(std::move(sessionDirectory)),
-	  image_callback_(std::move(imageCallback)),
-	  log_callback_(std::move(logCallback)),
-	  jpeg_buffer_(kImageBufferSize)
+			   ImageCallback imageCallback, LogCallback logCallback)
+    : session_directory_(std::move(sessionDirectory)),
+      image_callback_(std::move(imageCallback)),
+      log_callback_(std::move(logCallback)), jpeg_buffer_(kImageBufferSize)
 {
 	worker_ = std::thread([this] { workerLoop(); });
 }
@@ -116,7 +116,7 @@ void SsdvReceiver::finish()
 		worker_.join();
 }
 
-void SsdvReceiver::ingestFrame(const QByteArray& frame)
+void SsdvReceiver::ingestFrame(const QByteArray &frame)
 {
 	{
 		std::lock_guard<std::mutex> lock(queue_mutex_);
@@ -126,7 +126,7 @@ void SsdvReceiver::ingestFrame(const QByteArray& frame)
 			frame_queue_.pop_front();
 			++dropped_frames_;
 		}
-		frame_queue_.push_back({ frame, queue_generation_ });
+		frame_queue_.push_back({frame, queue_generation_});
 	}
 	queue_cv_.notify_one();
 }
@@ -165,12 +165,14 @@ void SsdvReceiver::workerLoop()
 			std::unique_lock<std::mutex> lock(queue_mutex_);
 			if (!dirty) {
 				queue_cv_.wait(lock, [this] {
-					return stop_requested_ || clear_requested_ ||
+					return stop_requested_ ||
+					       clear_requested_ ||
 					       !frame_queue_.empty();
 				});
 			} else {
 				queue_cv_.wait_until(lock, nextRefresh, [this] {
-					return stop_requested_ || clear_requested_ ||
+					return stop_requested_ ||
+					       clear_requested_ ||
 					       !frame_queue_.empty();
 				});
 			}
@@ -185,9 +187,10 @@ void SsdvReceiver::workerLoop()
 			}
 		}
 		if (stopNow) {
-			// Normal shutdown must not drop frames that were already
-			// ingested but not yet processed. Drain them, then write the
-			// final packet archive and image without touching the UI.
+			// Normal shutdown must not drop frames that were
+			// already ingested but not yet processed. Drain them,
+			// then write the final packet archive and image without
+			// touching the UI.
 			std::deque<QueuedFrame> remaining;
 			std::uint64_t finishGeneration = 0;
 			bool finishClear = false;
@@ -204,10 +207,11 @@ void SsdvReceiver::workerLoop()
 				break;
 			}
 			bool finishDirty = dirty;
-			for (const auto& queued : remaining) {
+			for (const auto &queued : remaining) {
 				if (queued.generation != finishGeneration)
 					continue;
-				if (processFrame(queued.frame, queued.generation))
+				if (processFrame(queued.frame,
+						 queued.generation))
 					finishDirty = true;
 			}
 			if (finishDirty) {
@@ -225,12 +229,13 @@ void SsdvReceiver::workerLoop()
 			nextRefresh = std::chrono::steady_clock::now();
 		}
 		if (droppedFrames != 0 && log_callback_) {
-			log_callback_(QStringLiteral("SSDV input queue dropped %1 frames")
-					  .arg(droppedFrames));
+			log_callback_(
+			    QStringLiteral("SSDV input queue dropped %1 frames")
+				.arg(droppedFrames));
 		}
 
 		bool urgent = false;
-		for (const auto& queued : batch) {
+		for (const auto &queued : batch) {
 			if (!isCurrentGeneration(queued.generation))
 				continue;
 			if (processFrame(queued.frame, queued.generation)) {
@@ -250,29 +255,29 @@ void SsdvReceiver::workerLoop()
 	}
 }
 
-bool SsdvReceiver::processFrame(const QByteArray& frame,
+bool SsdvReceiver::processFrame(const QByteArray &frame,
 				std::uint64_t generation)
 {
 	if (frame.size() != kCcsdsFrameSize)
 		return false;
 	// Archive each received CCSDS frame before SSDV/CRC checks. Frames with
-	// damaged image headers cannot be assigned to a specific image, but remain
-	// available for offline repair.
+	// damaged image headers cannot be assigned to a specific image, but
+	// remain available for offline repair.
 	appendRawFrame(frame);
 	if (virtualChannelId(frame) != 1)
 		return false;
 
 	const auto spacecraftHeader =
-		(std::uint16_t(std::uint8_t(frame[0])) << 8) |
-		std::uint8_t(frame[1]);
+	    (std::uint16_t(std::uint8_t(frame[0])) << 8) |
+	    std::uint8_t(frame[1]);
 	QByteArray packet = frame.mid(kCcsdsShortHeaderSize, kDslwpPacketSize);
 	int errors = 0;
 	if (packet.size() != kDslwpPacketSize)
 		return false;
 
-	auto* bytes = reinterpret_cast<std::uint8_t*>(packet.data());
+	auto *bytes = reinterpret_cast<std::uint8_t *>(packet.data());
 	const bool crcValid =
-		ssdv_dec_is_packet(bytes, &errors, ssdv_dslwp_mode) == SSDV_OK;
+	    ssdv_dec_is_packet(bytes, &errors, ssdv_dslwp_mode) == SSDV_OK;
 	const bool jamxCrcValid = !crcValid && hasJamxCrc(packet);
 
 	ssdv_packet_info_t info{};
@@ -281,56 +286,61 @@ bool SsdvReceiver::processFrame(const QByteArray& frame,
 		return false;
 	const auto existing = packets_.find(info.packet_id);
 	const bool existingCrcFailed =
-		existing != packets_.end() &&
-		crc_failed_packet_ids_.find(info.packet_id) !=
-			crc_failed_packet_ids_.end();
-	// Both the DSLWP and JAMX CRC initial values are valid protocol variants.
-	// Only packets that fail both checks are accepted as best-effort recovery
-	// data and shown as CRC-failed in the UI.
+	    existing != packets_.end() &&
+	    crc_failed_packet_ids_.find(info.packet_id) !=
+		crc_failed_packet_ids_.end();
+	// Both the DSLWP and JAMX CRC initial values are valid protocol
+	// variants. Only packets that fail both checks are accepted as
+	// best-effort recovery data and shown as CRC-failed in the UI.
 	const bool crcFailed = !crcValid && !jamxCrcValid;
-	// A packet with neither known CRC is useful only after a validated packet
-	// has established the image identity. This permits damaged packets to
-	// improve a local preview without allowing arbitrary VC1 telemetry to
-	// create false SSDV sessions.
+	// A packet with neither known CRC is useful only after a validated
+	// packet has established the image identity. This permits damaged
+	// packets to improve a local preview without allowing arbitrary VC1
+	// telemetry to create false SSDV sessions.
 	if (!crcValid && !jamxCrcValid &&
 	    (image_id_ < 0 || image_id_ != int(info.image_id) ||
 	     width_ != info.width || height_ != info.height ||
-	     quality_ != info.quality || spacecraft_header_ != spacecraftHeader ||
+	     quality_ != info.quality ||
+	     spacecraft_header_ != spacecraftHeader ||
 	     (!packets_.empty() && existing == packets_.end() &&
 	      info.packet_id > packets_.rbegin()->first + 64U)))
 		return false;
-	const bool packetJamxMode = jamxCrcValid ||
-		(!crcValid && !jamxCrcValid && jamx_mode_);
+	const bool packetJamxMode =
+	    jamxCrcValid || (!crcValid && !jamxCrcValid && jamx_mode_);
 	const bool formatChanged = image_id_ >= 0 &&
-		(crcValid || jamxCrcValid) && packetJamxMode != jamx_mode_;
+				   (crcValid || jamxCrcValid) &&
+				   packetJamxMode != jamx_mode_;
 
 	const auto firstPacket = packets_.find(0);
 	const bool replacedFirstPacket =
-		(crcValid || jamxCrcValid) && info.packet_id == 0 &&
-		firstPacket != packets_.end() && !existingCrcFailed &&
-		firstPacket->second != packet;
+	    (crcValid || jamxCrcValid) && info.packet_id == 0 &&
+	    firstPacket != packets_.end() && !existingCrcFailed &&
+	    firstPacket->second != packet;
 	const bool duplicatePacket =
-		existing != packets_.end() && existing->second == packet;
+	    existing != packets_.end() && existing->second == packet;
 	// A byte-identical retransmission of an already stored packet is a
 	// duplicate, not a new pass. In particular, the failed local-decoder
 	// branch can deliver the first packet again after the successful branch
-	// has already started the image. Ignore it before the counter-regression
-	// test: otherwise the duplicate clears the accumulated image and starts a
-	// one-packet session. Once the image is complete, an identical first
-	// packet is allowed to start the next pass.
+	// has already started the image. Ignore it before the
+	// counter-regression test: otherwise the duplicate clears the
+	// accumulated image and starts a one-packet session. Once the image is
+	// complete, an identical first packet is allowed to start the next
+	// pass.
 	if (duplicatePacket && !complete_)
 		return false;
-	// A late packet after demodulator re-lock is common and must not split the
-	// image. A validated return to the first packet (or packet zero) indicates
-	// a repeated pass, while an isolated decrease is simply out of order data.
-	const bool packetCounterRegressed = (crcValid || jamxCrcValid) &&
-		!packets_.empty() && !existingCrcFailed &&
-		info.packet_id < packets_.rbegin()->first &&
-		(info.packet_id == packets_.begin()->first || info.packet_id == 0);
-	const bool sessionChanged = image_id_ != int(info.image_id) ||
-		spacecraft_header_ != spacecraftHeader || width_ != info.width ||
-		height_ != info.height || quality_ != info.quality ||
-		replacedFirstPacket || packetCounterRegressed || formatChanged;
+	// A late packet after demodulator re-lock is common and must not split
+	// the image. A validated return to the first packet (or packet zero)
+	// indicates a repeated pass, while an isolated decrease is simply out
+	// of order data.
+	const bool packetCounterRegressed =
+	    (crcValid || jamxCrcValid) && !packets_.empty() &&
+	    !existingCrcFailed && info.packet_id < packets_.rbegin()->first &&
+	    (info.packet_id == packets_.begin()->first || info.packet_id == 0);
+	const bool sessionChanged =
+	    image_id_ != int(info.image_id) ||
+	    spacecraft_header_ != spacecraftHeader || width_ != info.width ||
+	    height_ != info.height || quality_ != info.quality ||
+	    replacedFirstPacket || packetCounterRegressed || formatChanged;
 
 	if (sessionChanged) {
 		savePacketBin();
@@ -347,22 +357,31 @@ bool SsdvReceiver::processFrame(const QByteArray& frame,
 		jamx_mode_ = packetJamxMode;
 		satellite_ = satelliteName(spacecraft_header_, jamx_mode_);
 		state_generation_ = generation;
-		image_path_ = QDir(session_directory_).filePath(
-			QStringLiteral("SSDV_%1_Pass%2_ID%3.jpg")
+		image_path_ =
+		    QDir(session_directory_)
+			.filePath(
+			    QStringLiteral("SSDV_%1_Pass%2_ID%3.jpg")
 				.arg(QDateTime::currentDateTime().toString(
-					QStringLiteral("yyyyMMdd_HHmmss_zzz")))
+				    QStringLiteral("yyyyMMdd_HHmmss_zzz")))
 				.arg(++session_serial_)
 				.arg(image_id_));
-		const QString basePath = image_path_.left(image_path_.size() - 4);
+		const QString basePath =
+		    image_path_.left(image_path_.size() - 4);
 		packet_bin_path_ = basePath + QStringLiteral(".bin");
 		if (log_callback_) {
-			log_callback_(QStringLiteral("SSDV image started: ID %1, %2x%3, quality %4")
-					  .arg(image_id_).arg(width_).arg(height_).arg(quality_));
+			log_callback_(
+			    QStringLiteral(
+				"SSDV image started: ID %1, %2x%3, quality %4")
+				.arg(image_id_)
+				.arg(width_)
+				.arg(height_)
+				.arg(quality_));
 		}
 	}
 
 	// Never let an unverified copy overwrite a packet that already passed a
-	// recognized CRC. A later verified copy may still upgrade a yellow packet.
+	// recognized CRC. A later verified copy may still upgrade a yellow
+	// packet.
 	if (existing != packets_.end() && !existingCrcFailed && crcFailed)
 		return false;
 	if (duplicatePacket && !sessionChanged)
@@ -379,16 +398,18 @@ bool SsdvReceiver::processFrame(const QByteArray& frame,
 	return true;
 }
 
-void SsdvReceiver::appendRawFrame(const QByteArray& frame)
+void SsdvReceiver::appendRawFrame(const QByteArray &frame)
 {
-	const QString path = QDir(session_directory_).filePath(
-		QStringLiteral("SSDV_received_frames223.bin"));
+	const QString path =
+	    QDir(session_directory_)
+		.filePath(QStringLiteral("SSDV_received_frames223.bin"));
 	QFile output(path);
 	if (!output.open(QIODevice::WriteOnly | QIODevice::Append) ||
 	    output.write(frame) != frame.size()) {
 		if (log_callback_)
-			log_callback_(QStringLiteral("Unable to save SSDV raw frames: %1")
-					  .arg(path));
+			log_callback_(
+			    QStringLiteral("Unable to save SSDV raw frames: %1")
+				.arg(path));
 	}
 }
 
@@ -399,23 +420,27 @@ bool SsdvReceiver::savePacketBin()
 	QSaveFile output(packet_bin_path_);
 	if (!output.open(QIODevice::WriteOnly)) {
 		if (log_callback_)
-			log_callback_(QStringLiteral("Unable to save SSDV packets: %1")
-					  .arg(packet_bin_path_));
+			log_callback_(
+			    QStringLiteral("Unable to save SSDV packets: %1")
+				.arg(packet_bin_path_));
 		return false;
 	}
-	for (const auto& entry : bin_packets_) {
+	for (const auto &entry : bin_packets_) {
 		if (output.write(entry.second) != kDslwpPacketSize) {
 			output.cancelWriting();
 			if (log_callback_)
-				log_callback_(QStringLiteral("Unable to save SSDV packets: %1")
-						  .arg(packet_bin_path_));
+				log_callback_(
+				    QStringLiteral(
+					"Unable to save SSDV packets: %1")
+					.arg(packet_bin_path_));
 			return false;
 		}
 	}
 	if (!output.commit()) {
 		if (log_callback_)
-			log_callback_(QStringLiteral("Unable to save SSDV packets: %1")
-					  .arg(packet_bin_path_));
+			log_callback_(
+			    QStringLiteral("Unable to save SSDV packets: %1")
+				.arg(packet_bin_path_));
 		return false;
 	}
 	bin_dirty_ = false;
@@ -440,11 +465,12 @@ bool SsdvReceiver::rebuildImage(bool allowStopped, bool publish)
 
 		bool rejected = false;
 		std::uint16_t rejectedPacketId = 0;
-		for (const auto& entry : packets_) {
-			const auto* packet = reinterpret_cast<const std::uint8_t*>(
+		for (const auto &entry : packets_) {
+			const auto *packet =
+			    reinterpret_cast<const std::uint8_t *>(
 				entry.second.data());
 			const char result =
-				ssdv_dec_feed(&decoder, packet, ssdv_dslwp_mode);
+			    ssdv_dec_feed(&decoder, packet, ssdv_dslwp_mode);
 
 			if (result != SSDV_FEED_ME && result != SSDV_OK) {
 				rejected = true;
@@ -458,32 +484,32 @@ bool SsdvReceiver::rebuildImage(bool allowStopped, bool publish)
 		packets_.erase(rejectedPacketId);
 		crc_failed_packet_ids_.erase(rejectedPacketId);
 		complete_ = false;
-		for (const auto& entry : packets_) {
+		for (const auto &entry : packets_) {
 			ssdv_packet_info_t info{};
-			ssdv_dec_header(
-				&info,
-				reinterpret_cast<const std::uint8_t*>(
-					entry.second.constData()),
-				ssdv_dslwp_mode);
+			ssdv_dec_header(&info,
+					reinterpret_cast<const std::uint8_t *>(
+					    entry.second.constData()),
+					ssdv_dslwp_mode);
 			complete_ = complete_ || info.eoi != 0;
 		}
 		if (log_callback_) {
-			log_callback_(QStringLiteral(
-				"SSDV decoder discarded unusable packet %1 and restarted")
-					  .arg(rejectedPacketId));
+			log_callback_(
+			    QStringLiteral("SSDV decoder discarded unusable "
+					   "packet %1 and restarted")
+				.arg(rejectedPacketId));
 		}
 	}
 	if (packets_.empty())
 		return false;
 
-	std::uint8_t* jpeg = nullptr;
+	std::uint8_t *jpeg = nullptr;
 	std::size_t jpegLength = 0;
 	if (ssdv_dec_get_jpeg(&decoder, &jpeg, &jpegLength) != SSDV_OK ||
 	    jpeg == nullptr || jpegLength == 0 ||
 	    jpegLength > std::size_t(std::numeric_limits<int>::max()))
 		return false;
 
-	const QByteArray encoded(reinterpret_cast<const char*>(jpeg),
+	const QByteArray encoded(reinterpret_cast<const char *>(jpeg),
 				 int(jpegLength));
 	const QImage image = QImage::fromData(encoded, "JPEG");
 	if (image.isNull() ||
@@ -491,15 +517,19 @@ bool SsdvReceiver::rebuildImage(bool allowStopped, bool publish)
 		return false;
 
 	const auto now = std::chrono::steady_clock::now();
-	const bool saveNow = complete_ || last_image_save_.time_since_epoch().count() == 0 ||
+	const bool saveNow = complete_ ||
+			     last_image_save_.time_since_epoch().count() == 0 ||
 			     now - last_image_save_ >= kImageSaveInterval;
 	if (saveNow) {
 		QSaveFile output(image_path_);
 		if (!output.open(QIODevice::WriteOnly) ||
-		    output.write(encoded) != encoded.size() || !output.commit()) {
+		    output.write(encoded) != encoded.size() ||
+		    !output.commit()) {
 			if (log_callback_) {
-				log_callback_(QStringLiteral("Unable to save SSDV image: %1")
-						  .arg(image_path_));
+				log_callback_(
+				    QStringLiteral(
+					"Unable to save SSDV image: %1")
+					.arg(image_path_));
 			}
 			return false;
 		}
@@ -534,7 +564,7 @@ bool SsdvReceiver::rebuildImage(bool allowStopped, bool publish)
 	update.missing_packets = int(missingIds.size());
 	update.crc_failed_packets = int(crc_failed_packet_ids_.size());
 	update.received_packet_ids.reserve(packets_.size());
-	for (const auto& entry : packets_)
+	for (const auto &entry : packets_)
 		update.received_packet_ids.push_back(entry.first);
 	update.crc_failed_packet_ids.assign(crc_failed_packet_ids_.begin(),
 					    crc_failed_packet_ids_.end());
