@@ -178,7 +178,7 @@
     "showWaterfall":  true,
     "snrSmoothing":  false,
     "snrSmoothingSpeed":  20,
-    "source":  "PlutoSDR",
+    "source":  "RTL-SDR",
     "streams":  {
                     "Radio":  {
                                   "muted":  false,

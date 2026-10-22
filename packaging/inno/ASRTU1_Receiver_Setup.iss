@@ -139,7 +139,12 @@ Name: "sdrpp"; Description: "{cm:SdrppComponent}"; Types: full
 [Files]
 #include "stage\core-files.iss"
 Source: "stage\proxy\*"; DestDir: "{app}\proxy"; Excludes: "config.cfg"; Components: core; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "stage\sdrsharp\*"; DestDir: "{app}\sdrsharp"; Components: sdrsharp; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "stage\sdrsharp\*"; DestDir: "{app}\sdrsharp"; Excludes: "SDRSharp.config,SDRSharp.Layout.xml,Frequencies.xml,BandPlan.xml,notches.xml"; Components: sdrsharp; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "stage\sdrsharp\SDRSharp.config"; DestDir: "{app}\sdrsharp"; Components: sdrsharp; Flags: onlyifdoesntexist
+Source: "stage\sdrsharp\SDRSharp.Layout.xml"; DestDir: "{app}\sdrsharp"; Components: sdrsharp; Flags: onlyifdoesntexist
+Source: "stage\sdrsharp\Frequencies.xml"; DestDir: "{app}\sdrsharp"; Components: sdrsharp; Flags: onlyifdoesntexist
+Source: "stage\sdrsharp\BandPlan.xml"; DestDir: "{app}\sdrsharp"; Components: sdrsharp; Flags: onlyifdoesntexist
+Source: "stage\sdrsharp\notches.xml"; DestDir: "{app}\sdrsharp"; Components: sdrsharp; Flags: onlyifdoesntexist
 #ifdef SdrppAvailable
 Source: "stage\sdrpp\*"; DestDir: "{app}\sdrpp"; Excludes: "*.json"; Components: sdrpp; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Resource JSON is application data, not user settings. The exclusion above

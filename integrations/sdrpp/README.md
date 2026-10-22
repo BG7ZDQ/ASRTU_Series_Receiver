@@ -42,7 +42,7 @@ Automatic scanning still runs first and a failed scan no longer prevents the
 manual URI from being used. New Pluto devices default to the AD9361
 `hybrid` AGC mode, a 2 MHz sample rate and a 2 MHz RF bandwidth; Manual and
 the other AGC modes remain selectable. The packaged default SDR++ spectrum
-range is -140 to 60 dB.
+range is -150 to -65 dB.
 
 The installer also carries the signed Analog Devices PlutoSDR-M2K USB driver
 and an elevated installer shortcut.
