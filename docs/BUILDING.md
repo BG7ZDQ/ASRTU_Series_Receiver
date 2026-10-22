@@ -117,6 +117,12 @@ Linux 当前范围与限制：
 - Linux 发行包按 `ASRTU_Series_Receiver-<版本>-LinuxAppImage.AppImage`
   命名。Linux 发行包属于 CI 产物，正式发布仅由 `v*` tag 触发；运行时硬件和 OOT
   模块兼容性仍需在目标发行版上实测。Debian/RPM 包不再构建。
+- AppImage 是一次性便携文件，不是安装器，因此没有安装时的组件勾选页。
+  默认 AppImage 不携带 SDR++；需要「带 SDR++」版本时，把一个包含
+  `sdrpp` 可执行文件和 `modules/` 的 Linux SDR++ 目录传给
+  `ASRTU_SDRPP_LINUX_ROOT` 再运行 `ci/build_appimage.sh`，生成的文件名会带
+  `-SDRpp` 后缀。用户按下载的版本自行选择是否携带 SDR++；CI 默认构建不含
+  SDR++ 的标准 AppImage。
 - `benchmark_main.cpp` 使用 Windows 进程统计 API，非 Windows 默认关闭
   `ASRTU_BUILD_BENCHMARK`。
 

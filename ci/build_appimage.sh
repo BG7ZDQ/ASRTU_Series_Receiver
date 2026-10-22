@@ -27,6 +27,20 @@ mkdir -p "$output_dir"
 cmake --install "$build_dir" --prefix "$appdir/usr"
 install -d "$appdir/usr/lib"
 
+# SDR++ is optional. The AppImage itself is not an installer, so the choice is
+# expressed by producing a second AppImage variant when a prepared SDR++ tree
+# is supplied. The launcher discovers ../sdrpp relative to usr/bin.
+if [[ -n "${ASRTU_SDRPP_LINUX_ROOT:-}" ]]; then
+	sdrpp_root=$(realpath "$ASRTU_SDRPP_LINUX_ROOT")
+	if [[ ! -x "$sdrpp_root/sdrpp" || ! -d "$sdrpp_root/modules" ]]; then
+		echo "ASRTU_SDRPP_LINUX_ROOT must contain sdrpp and modules/: $sdrpp_root" >&2
+		exit 1
+	fi
+	mkdir -p "$appdir/usr/sdrpp"
+	cp -a "$sdrpp_root/." "$appdir/usr/sdrpp/"
+	artifact_name="ASRTU_Series_Receiver-${version}-LinuxAppImage-SDRpp.AppImage"
+fi
+
 copy_oot_library()
 {
 	local name=$1
