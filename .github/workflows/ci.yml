@@ -477,6 +477,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y zip unzip
+          mkdir -p work/plugins
           unzip -q dist/plugins/ASRTU_Plugins-*.zip -d work/plugins
           version=$(sed -n 's/^project(ASRTU1Qt VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
           ci/package_linux_appimage.sh \
