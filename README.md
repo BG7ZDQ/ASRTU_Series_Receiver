@@ -21,7 +21,7 @@ Languages: **中文** · [English](README_EN.md) · [日本語](README_JA.md)
 ### 1. 安装与首次设置
 
 1. Windows：运行 `ASRTU_Series_Receiver-<版本号>-WinInstaller(Recommend).exe`（例如 `ASRTU_Series_Receiver-1.5.5-WinInstaller(Recommend).exe`），按需求选择是否安装随包提供的 SDR# 遥测预设。
-   Linux：解压 `ASRTU_Series_Receiver-<版本号>-LinuxAppImage.zip`，进入解压目录执行 `bash setup.sh`，选择安装语言以及是否安装随包的 SDR++。
+   Linux：解压 `ASRTU_Series_Receiver-<版本号>-LinuxAppImage.zip`，进入解压目录执行 `bash setup.sh`，选择安装语言以及是否安装随包的 SDR++。详细步骤见 [Linux 安装说明](docs/LINUX_INSTALL.md)。
 2. 从桌面或应用菜单打开 **ASRTU 系列卫星启动器**。
 3. 填写呼号、经度、纬度和海拔。坐标用于卫星跟踪与多普勒计算；启动器会在本机保存设置。
 4. 根据接收链路选择“输入”。只有声卡输入模式会显示“声卡”下拉框。
@@ -141,6 +141,7 @@ Inno Setup 6 和 radioconda/GNU Radio 开发依赖后，从源码构建安装器
 
 - [架构与数据流](docs/ARCHITECTURE.md)
 - [构建说明](docs/BUILDING.md)
+- [Linux 安装说明](docs/LINUX_INSTALL.md)
 - [翻译维护](docs/TRANSLATIONS.md)
 - [打包与发布](docs/PACKAGING.md)
 - [开源发布检查表](docs/OPEN_SOURCE_CHECKLIST.md)
