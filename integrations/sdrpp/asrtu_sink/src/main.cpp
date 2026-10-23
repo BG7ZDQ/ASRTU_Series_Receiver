@@ -105,20 +105,14 @@ class AsrtuSink final : public SinkManager::Sink
 		ImGui::TextUnformatted(
 		    "ASRTU shared-memory bridge (48 kHz I/Q)");
 		ImGui::TextUnformatted("Use RAW demodulation at 48 kHz.");
-#ifdef _WIN32
 		if (ImGui::Checkbox("Automatic Doppler tuning##asrtu",
 				    &autoDoppler_)) {
 			settings.acquire();
 			settings.conf[name_]["autoDoppler"] = autoDoppler_;
 			settings.release(true);
 		}
-#else
-		ImGui::TextUnformatted(
-		    "Doppler: use SDR++ Rigctl Server (port 4532).");
-#endif
 		if (bridge_.active()) {
 			ImGui::TextUnformatted("Bridge active");
-#ifdef _WIN32
 			ImGui::TextUnformatted(
 			    autoDoppler_ && tracking_ ? "Doppler: tracking"
 			    : autoDoppler_ ? "Doppler: waiting for valid "
@@ -128,7 +122,6 @@ class AsrtuSink final : public SinkManager::Sink
 				ImGui::Text("Target: %.6f MHz (%+.0f Hz)",
 					    double(targetHz_) / 1e6,
 					    double(correctionHz_));
-#endif
 			if (ImGui::Button("Stop bridge##asrtu")) {
 				bridge_.stop();
 				doppler_.close();

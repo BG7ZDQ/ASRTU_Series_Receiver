@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <utility>
 #include <fcntl.h>
 #include <sys/file.h>
 #include <sys/mman.h>
@@ -18,6 +19,10 @@ inline constexpr std::size_t kBytes = 64 + std::size_t(kCapacity) * 8;
 inline std::string iqPath()
 {
 	return "/tmp/asrtu-iq-" + std::to_string(getuid()) + ".v1";
+}
+inline std::string dopplerPath()
+{
+	return "/tmp/asrtu-doppler-" + std::to_string(getuid()) + ".v1";
 }
 inline std::int64_t monotonicNs()
 {
@@ -142,17 +147,75 @@ class SharedBridge
 	std::string error_;
 };
 
-// Unix tuning keeps the existing SDR++ Rigctl Server path; this plugin only
-// adds the missing lossless I/Q path. Windows retains its V1 control mapping.
+// Same 64-byte V1 control record as Windows. TinyDoppler is the only writer;
+// SDR++ opens the per-user file read-only and treats a stopped/stale tracker
+// as "no Doppler" without touching any rigctl endpoint.
 class DopplerReader
 {
       public:
+	explicit DopplerReader(std::string path = dopplerPath())
+	    : path_(std::move(path))
+	{
+	}
+	~DopplerReader()
+	{
+		close();
+	}
 	void close()
 	{
+		if (base_) {
+			munmap(const_cast<std::uint8_t *>(base_), 64);
+			base_ = nullptr;
+		}
+		if (fd_ >= 0)
+			::close(fd_);
+		fd_ = -1;
 	}
-	bool read(std::int64_t &, std::int64_t &)
+	bool read(std::int64_t &target, std::int64_t &correction)
 	{
-		return false;
+		if (!base_) {
+			fd_ = open(path_.c_str(),
+				   O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+			struct stat info = {};
+			if (fd_ < 0 || fstat(fd_, &info) ||
+			    !S_ISREG(info.st_mode) || info.st_uid != getuid() ||
+			    info.st_size != 64) {
+				close();
+				return false;
+			}
+			void *view =
+			    mmap(nullptr, 64, PROT_READ, MAP_SHARED, fd_, 0);
+			if (view == MAP_FAILED) {
+				close();
+				return false;
+			}
+			base_ = static_cast<const std::uint8_t *>(view);
+		}
+		const auto sequence = loadShared<std::int32_t>(base_, 36);
+		if (sequence & 1)
+			return false;
+		const auto magic = loadShared<std::uint32_t>(base_, 0);
+		const auto version = loadShared<std::uint32_t>(base_, 4);
+		target = loadShared<std::int64_t>(base_, 8);
+		correction = loadShared<std::int64_t>(base_, 16);
+		const auto timestamp = loadShared<std::int64_t>(base_, 24);
+		const auto valid = loadShared<std::int32_t>(base_, 32);
+		const auto after = loadShared<std::int32_t>(base_, 36);
+		const auto now =
+		    std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::system_clock::now().time_since_epoch())
+			.count();
+		const bool fresh = timestamp > 0 && timestamp <= now &&
+				   now - timestamp <= 3000;
+		if (!fresh)
+			close();
+		return sequence == after && magic == 0x504f4441U &&
+		       version == 1 && valid != 0 && fresh && target > 0;
 	}
+
+      private:
+	std::string path_;
+	int fd_ = -1;
+	const std::uint8_t *base_ = nullptr;
 };
 } // namespace asrtu

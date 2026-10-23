@@ -4,9 +4,10 @@ The CoreAudio device enumeration and application bundler build on
 [PR #23 by doublehan07](https://github.com/BG7ZDQ/ASRTU_Series_Receiver/pull/23).
 The launcher lists input devices by name; GNU Radio's CoreAudio source opens
 the selected device. Mono 12 kHz IF, stereo I/Q and WAV/OGG playback use the
-same decoder pipeline. SDR++ has a native POSIX shared-memory I/Q bridge.
-Existing SDR++ Rigctl Server tuning remains on port 4532; optional physical
-radio tuning uses an independently configured Hamlib endpoint (default 4534).
+same decoder pipeline. SDR++ has a native POSIX shared-memory I/Q bridge and reads Doppler tuning from
+the shared-memory control record. Optional physical radio tuning is an
+independently configured Hamlib endpoint (default 4534); SDR tuning never uses
+rigctl.
 
 CI builds Intel and Apple Silicon independently with Qt 5, GNU Radio 3.10 and
 the pinned gr-lilacsat revision. `ci/build_macos_app.py` assembles the launcher,

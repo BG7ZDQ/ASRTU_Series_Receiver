@@ -19,6 +19,8 @@ plugin. The Windows launcher selects `--shared-iq-bridge` for SDR++;
 5. Open TinyDoppler and enable **Automatic Doppler tuning** in the sink panel.
    This preference is saved per stream in `asrtu_sink_config.json`. The plugin
    tunes its own Radio/VFO; it does not follow whichever VFO is selected.
+   SDR tuning uses the shared-memory control record on every platform; no
+   rigctl server is involved.
 
 I/Q is tapped before audio volume and mute, without 16-bit PCM conversion.
 Doppler is polled on the GUI thread even when the sink panel is collapsed.
@@ -77,20 +79,23 @@ producer PID 56. A failed contender never changes the header. A handover keeps
 the cursor when a decoder retains the mapping; PID and enabled flag are cleared
 before releasing ownership.
 
-The control mapping is `Local\ASRTU_DOPPLER_CONTROL_V1` (64 bytes): magic
-`0x504f4441` at 0, version 1 at 4, signed 64-bit target Hz at 8, correction Hz
-at 16, UTC milliseconds at 24, valid int32 at 32. Offset 36 adds a seqlock
-without changing existing V1 field offsets: the writer publishes an odd sequence
-before changing fields and an even sequence afterward. Readers accept only
-unchanged even sequences. Use the updated TinyDoppler for coherent updates.
+The control record is `Local\ASRTU_DOPPLER_CONTROL_V1` on Windows and
+`/tmp/asrtu-doppler-<uid>.v1` on Linux/macOS (64 bytes): magic `0x504f4441` at
+0, version 1 at 4, signed 64-bit target Hz at 8, correction Hz at 16, UTC
+milliseconds at 24, valid int32 at 32. Offset 36 adds a seqlock without changing
+existing V1 field offsets: the writer publishes an odd sequence before changing
+fields and an even sequence afterward. Readers accept only unchanged even
+sequences and a record no older than three seconds. Use the updated TinyDoppler
+for coherent updates. Physical radios remain a separate Hamlib `rigctld` option;
+they are not part of the SDR control path.
 
 ## Build
 
-Windows uses named shared memory; Linux/macOS use a per-user mmap file at
-`/tmp/asrtu-iq-<uid>.v1`, with an exclusive producer lock. Unix heartbeat values
-are monotonic nanoseconds. The decoder opens the same file read-only. Existing
-SDR++ Rigctl Server tuning stays on port 4532; the Unix plugin does not add a
-second tuning path. Windows keeps its shared-memory Doppler control.
+Windows uses named shared memory; Linux/macOS use per-user mmap files at
+`/tmp/asrtu-iq-<uid>.v1` (I/Q) and `/tmp/asrtu-doppler-<uid>.v1` (control), with
+an exclusive producer lock. Unix I/Q heartbeat values are monotonic nanoseconds;
+the control timestamp is UTC milliseconds. The decoder opens the same files
+read-only. No SDR tuning path uses an SDR++ Rigctl Server.
 
 CI builds the plugin for Windows x64, Linux x86_64/arm64 and macOS x86_64/arm64.
 See [artifact layout](../../docs/RELEASE_LAYOUT.md). Each binary records the

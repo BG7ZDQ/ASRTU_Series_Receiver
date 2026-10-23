@@ -178,7 +178,7 @@ bool sdrProcessRunning(const QString &executable)
 
 QString audioConverterPath()
 {
-	const QString local =
+	QString local =
 	    QDir(decoderDirectory())
 		.filePath(executableName(QStringLiteral("sndfile-convert")));
 	if (QFileInfo::exists(local))
