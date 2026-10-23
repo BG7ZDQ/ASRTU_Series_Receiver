@@ -5,6 +5,11 @@ Only the Doppler-corrected receive frequency (`F <Hz>`) is sent, on each valid
 tracking tick. There are no PTT, mode, split, start/stop or VFO commands.
 SDR# and SDR++ always use the shared-memory control record, never this Hamlib
 endpoint. Leave this option disabled when using an SDR alone.
+Existing SDR++ Rigctl instances and settings are left untouched, including
+when applying an older ASRTU preset. ASRTU does not migrate them to Hamlib.
+
+The control button is next to **Update orbit data** in TinyDoppler. Its labels,
+settings and validation messages are available in Chinese, English and Japanese.
 
 Install Hamlib for your OS, select the radio model and serial port in rigctld,
 and match its baud rate to the radio. Confirm the model number with `rigctl -l`

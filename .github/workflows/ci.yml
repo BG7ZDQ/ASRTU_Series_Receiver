@@ -37,7 +37,7 @@ jobs:
         run: |
           docker run --rm --volume "$PWD:/work:ro" --workdir /work \
             rhysd/actionlint:1.7.12 -color
-      - name: Test package ABI checker
+      - name: Test packaging helpers and Linux installer
         run: python3 -m unittest discover -s ci/tests -v
       - name: Check changed C and C++ formatting
         run: |
@@ -49,6 +49,23 @@ jobs:
             ':(exclude)packaging/payload/sdrsharp/**' \
             ':(exclude)packaging/payload/plutosdr-driver/**'
           ci/check_format.sh "$BASE_SHA"
+
+  posix-control:
+    name: POSIX control protocol ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15-intel, macos-14]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Test shared-memory I/Q and concurrent Doppler updates
+        run: |
+          c++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            tests/posix_bridge_test.cpp -o "$RUNNER_TEMP/posix_bridge_test"
+          "$RUNNER_TEMP/posix_bridge_test"
 
   linux:
     name: Linux strict build and static analysis
@@ -540,7 +557,7 @@ jobs:
   release:
     name: Publish tag artifacts
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [windows, windows-installer, packages, plugins, linux-bundle, macos]
+    needs: [windows, windows-installer, packages, plugins, linux-bundle, macos, posix-control]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

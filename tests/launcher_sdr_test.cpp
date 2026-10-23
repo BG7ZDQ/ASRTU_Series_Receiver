@@ -99,12 +99,16 @@ bool testSdrppPresetMigration()
 		    .value(QStringLiteral("bandwidth"))
 		    .toDouble() != 48000.0 ||
 	    !bridgeSettings.value(QStringLiteral("autoDoppler")).toBool() ||
-	    instances.contains(QStringLiteral("Rigctl Server")))
+	    instances.value(QStringLiteral("Rigctl Server")) !=
+		QJsonValue(QJsonObject{{QStringLiteral("enabled"), true},
+				       {QStringLiteral("module"),
+					QStringLiteral("rigctl_server")}}))
 		return false;
 	QFile marker(root.filePath(QStringLiteral("asrtu-preset.version")));
 	if (!marker.open(QIODevice::ReadOnly) ||
 	    marker.readAll().trimmed().toInt() != 4)
 		return false;
+	marker.close();
 
 	// A later operator choice must survive subsequent launcher starts.
 	QJsonObject stream = streams.value(QStringLiteral("Radio")).toObject();
@@ -118,12 +122,30 @@ bool testSdrppPresetMigration()
 	    !readJsonObject(root.filePath(QStringLiteral("config.json")),
 			    &config, &error))
 		return false;
-	return config.value(QStringLiteral("streams"))
-		   .toObject()
-		   .value(QStringLiteral("Radio"))
-		   .toObject()
-		   .value(QStringLiteral("sink"))
-		   .toString() == QStringLiteral("Network");
+	if (config.value(QStringLiteral("streams"))
+		.toObject()
+		.value(QStringLiteral("Radio"))
+		.toObject()
+		.value(QStringLiteral("sink"))
+		.toString() != QStringLiteral("Network"))
+		return false;
+	// Preserve user Rigctl settings for both current and older presets.
+	const auto rigctl = instances.value(QStringLiteral("Rigctl Server"));
+	for (const int version : {4, 3, 1}) {
+		if (!marker.open(QIODevice::WriteOnly | QIODevice::Truncate))
+			return false;
+		marker.write(QByteArray::number(version));
+		marker.close();
+		if (!configureSdrppPreset(root.absolutePath(), &error) ||
+		    !readJsonObject(
+			root.filePath(QStringLiteral("config.json")), &config,
+			&error) ||
+		    config.value(QStringLiteral("moduleInstances"))
+			    .toObject()
+			    .value(QStringLiteral("Rigctl Server")) != rigctl)
+			return false;
+	}
+	return true;
 }
 
 int main(int argc, char **argv)

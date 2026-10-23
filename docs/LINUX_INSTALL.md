@@ -44,8 +44,21 @@ bash setup.sh --lang zh --without-sdrpp --yes
 bash setup.sh --lang zh --with-sdrpp --yes
 ```
 
-`--yes` 只跳过“覆盖已有安装”的确认，不会跳过安装 SDR++ 所需的 `sudo`
-密码输入。
+`--yes` 自动确认覆盖安装和可选 SDR++ 安装；若不需要 SDR++，请同时传入
+`--without-sdrpp`。它不会跳过 `sudo` 密码输入。`--lang` 选择安装提示语言，
+应用界面默认跟随系统语言；也可用 `asrtu --language=zh`（或 `en`、`ja`）指定。
+
+自定义目录可以包含空格，安装和卸载时使用同一个 `--prefix`：
+
+```bash
+bash setup.sh --lang zh --without-sdrpp --prefix "$HOME/Applications/ASRTU Receiver"
+bash setup.sh --lang zh --uninstall --prefix "$HOME/Applications/ASRTU Receiver"
+```
+
+安装器会将路径规范化，并拒绝系统目录、个人主目录及安装包所在目录的祖先。
+已有目录必须带有本安装器写入的 `.asrtu-installation` 标记，否则不会覆盖或
+卸载。旧版安装没有此标记时，请先手动重命名旧目录作为备份，或选择新目录；
+安装器不会自动认领或迁移旧目录，也不接受符号链接作为安装目标。
 
 ## 安装后的位置
 
@@ -68,7 +81,8 @@ sdrpp
 安装 SDR++ 不会自动改掉你已有的 SDR++ 配置。首次使用时手动配置一次：
 
 1. 打开 SDR++
-2. 在 **Module Manager** 中启用 **ASRTU Bridge**
+2. 在 **Module Manager** 中添加 `asrtu_sink` 实例，命名为 **ASRTU Bridge**
+   并启用；已有实例则直接启用
 3. **Radio** 选择 **RAW**，带宽设为 **48 kHz**
 4. **Sinks** 选择 **ASRTU Receiver**
 5. 回到 ASRTU 启动器，输入选择
@@ -77,6 +91,7 @@ sdrpp
 SDR++ 的多普勒来自 TinyDoppler 的共享内存控制记录，不需要
 **Rigctl Server**，也不需要把 SDR++ 的 Rigctl 端口填到 ASRTU 里。
 只有实体电台的 **电台控频…** 才使用 Hamlib `rigctld`（默认 4534）。
+已有 Rigctl 配置由用户自行管理，ASRTU 不删除或迁移这些设置。
 
 ## 卸载
 

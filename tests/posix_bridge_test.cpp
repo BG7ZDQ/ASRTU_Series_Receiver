@@ -1,4 +1,5 @@
 #include "../integrations/sdrpp/asrtu_sink/src/posix_bridge.h"
+#include "../external/TinyDoppler/app/doppler_control_record.h"
 #include <array>
 #include <chrono>
 #include <cstdio>
@@ -63,15 +64,7 @@ int main()
 	    std::chrono::duration_cast<std::chrono::milliseconds>(
 		std::chrono::system_clock::now().time_since_epoch())
 		.count();
-	asrtu::storeShared(control, 0, std::uint32_t(0x504f4441U));
-	asrtu::storeShared(control, 4, std::uint32_t(1));
-	asrtu::storeShared(control, 8, std::int64_t(145800000));
-	asrtu::storeShared(control, 16, std::int64_t(1250));
-	asrtu::storeShared(control, 24, std::int64_t(now));
-	asrtu::storeShared(control, 32, std::int32_t(1));
-	asrtu::storeShared(control, 36, std::int32_t(2));
-	munmap(control, 64);
-	close(controlFd);
+	tiny_doppler::publishControlRecord(control, 145800000, 1250, now, true);
 
 	asrtu::DopplerReader reader(controlPath);
 	std::int64_t target = 0;
@@ -79,6 +72,50 @@ int main()
 	if (!reader.read(target, correction) || target != 145800000 ||
 	    correction != 1250)
 		return 10;
+	// Reject a writer in progress, an invalid tracker, and stale data.
+	asrtu::storeShared(control, 36, std::uint32_t(3));
+	if (reader.read(target, correction))
+		return 11;
+	tiny_doppler::publishControlRecord(control, 145800000, 1250, now,
+					   false);
+	if (reader.read(target, correction))
+		return 12;
+	tiny_doppler::publishControlRecord(control, 145800000, 1250, now - 4000,
+					   true);
+	if (reader.read(target, correction))
+		return 13;
+	// Sequence wrap is defined, and a stale reader can reconnect.
+	asrtu::storeShared(control, 36, UINT32_MAX - 1);
+	tiny_doppler::publishControlRecord(control, 145800000, 1250, now, true);
+	if (!reader.read(target, correction) ||
+	    asrtu::loadShared<std::uint32_t>(control, 36) != 0)
+		return 14;
+
+	// Exercise the production writer against the actual SDR++ reader in
+	// another process. Every accepted record must be a coherent pair.
+	tiny_doppler::publishControlRecord(control, 145800000, -145800000, now,
+					   true);
+	const auto publisher = fork();
+	if (publisher < 0)
+		return 15;
+	if (publisher == 0) {
+		for (std::int64_t i = 1; i <= 200000; ++i)
+			tiny_doppler::publishControlRecord(
+			    control, 145800000 + i, -(145800000 + i), now,
+			    true);
+		_exit(0);
+	}
+	bool coherent = true;
+	for (int i = 0; i < 200000; ++i) {
+		if (reader.read(target, correction) && target != -correction)
+			coherent = false;
+	}
+	waitpid(publisher, &status, 0);
+	if (!coherent || !WIFEXITED(status) || WEXITSTATUS(status))
+		return 16;
+	munmap(control, 64);
+	close(controlFd);
+	reader.close();
 	unlink(controlPath);
 	return 0;
 }

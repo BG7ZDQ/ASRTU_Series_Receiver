@@ -89,6 +89,14 @@ sequences and a record no older than three seconds. Use the updated TinyDoppler
 for coherent updates. Physical radios remain a separate Hamlib `rigctld` option;
 they are not part of the SDR control path.
 
+On POSIX each payload field uses a release store after the odd sequence, paired
+with an acquire load in the reader; the even sequence is also released. Thus
+observing any new field orders the reader's final sequence check after the odd
+marker. This also covers ARM; the sequence wraps as an unsigned 32-bit value.
+The POSIX regression test exercises the actual TinyDoppler writer and SDR++
+reader in separate processes, plus invalid, stale, in-progress and wrapped
+records. Existing SDR++ Rigctl instances are neither removed nor migrated.
+
 ## Build
 
 Windows uses named shared memory; Linux/macOS use per-user mmap files at

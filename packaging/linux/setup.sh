@@ -103,6 +103,12 @@ say() {
         zh:uninstalled) echo "ASRTU 已卸载。用户数据和录音仍保留。" ;;
         en:uninstalled) echo "ASRTU was removed. User data and recordings were kept." ;;
         ja:uninstalled) echo "ASRTU を削除しました。ユーザーデータと録音は保持されています。" ;;
+        zh:unsafe_prefix) echo "拒绝操作此目录：%s。请选择独立的 ASRTU 安装目录。" ;;
+        en:unsafe_prefix) echo "Refusing to use this directory: %s. Choose a dedicated ASRTU installation directory." ;;
+        ja:unsafe_prefix) echo "このディレクトリは使用できません：%s。ASRTU 専用のインストール先を選択してください。" ;;
+        zh:unmanaged_prefix) echo "目录不是本安装器创建的 ASRTU 安装：%s。不会删除或覆盖；旧版请先手动重命名备份，或选择新目录。" ;;
+        en:unmanaged_prefix) echo "Not an ASRTU installation created by this installer: %s. Nothing will be removed or overwritten; rename an old installation as a backup or choose a new directory." ;;
+        ja:unmanaged_prefix) echo "このインストーラーで作成した ASRTU ではありません：%s。削除・上書きはしません。旧版は手動で名前を変更して保存するか、別のディレクトリを選択してください。" ;;
         *) echo "$key" ;;
     esac
 }
@@ -118,8 +124,54 @@ confirm() {
     [[ "$answer" =~ ^[Yy]$ ]]
 }
 
+INSTALL_MARKER='.asrtu-installation'
+INSTALL_ID='ASRTU Series Receiver installation v1'
+
+validate_prefix() {
+    # Resolve aliases before checking ancestors. Never follow an installation
+    # symlink, including a path supplied with a trailing slash.
+    local requested="${PREFIX%/}" resolved user_dir protected
+    if [[ -z "$requested" || -L "$requested" || "$PREFIX" == *[$'\n\r\t']* ]]; then
+        printf "$(say unsafe_prefix)\n" "$PREFIX" >&2
+        return 1
+    fi
+    resolved=$(realpath -m -- "$PREFIX")
+    user_dir=$(realpath -m -- "$HOME")
+    for protected in "$user_dir" "$SCRIPT_DIR" / /usr /usr/local /opt /var /tmp /etc /home; do
+        if [[ "$resolved" == "$protected" || "$protected" == "$resolved/"* ]]; then
+            printf "$(say unsafe_prefix)\n" "$PREFIX" >&2
+            return 1
+        fi
+    done
+    PREFIX=$resolved
+    if [[ -e "$PREFIX" ]]; then
+        if [[ ! -d "$PREFIX" || ! -f "$PREFIX/$INSTALL_MARKER" ||
+              -L "$PREFIX/$INSTALL_MARKER" ]] ||
+           [[ "$(cat -- "$PREFIX/$INSTALL_MARKER")" != "$INSTALL_ID" ]]; then
+            printf "$(say unmanaged_prefix)\n" "$PREFIX" >&2
+            return 1
+        fi
+    elif ((UNINSTALL)); then
+        printf "$(say unmanaged_prefix)\n" "$PREFIX" >&2
+        return 1
+    fi
+}
+
+# Desktop Entry quoting has two layers: value escaping, then Exec argument
+# quoting. Percent signs must also be escaped as literal field codes.
+desktop_exec_path() {
+    local value="$1"
+    value=${value//\\/\\\\\\\\}
+    value=${value//\"/\\\\\"}
+    value=${value//\`/\\\\\`}
+    value=${value//\$/\\\\\$}
+    value=${value//%/%%}
+    printf '"%s"' "$value"
+}
+
 select_language
 printf '\n== %s ==\n\n' "$(say welcome)"
+validate_prefix
 
 if ((UNINSTALL)); then
     printf "$(say uninstall)\n"
@@ -161,15 +213,17 @@ if [[ ! -d "$WORK/squashfs-root" ]]; then
     exit 1
 fi
 mkdir -p "$(dirname -- "$PREFIX")"
+validate_prefix
 rm -rf -- "$PREFIX"
 mv "$WORK/squashfs-root" "$PREFIX"
 chmod 755 "$PREFIX" "$PREFIX/AppRun"
+printf '%s\n' "$INSTALL_ID" >"$PREFIX/$INSTALL_MARKER"
 
 mkdir -p "${HOME}/.local/bin" "${HOME}/.local/share/applications"
-cat >"${HOME}/.local/bin/asrtu" <<EOF
-#!/bin/sh
-exec "$PREFIX/AppRun" "\$@"
-EOF
+{
+    printf '#!/usr/bin/env bash\n'
+    printf 'exec %q "$@"\n' "$PREFIX/AppRun"
+} >"${HOME}/.local/bin/asrtu"
 chmod 755 "${HOME}/.local/bin/asrtu"
 for profile in "${HOME}/.profile" "${HOME}/.bashrc"; do
     [[ -e "$profile" ]] || : >>"$profile"
@@ -190,8 +244,8 @@ cat >"${HOME}/.local/share/applications/asrtu-series-receiver.desktop" <<EOF
 Type=Application
 Name=ASRTU Series Receiver
 Comment=ASRTU satellite receiver and decoder
-Exec=$PREFIX/AppRun
-Icon=$PREFIX/asrtu-series-receiver.png
+Exec=$(desktop_exec_path "$PREFIX/AppRun")
+Icon=${PREFIX//\\/\\\\}/asrtu-series-receiver.png
 Terminal=false
 Categories=Network;HamRadio;
 EOF

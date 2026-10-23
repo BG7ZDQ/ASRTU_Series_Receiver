@@ -39,9 +39,7 @@ Set-Field $instances 'ASRTU Bridge' ([pscustomobject]@{ enabled = $true; module 
 Set-Field $instances 'BladeRF Source' ([pscustomobject]@{ enabled = $true; module = 'bladerf_source' })
 Set-Field $instances 'SDRplay Source' ([pscustomobject]@{ enabled = $true; module = 'sdrplay_source' })
 Set-Field $instances 'SoapySDR Source' ([pscustomobject]@{ enabled = $true; module = 'soapy_source' })
-if ($null -ne $instances.'Rigctl Server') {
-    $instances.PSObject.Properties.Remove('Rigctl Server')
-}
+# Existing Rigctl instances and their configuration belong to the operator.
 if ($PlutoUri) {
     Set-Field $instances 'PlutoSDR Source' ([pscustomobject]@{ enabled = $true; module = 'plutosdr_source' })
 }

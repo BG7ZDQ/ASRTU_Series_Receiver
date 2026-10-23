@@ -548,31 +548,16 @@ bool configureSdrppPreset(const QString &sdrppRoot, QString *error)
 	// installs even when the rest of the preset is already present.
 	if (presetAlreadyApplied) {
 		bool changed = false;
-		QJsonObject instances =
-		    config.value(QStringLiteral("moduleInstances")).toObject();
-		if (instances.contains(QStringLiteral("Rigctl Server"))) {
-			instances.remove(QStringLiteral("Rigctl Server"));
-			config[QStringLiteral("moduleInstances")] = instances;
-			changed = true;
-		}
 		if (config.value(QStringLiteral("centerTuning")).toBool(true)) {
 			config[QStringLiteral("centerTuning")] = false;
 			changed = true;
 		}
 		return !changed || writeJsonObject(configFile, config, error);
 	}
-	// Shorter-lived marker values can arrive from builds that still
-	// carried the old Rigctl module. Repair the config without replaying
-	// the full preset migration and losing operator changes.
+	// Repair older presets without replaying the full migration. Existing
+	// Rigctl modules and their settings belong to the operator.
 	if (markerVersion > 0) {
 		bool changed = false;
-		QJsonObject instances =
-		    config.value(QStringLiteral("moduleInstances")).toObject();
-		if (instances.contains(QStringLiteral("Rigctl Server"))) {
-			instances.remove(QStringLiteral("Rigctl Server"));
-			config[QStringLiteral("moduleInstances")] = instances;
-			changed = true;
-		}
 		if (config.value(QStringLiteral("centerTuning")).toBool(true)) {
 			config[QStringLiteral("centerTuning")] = false;
 			changed = true;
@@ -588,7 +573,6 @@ bool configureSdrppPreset(const QString &sdrppRoot, QString *error)
 
 	QJsonObject instances =
 	    config.value(QStringLiteral("moduleInstances")).toObject();
-	instances.remove(QStringLiteral("Rigctl Server"));
 	QString bridgeName = QStringLiteral("ASRTU Bridge");
 	for (auto it = instances.constBegin(); it != instances.constEnd();
 	     ++it) {

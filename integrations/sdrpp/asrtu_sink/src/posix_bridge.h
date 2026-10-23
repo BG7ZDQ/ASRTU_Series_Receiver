@@ -191,7 +191,7 @@ class DopplerReader
 			}
 			base_ = static_cast<const std::uint8_t *>(view);
 		}
-		const auto sequence = loadShared<std::int32_t>(base_, 36);
+		const auto sequence = loadShared<std::uint32_t>(base_, 36);
 		if (sequence & 1)
 			return false;
 		const auto magic = loadShared<std::uint32_t>(base_, 0);
@@ -200,7 +200,7 @@ class DopplerReader
 		correction = loadShared<std::int64_t>(base_, 16);
 		const auto timestamp = loadShared<std::int64_t>(base_, 24);
 		const auto valid = loadShared<std::int32_t>(base_, 32);
-		const auto after = loadShared<std::int32_t>(base_, 36);
+		const auto after = loadShared<std::uint32_t>(base_, 36);
 		const auto now =
 		    std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::system_clock::now().time_since_epoch())
