@@ -7,7 +7,7 @@
 /ui-*.png
 /packaging/inno/stage/
 /packaging/inno/dist/
-/packaging/linux/
+/packaging/linux/*.AppImage
 /packaging/plugins/
 /packaging/inno/launcher*.png
 /integrations/sdrpp/build/

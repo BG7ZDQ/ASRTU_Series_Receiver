@@ -454,6 +454,42 @@ jobs:
           path: dist/plugins/*.zip
           if-no-files-found: error
 
+  linux-bundle:
+    name: Linux installer bundle
+    needs: [packages, plugins]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/download-artifact@v4
+        with:
+          name: asrtu-linux-appimage
+          path: dist/linux
+      - uses: actions/download-artifact@v4
+        with:
+          name: asrtu-plugins
+          path: dist/plugins
+      - name: Verify bundled SDR++ package
+        run: |
+          echo '9B646FE5D96E1BD7236C0B336B9057E09F478645BFC2C67862E91763545B325B  packaging/payload/sdrpp-linux/sdrpp_ubuntu_jammy_amd64.deb' | sha256sum -c -
+      - name: Assemble Linux AppImage installer ZIP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zip unzip
+          unzip -q dist/plugins/ASRTU_Plugins-*.zip -d work/plugins
+          version=$(sed -n 's/^project(ASRTU1Qt VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          ci/package_linux_appimage.sh \
+            dist/linux/*.AppImage \
+            work/plugins/SDR++/Linux-x86_64/asrtu_sink.so \
+            packaging/payload/sdrpp-linux/sdrpp_ubuntu_jammy_amd64.deb \
+            dist/linux-bundle "$version"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: asrtu-linux-bundle
+          path: dist/linux-bundle/*.zip
+          if-no-files-found: error
+
   macos:
     name: macOS receiver ${{ matrix.arch }}
     strategy:
@@ -503,7 +539,7 @@ jobs:
   release:
     name: Publish tag artifacts
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [windows, windows-installer, packages, plugins, macos]
+    needs: [windows, windows-installer, packages, plugins, linux-bundle, macos]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -519,6 +555,11 @@ jobs:
           pattern: asrtu-macos-*
           merge-multiple: true
           path: dist/macos
+      - name: Download Linux installer bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: asrtu-linux-bundle
+          path: dist/linux-bundle
       - name: Download Windows installer
         uses: actions/download-artifact@v4
         with:

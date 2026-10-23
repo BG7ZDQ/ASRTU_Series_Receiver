@@ -74,10 +74,6 @@
                          {
                              "name":  "Module Manager",
                              "open":  false
-                         },
-                         {
-                             "name":  "Rigctl Server",
-                             "open":  false
                          }
                      ],
     "menuWidth":  412,
@@ -143,10 +139,6 @@
                                              "enabled":  true,
                                              "module":  "recorder"
                                          },
-                            "Rigctl Server":  {
-                                                  "enabled":  false,
-                                                  "module":  "rigctl_server"
-                                              },
                             "SDRplay Source":  {
                                                    "enabled":  true,
                                                    "module":  "sdrplay_source"

@@ -531,30 +531,64 @@ bool configureSdrppPreset(const QString &sdrppRoot, QString *error)
 
 	// Preserve settings changed by the operator after the one-time
 	// migration.
-	constexpr int kPresetVersion = 3;
-	bool presetAlreadyApplied = false;
+	constexpr int kPresetVersion = 4;
+	int markerVersion = 0;
 	{
 		// Close the read handle before QSaveFile replaces this same
 		// path; Windows otherwise reports a sharing violation on
 		// migration.
 		QFile marker(markerFile);
-		presetAlreadyApplied =
-		    marker.open(QIODevice::ReadOnly) &&
-		    marker.readAll().trimmed().toInt() >= kPresetVersion;
+		if (marker.open(QIODevice::ReadOnly))
+			markerVersion = marker.readAll().trimmed().toInt();
 	}
+	const bool presetAlreadyApplied = markerVersion >= kPresetVersion;
 	// The +5 kHz IF offset only works with normal (VFO) tuning. SDR++'s
 	// centerTuning mode snaps the hardware back to the VFO frequency and
 	// makes the sink retune the hardware on every frame, so repair old
 	// installs even when the rest of the preset is already present.
 	if (presetAlreadyApplied) {
-		if (!config.value(QStringLiteral("centerTuning")).toBool(true))
-			return true;
-		config[QStringLiteral("centerTuning")] = false;
-		return writeJsonObject(configFile, config, error);
+		bool changed = false;
+		QJsonObject instances =
+		    config.value(QStringLiteral("moduleInstances")).toObject();
+		if (instances.contains(QStringLiteral("Rigctl Server"))) {
+			instances.remove(QStringLiteral("Rigctl Server"));
+			config[QStringLiteral("moduleInstances")] = instances;
+			changed = true;
+		}
+		if (config.value(QStringLiteral("centerTuning")).toBool(true)) {
+			config[QStringLiteral("centerTuning")] = false;
+			changed = true;
+		}
+		return !changed || writeJsonObject(configFile, config, error);
+	}
+	// Shorter-lived marker values can arrive from builds that still
+	// carried the old Rigctl module. Repair the config without replaying
+	// the full preset migration and losing operator changes.
+	if (markerVersion > 0) {
+		bool changed = false;
+		QJsonObject instances =
+		    config.value(QStringLiteral("moduleInstances")).toObject();
+		if (instances.contains(QStringLiteral("Rigctl Server"))) {
+			instances.remove(QStringLiteral("Rigctl Server"));
+			config[QStringLiteral("moduleInstances")] = instances;
+			changed = true;
+		}
+		if (config.value(QStringLiteral("centerTuning")).toBool(true)) {
+			config[QStringLiteral("centerTuning")] = false;
+			changed = true;
+		}
+		if (changed && !writeJsonObject(configFile, config, error))
+			return false;
+		QSaveFile markerOutput(markerFile);
+		if (!markerOutput.open(QIODevice::WriteOnly))
+			return false;
+		markerOutput.write(QByteArray::number(kPresetVersion));
+		return markerOutput.commit();
 	}
 
 	QJsonObject instances =
 	    config.value(QStringLiteral("moduleInstances")).toObject();
+	instances.remove(QStringLiteral("Rigctl Server"));
 	QString bridgeName = QStringLiteral("ASRTU Bridge");
 	for (auto it = instances.constBegin(); it != instances.constEnd();
 	     ++it) {
@@ -1130,13 +1164,8 @@ void showSdrChooser(QWidget *parent)
 		    program.sdrSharp ? QCoreApplication::translate(
 					   "ASRTU", "遥测预设 · 共享内存 I/Q")
 		    : program.name == QStringLiteral("SDR++")
-#ifdef Q_OS_WIN
 			? QCoreApplication::translate(
 			      "ASRTU", "遥测预设 · 共享内存 I/Q 与多普勒")
-#else
-			? QCoreApplication::translate("ASRTU",
-						      "遥测预设 · Rigctl")
-#endif
 			: QFileInfo(program.executable).fileName(),
 		    button);
 		description->setTextFormat(Qt::PlainText);

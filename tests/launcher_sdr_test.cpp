@@ -98,11 +98,12 @@ bool testSdrppPresetMigration()
 		    .toObject()
 		    .value(QStringLiteral("bandwidth"))
 		    .toDouble() != 48000.0 ||
-	    !bridgeSettings.value(QStringLiteral("autoDoppler")).toBool())
+	    !bridgeSettings.value(QStringLiteral("autoDoppler")).toBool() ||
+	    instances.contains(QStringLiteral("Rigctl Server")))
 		return false;
 	QFile marker(root.filePath(QStringLiteral("asrtu-preset.version")));
 	if (!marker.open(QIODevice::ReadOnly) ||
-	    marker.readAll().trimmed().toInt() != 3)
+	    marker.readAll().trimmed().toInt() != 4)
 		return false;
 
 	// A later operator choice must survive subsequent launcher starts.

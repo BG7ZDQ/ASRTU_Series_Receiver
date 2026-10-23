@@ -26,6 +26,24 @@ GitHub Actions 的 `windows-installer` job 下载已通过冒烟测试的运行�
 
 此路径另外要求安装 radioconda/GNU Radio、Qt、Qwt 和 `gr-lilacsat` 开发环境。
 
+## Linux 安装包
+
+`linux-bundle` CI job 把 AppImage、Linux `asrtu_sink.so`、可选 SDR++ Debian
+包和 `packaging/linux/setup.sh` 组装成：
+
+```text
+ASRTU_Series_Receiver-<版本号>-LinuxAppImage.zip
+  setup.sh
+  ASRTU_Series_Receiver-<版本号>-LinuxAppImage/
+    ASRTU_Series_Receiver-<版本号>-LinuxAppImage.AppImage
+    plugins/asrtu_sink.so
+    sdrpp/sdrpp_ubuntu_jammy_amd64.deb
+```
+
+`setup.sh` 支持安装语言选择，并询问是否安装 SDR++；不需要 SDR++ 时只安装
+ASRTU。SDR++ 包只针对 Ubuntu 22.04/Jammy x86_64，因此该 ZIP 也是 x86_64
+专用。脚本不会覆盖系统 Qt/GNU Radio，AppImage 解包安装到用户目录。
+
 ## SDR++ 插件
 
 `integrations/sdrpp/` 提供 Windows `asrtu_sink` 共享内存插件。SDR++ 的

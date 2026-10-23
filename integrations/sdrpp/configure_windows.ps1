@@ -39,7 +39,9 @@ Set-Field $instances 'ASRTU Bridge' ([pscustomobject]@{ enabled = $true; module 
 Set-Field $instances 'BladeRF Source' ([pscustomobject]@{ enabled = $true; module = 'bladerf_source' })
 Set-Field $instances 'SDRplay Source' ([pscustomobject]@{ enabled = $true; module = 'sdrplay_source' })
 Set-Field $instances 'SoapySDR Source' ([pscustomobject]@{ enabled = $true; module = 'soapy_source' })
-if ($null -ne $instances.'Rigctl Server') { Set-Field $instances.'Rigctl Server' 'enabled' $false }
+if ($null -ne $instances.'Rigctl Server') {
+    $instances.PSObject.Properties.Remove('Rigctl Server')
+}
 if ($PlutoUri) {
     Set-Field $instances 'PlutoSDR Source' ([pscustomobject]@{ enabled = $true; module = 'plutosdr_source' })
 }
@@ -69,11 +71,6 @@ $bridgeConfig = Read-Config 'asrtu_sink_config.json'
 $bridge = Ensure-Object $bridgeConfig 'Radio'
 if ($null -eq $bridge.autoDoppler) { Set-Field $bridge 'autoDoppler' $true }
 Write-Config 'asrtu_sink_config.json' $bridgeConfig
-$rigctl = Read-Config 'rigctl_server_config.json'
-if ($null -ne $rigctl.'Rigctl Server') {
-    Set-Field $rigctl.'Rigctl Server' 'autoStart' $false
-    Write-Config 'rigctl_server_config.json' $rigctl
-}
-[IO.File]::WriteAllText((Join-Path $SdrppRoot 'asrtu-preset.version'), '3',
+[IO.File]::WriteAllText((Join-Path $SdrppRoot 'asrtu-preset.version'), '4',
     [Text.ASCIIEncoding]::new())
 Write-Host "Shared-memory preset configured: $SdrppRoot"
