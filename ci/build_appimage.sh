@@ -8,7 +8,7 @@ linuxdeploy=${LINUXDEPLOY:?missing linuxdeploy path}
 linuxdeploy_plugin_qt=${LINUXDEPLOY_PLUGIN_QT:?missing linuxdeploy Qt plugin path}
 version=${VERSION:?missing version}
 version=${version#v}
-artifact_name="ASRTU_Series_Receiver-${version}-LinuxAppImage.AppImage"
+artifact_name="ASRTU_Series_Receiver-${version}-x86_64-LinuxAppImage.AppImage"
 output_dir=$(realpath -m "$output_dir")
 oot_prefix=$(realpath "$oot_prefix")
 tool_dir=$(dirname "$linuxdeploy")
@@ -38,7 +38,7 @@ if [[ -n "${ASRTU_SDRPP_LINUX_ROOT:-}" ]]; then
 	fi
 	mkdir -p "$appdir/usr/sdrpp"
 	cp -a "$sdrpp_root/." "$appdir/usr/sdrpp/"
-	artifact_name="ASRTU_Series_Receiver-${version}-LinuxAppImage-SDRpp.AppImage"
+	artifact_name="ASRTU_Series_Receiver-${version}-x86_64-LinuxAppImage-SDRpp.AppImage"
 fi
 
 copy_oot_library()

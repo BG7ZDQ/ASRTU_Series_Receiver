@@ -1,5 +1,9 @@
 # macOS support in 1.5.5 (development)
 
+CI produces `ASRTU_Series_Receiver-<version>-x86_64-macOS.zip` for Intel
+and `ASRTU_Series_Receiver-<version>-arm64-macOS.zip` for Apple Silicon.
+Each ZIP contains `ASRTU Series Receiver.app`; the version comes from CMake.
+
 The CoreAudio device enumeration and application bundler build on
 [PR #23 by doublehan07](https://github.com/BG7ZDQ/ASRTU_Series_Receiver/pull/23).
 The launcher lists input devices by name; GNU Radio's CoreAudio source opens

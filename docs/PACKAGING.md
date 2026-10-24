@@ -12,9 +12,10 @@
 .\build_installer.ps1
 ```
 
-该默认路径会重新编译 SDR# 桥接插件，从 `packaging/payload/` 创建干净的 staging，并生成 `packaging/inno/dist/ASRTU_Series_Receiver-<版本号>-WinInstaller(Recommend).exe`（例如 `ASRTU_Series_Receiver-1.5.5-WinInstaller(Recommend).exe`，版本号取自 `CMakeLists.txt`）。安装器启动时始终由用户从简体中文、English、日本語中选择安装向导语言。若本地没有 `packaging/payload/sdrpp` 或 `packaging/payload/plutosdr-driver`，脚本会跳过对应可选组件并输出警告；此时生成的是核心安装器（仍包含 SDR# 预设），完整安装器需要本地补齐这两个载荷。
+该默认路径会重新编译 SDR# 桥接插件，从 `packaging/payload/` 创建干净的 staging，并生成 `packaging/inno/dist/ASRTU_Series_Receiver-<版本号>-x86_64-WinInstaller.exe`（例如 `ASRTU_Series_Receiver-1.5.5-x86_64-WinInstaller.exe`，版本号取自 `CMakeLists.txt`）。安装器启动时始终由用户从简体中文、English、日本語中选择安装向导语言。若本地没有 `packaging/payload/sdrpp` 或 `packaging/payload/plutosdr-driver`，脚本会跳过对应可选组件并输出警告；此时生成的是核心安装器（仍包含 SDR# 预设），完整安装器需要本地补齐这两个载荷。
 
 GitHub Actions 的 `windows-installer` job 下载已通过冒烟测试的运行目录来构建安装器，
+然后将 EXE 装入 `ASRTU_Series_Receiver-<版本号>-x86_64-WinInstaller.zip`。
 不再构建或发布 WinPortable.zip。打包前逐一校验主程序版本与 CMake 一致；
 仓库历史 payload 中的 1.5.4 二进制不能冒充 1.5.5，应使用下面的重编命令。
 
@@ -32,10 +33,10 @@ GitHub Actions 的 `windows-installer` job 下载已通过冒烟测试的运行�
 包和 `packaging/linux/setup.sh` 组装成：
 
 ```text
-ASRTU_Series_Receiver-<版本号>-LinuxAppImage.zip
+ASRTU_Series_Receiver-<版本号>-x86_64-LinuxAppImage.zip
   setup.sh
-  ASRTU_Series_Receiver-<版本号>-LinuxAppImage/
-    ASRTU_Series_Receiver-<版本号>-LinuxAppImage.AppImage
+  ASRTU_Series_Receiver-<版本号>-x86_64-LinuxAppImage/
+    ASRTU_Series_Receiver-<版本号>-x86_64-LinuxAppImage.AppImage
     plugins/asrtu_sink.so
     sdrpp/sdrpp_ubuntu_jammy_amd64.deb
 ```
@@ -45,6 +46,9 @@ ASRTU。SDR++ 包只针对 Ubuntu 22.04/Jammy x86_64，因此该 ZIP 也是 x86_
 专用。脚本不会覆盖系统 Qt/GNU Radio，AppImage 解包安装到用户目录。
 
 ## SDR++ 插件
+
+所有平台的插件统一放入 `SDR_Software_Plugins-<版本号>-AllPlatform.zip`，
+顶层为 `SDR#` 和 `SDR++`，内部按系统和架构分目录。
 
 `integrations/sdrpp/` 提供 Windows `asrtu_sink` 共享内存插件。SDR++ 的
 RAW 模式输出以 48 kHz 浮点 I/Q 写入与 SDR# 相同的共享内存，多普勒指令

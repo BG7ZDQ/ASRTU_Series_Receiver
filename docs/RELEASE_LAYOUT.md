@@ -6,23 +6,29 @@ Do not create a release tag while this version is under validation.
 
 | Target | Artifact |
 | --- | --- |
-| Windows x64 | Inno Setup installer |
-| Linux x86_64 | AppImage |
-| Linux x86_64 | Installer ZIP with `setup.sh` |
-| macOS x86_64 / arm64 | Separate application bundle ZIPs |
-| SDR bridges | `ASRTU_Plugins-1.5.5.zip` |
+| Windows x86_64 | `ASRTU_Series_Receiver-1.5.5-x86_64-WinInstaller.zip` |
+| Linux x86_64 | `ASRTU_Series_Receiver-1.5.5-x86_64-LinuxAppImage.zip` |
+| macOS Intel | `ASRTU_Series_Receiver-1.5.5-x86_64-macOS.zip` |
+| macOS Apple Silicon | `ASRTU_Series_Receiver-1.5.5-arm64-macOS.zip` |
+| SDR bridges | `SDR_Software_Plugins-1.5.5-AllPlatform.zip` |
 
 Windows no longer produces a portable release ZIP. The tested runtime directory
 is an internal input to the installer. Legacy script/directory names containing
 `portable` remain compatible with local build automation.
 
+The Windows ZIP contains the matching `*-x86_64-WinInstaller.exe`; extract it
+before running Setup. Each macOS ZIP contains `ASRTU Series Receiver.app`.
+The Linux AppImage and per-platform plugin build outputs are intermediate CI
+artifacts; only the ZIPs listed above are attached to a future tagged release.
+Final GitHub Actions artifact names match the ZIP basename, without `.zip`.
+
 The Linux installer ZIP has exactly this shape:
 
 ```text
-ASRTU_Series_Receiver-<version>-LinuxAppImage.zip
+ASRTU_Series_Receiver-<version>-x86_64-LinuxAppImage.zip
   setup.sh
-  ASRTU_Series_Receiver-<version>-LinuxAppImage/
-    ASRTU_Series_Receiver-<version>-LinuxAppImage.AppImage
+  ASRTU_Series_Receiver-<version>-x86_64-LinuxAppImage/
+    ASRTU_Series_Receiver-<version>-x86_64-LinuxAppImage.AppImage
     plugins/asrtu_sink.so
     sdrpp/sdrpp_ubuntu_jammy_amd64.deb
 ```

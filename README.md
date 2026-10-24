@@ -20,8 +20,10 @@ Languages: **中文** · [English](README_EN.md) · [日本語](README_JA.md)
 
 ### 1. 安装与首次设置
 
-1. Windows：运行 `ASRTU_Series_Receiver-<版本号>-WinInstaller(Recommend).exe`（例如 `ASRTU_Series_Receiver-1.5.5-WinInstaller(Recommend).exe`），按需求选择是否安装随包提供的 SDR# 遥测预设。
-   Linux：解压 `ASRTU_Series_Receiver-<版本号>-LinuxAppImage.zip`，进入解压目录执行 `bash setup.sh`，选择安装语言以及是否安装随包的 SDR++。详细步骤见 [Linux 安装说明](docs/LINUX_INSTALL.md)。
+1. Windows：解压 `ASRTU_Series_Receiver-<版本号>-x86_64-WinInstaller.zip`，运行其中同名 EXE 安装器，按需求选择是否安装随包提供的 SDR# 遥测预设。
+   Linux：解压 `ASRTU_Series_Receiver-<版本号>-x86_64-LinuxAppImage.zip`，进入解压目录执行 `bash setup.sh`，选择安装语言以及是否安装随包的 SDR++。详细步骤见 [Linux 安装说明](docs/LINUX_INSTALL.md)。
+   macOS：按机器选择 `ASRTU_Series_Receiver-<版本号>-x86_64-macOS.zip`（Intel）或 `ASRTU_Series_Receiver-<版本号>-arm64-macOS.zip`（Apple Silicon），解压后使用其中的 `.app`。支持范围见 [macOS 说明](docs/MACOS_STATUS.md)。
+   独立 SDR 插件：使用 `SDR_Software_Plugins-<版本号>-AllPlatform.zip`，从 `SDR#` 或 `SDR++` 下选择对应系统和架构。
 2. 从桌面或应用菜单打开 **ASRTU 系列卫星启动器**。
 3. 填写呼号、经度、纬度和海拔。坐标用于卫星跟踪与多普勒计算；启动器会在本机保存设置。
 4. 根据接收链路选择“输入”。只有声卡输入模式会显示“声卡”下拉框。

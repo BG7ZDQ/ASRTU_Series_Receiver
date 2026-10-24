@@ -21,7 +21,10 @@ Contributors: **BG7ZDQ** **BI1NWO** **BG6HNY** **BG4QBF**
 
 ### 1. インストールと初期設定
 
-1. `ASRTU_Series_Receiver-<バージョン>-WinInstaller(Recommend).exe`（例：`ASRTU_Series_Receiver-1.5.5-WinInstaller(Recommend).exe`）を実行し、同梱のSDR#テレメトリプリセットをインストールするか選択します。
+1. Windows：`ASRTU_Series_Receiver-<バージョン>-x86_64-WinInstaller.zip` を解凍し、中のインストーラー EXE を実行して、同梱のSDR#テレメトリプリセットをインストールするか選択します。
+   Linux：`ASRTU_Series_Receiver-<バージョン>-x86_64-LinuxAppImage.zip` を解凍し、`bash setup.sh` を実行して、インストール言語と同梱SDR++をインストールするかを選択します。
+   macOS：`ASRTU_Series_Receiver-<バージョン>-x86_64-macOS.zip`（Intel）または `ASRTU_Series_Receiver-<バージョン>-arm64-macOS.zip`（Apple Silicon）を選択します。
+   独立SDRプラグイン：`SDR_Software_Plugins-<バージョン>-AllPlatform.zip` を使用します。
 2. デスクトップから**ASRTUシリーズ衛星ランチャー**を開きます。
 3. コールサイン、経度、緯度、標高を入力します。座標は衛星追跡とドップラー計算に使用され、ローカルに保存されます。
 4. 受信系に合う入力を選択します。サウンドカード欄はサウンドカード入力時のみ表示されます。

@@ -293,7 +293,7 @@ $innoArgs += (Join-Path $PSScriptRoot 'ASRTU1_Receiver_Setup.iss')
 if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
 
 $installer = Join-Path $PSScriptRoot `
-    "dist\ASRTU_Series_Receiver-${appVersion}-WinInstaller(Recommend)${BuildSuffix}.exe"
+    "dist\ASRTU_Series_Receiver-${appVersion}-x86_64-WinInstaller${BuildSuffix}.exe"
 # Builds created inside a DSH workspace inherit its Low mandatory label. A
 # Low-labelled Setup cannot create its protected directory under the normal
 # user %TEMP% or write the per-user install directory. Relabel the finished

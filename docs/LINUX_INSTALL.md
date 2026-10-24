@@ -4,10 +4,10 @@ Linux 发行包是一个 ZIP，第一层是 `setup.sh`，第二层目录里放 A
 SDR++ 和 ASRTU 共享内存插件：
 
 ```text
-ASRTU_Series_Receiver-<版本号>-LinuxAppImage.zip
+ASRTU_Series_Receiver-<版本号>-x86_64-LinuxAppImage.zip
   setup.sh
-  ASRTU_Series_Receiver-<版本号>-LinuxAppImage/
-    ASRTU_Series_Receiver-<版本号>-LinuxAppImage.AppImage
+  ASRTU_Series_Receiver-<版本号>-x86_64-LinuxAppImage/
+    ASRTU_Series_Receiver-<版本号>-x86_64-LinuxAppImage.AppImage
     plugins/asrtu_sink.so
     sdrpp/sdrpp_ubuntu_jammy_amd64.deb
 ```

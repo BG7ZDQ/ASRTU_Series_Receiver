@@ -27,7 +27,7 @@ def main():
     version = re.search(r"project\(ASRTU1Qt VERSION ([0-9.]+)",
                         (repo / "CMakeLists.txt").read_text(encoding="utf-8")).group(1)
     args.output.mkdir(parents=True, exist_ok=True)
-    archive = args.output / f"ASRTU_Plugins-{version}.zip"
+    archive = args.output / f"SDR_Software_Plugins-{version}-AllPlatform.zip"
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as output:
         for path in sorted(args.root.rglob("*")):
             if path.is_file():

@@ -230,6 +230,8 @@ jobs:
     name: Windows Inno Setup installer
     needs: windows
     runs-on: windows-2022
+    outputs:
+      artifact-name: ${{ steps.package.outputs.artifact-name }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -267,6 +269,7 @@ jobs:
           "ASRTU_ISCC=$iscc" | Out-File `
             -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Build and verify Inno Setup installer
+        id: package
         shell: pwsh
         run: |
           .\build_installer.ps1 `
@@ -278,7 +281,8 @@ jobs:
             throw 'Unable to read the application version from CMakeLists.txt'
           }
           $appVersion = $versionLine.Matches[0].Groups[1].Value
-          $installer = "packaging/inno/dist/ASRTU_Series_Receiver-${appVersion}-WinInstaller(Recommend).exe"
+          $artifactName = "ASRTU_Series_Receiver-${appVersion}-x86_64-WinInstaller"
+          $installer = "packaging/inno/dist/${artifactName}.exe"
           if (-not (Test-Path -LiteralPath $installer)) {
             throw "Inno Setup installer was not created: $installer"
           }
@@ -287,11 +291,15 @@ jobs:
             throw "Inno Setup installer is unexpectedly small: $($item.Length) bytes"
           }
           Get-FileHash -LiteralPath $installer -Algorithm SHA256
+          New-Item -ItemType Directory -Force -Path 'dist/windows-installer' | Out-Null
+          Compress-Archive -LiteralPath $installer `
+            -DestinationPath "dist/windows-installer/${artifactName}.zip" -Force
+          "artifact-name=$artifactName" >> $env:GITHUB_OUTPUT
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: asrtu-windows-installer
-          path: packaging/inno/dist/*-WinInstaller(Recommend)*.exe
+          name: ${{ steps.package.outputs.artifact-name }}
+          path: dist/windows-installer/*-WinInstaller.zip
           if-no-files-found: error
 
   packages:
@@ -339,7 +347,7 @@ jobs:
           LINUXDEPLOY: ${{ github.workspace }}/dist/tools/linuxdeploy.AppImage
           LINUXDEPLOY_PLUGIN_QT: ${{ github.workspace }}/dist/tools/linuxdeploy-plugin-qt.AppImage
           LDAI_RUNTIME_FILE: ${{ github.workspace }}/dist/tools/runtime-x86_64
-          VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || steps.version.outputs.app }}
+          VERSION: ${{ steps.version.outputs.app }}
         run: ci/build_appimage.sh build-package "$ASRTU_OOT_PREFIX" dist/appimage
       - name: Enforce Ubuntu 22.04 glibc baseline
         run: |
@@ -451,6 +459,8 @@ jobs:
     name: Assemble cross-platform plugins
     needs: plugin-native
     runs-on: ubuntu-24.04
+    outputs:
+      artifact-name: ${{ steps.package.outputs.artifact-name }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -461,13 +471,15 @@ jobs:
           merge-multiple: true
           path: work/plugins
       - name: Verify complete platform matrix and package
+        id: package
         run: |
           cp integrations/sdrpp/README.md 'work/plugins/SDR++/README.md'
           cp external/TinyDoppler/plugin/README.md 'work/plugins/SDR#/README.md'
-          python3 ci/package_plugins.py work/plugins dist/plugins
+          archive=$(python3 ci/package_plugins.py work/plugins dist/plugins)
+          echo "artifact-name=$(basename "$archive" .zip)" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
-          name: asrtu-plugins
+          name: ${{ steps.package.outputs.artifact-name }}
           path: dist/plugins/*.zip
           if-no-files-found: error
 
@@ -475,6 +487,8 @@ jobs:
     name: Linux installer bundle
     needs: [packages, plugins]
     runs-on: ubuntu-24.04
+    outputs:
+      artifact-name: ${{ steps.package.outputs.artifact-name }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -485,26 +499,28 @@ jobs:
           path: dist/linux
       - uses: actions/download-artifact@v4
         with:
-          name: asrtu-plugins
+          name: ${{ needs.plugins.outputs.artifact-name }}
           path: dist/plugins
       - name: Verify bundled SDR++ package
         run: |
           echo '9B646FE5D96E1BD7236C0B336B9057E09F478645BFC2C67862E91763545B325B  packaging/payload/sdrpp-linux/sdrpp_ubuntu_jammy_amd64.deb' | sha256sum -c -
       - name: Assemble Linux AppImage installer ZIP
+        id: package
         run: |
           sudo apt-get update
           sudo apt-get install -y zip unzip
           mkdir -p work/plugins
-          unzip -q dist/plugins/ASRTU_Plugins-*.zip -d work/plugins
+          unzip -q dist/plugins/SDR_Software_Plugins-*-AllPlatform.zip -d work/plugins
           version=$(sed -n 's/^project(ASRTU1Qt VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
           ci/package_linux_appimage.sh \
             dist/linux/*.AppImage \
             work/plugins/SDR++/Linux-x86_64/asrtu_sink.so \
             packaging/payload/sdrpp-linux/sdrpp_ubuntu_jammy_amd64.deb \
             dist/linux-bundle "$version"
+          echo "artifact-name=ASRTU_Series_Receiver-${version}-x86_64-LinuxAppImage" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
-          name: asrtu-linux-bundle
+          name: ${{ steps.package.outputs.artifact-name }}
           path: dist/linux-bundle/*.zip
           if-no-files-found: error
 
@@ -541,16 +557,20 @@ jobs:
           cmake --build build --parallel 3
           QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
       - name: Assemble and verify app bundle
+        id: package
         run: |
           python3 ci/build_macos_app.py --build-dir build --output dist/macos \
             --dep-prefix "$CONDA_PREFIX" --dep-prefix "$PWD/work/oot-install"
           env -u DYLD_LIBRARY_PATH -u QT_PLUGIN_PATH \
             'dist/macos/ASRTU Series Receiver.app/Contents/MacOS/ASRTU1_Launcher' --check-session-directory
+          version=$(sed -n 's/^project(ASRTU1Qt VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          artifact_name="ASRTU_Series_Receiver-${version}-${{ matrix.arch }}-macOS"
           ditto -c -k --sequesterRsrc --keepParent 'dist/macos/ASRTU Series Receiver.app' \
-            'dist/macos/ASRTU_Series_Receiver-macOS-${{ matrix.arch }}.zip'
+            "dist/macos/${artifact_name}.zip"
+          echo "artifact-name=$artifact_name" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
-          name: asrtu-macos-${{ matrix.arch }}
+          name: ${{ steps.package.outputs.artifact-name }}
           path: dist/macos/*.zip
           if-no-files-found: error
 
@@ -562,31 +582,26 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Download Linux AppImage
-        uses: actions/download-artifact@v4
-        with:
-          name: asrtu-linux-appimage
-          path: dist/linux
       - name: Download macOS apps
         uses: actions/download-artifact@v4
         with:
-          pattern: asrtu-macos-*
+          pattern: ASRTU_Series_Receiver-*-*-macOS
           merge-multiple: true
           path: dist/macos
       - name: Download Linux installer bundle
         uses: actions/download-artifact@v4
         with:
-          name: asrtu-linux-bundle
+          name: ${{ needs.linux-bundle.outputs.artifact-name }}
           path: dist/linux-bundle
       - name: Download Windows installer
         uses: actions/download-artifact@v4
         with:
-          name: asrtu-windows-installer
+          name: ${{ needs.windows-installer.outputs.artifact-name }}
           path: dist/windows-installer
       - name: Download standalone plugins
         uses: actions/download-artifact@v4
         with:
-          name: asrtu-plugins
+          name: ${{ needs.plugins.outputs.artifact-name }}
           path: dist/plugins
       - name: Publish tag artifacts
         uses: softprops/action-gh-release@v2
@@ -594,9 +609,10 @@ jobs:
           name: ${{ contains(github.ref_name, 'nightly') && format('ASRTU Series Receiver {0} (nightly)', github.ref_name) || github.ref_name }}
           prerelease: ${{ contains(github.ref_name, 'nightly') }}
           files: |
-            dist/**/*.AppImage
-            dist/**/*.zip
-            dist/**/*.exe
+            dist/plugins/SDR_Software_Plugins-*-AllPlatform.zip
+            dist/linux-bundle/ASRTU_Series_Receiver-*-*-LinuxAppImage.zip
+            dist/windows-installer/ASRTU_Series_Receiver-*-*-WinInstaller.zip
+            dist/macos/ASRTU_Series_Receiver-*-*-macOS.zip
 
   arch-package:
     name: Arch PKGBUILD syntax

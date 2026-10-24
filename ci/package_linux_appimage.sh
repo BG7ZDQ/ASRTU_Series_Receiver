@@ -16,7 +16,7 @@ fi
 setup_script="$(cd "$(dirname "$0")/../packaging/linux" && pwd)/setup.sh"
 [[ -f "$setup_script" ]] || { echo "setup.sh not found: $setup_script" >&2; exit 1; }
 
-bundle_name="ASRTU_Series_Receiver-${version}-LinuxAppImage"
+bundle_name="ASRTU_Series_Receiver-${version}-x86_64-LinuxAppImage"
 output_dir=$(realpath -m "$output_dir")
 work=$(mktemp -d "${TMPDIR:-/tmp}/asrtu-linux-bundle.XXXXXX")
 trap 'rm -rf -- "$work"' EXIT
