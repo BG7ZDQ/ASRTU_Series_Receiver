@@ -1,0 +1,52 @@
+# Windows 启动故障与验证
+
+## 2026-10-24：1.5.5 Nightly 的 0xc0000142 反馈
+
+用户提供的截图显示 `ASRTU1_Demod_CQt.exe` 启动失败，错误码
+`0xc0000142`。按 [Microsoft NTSTATUS 定义](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55)，
+这是 `STATUS_DLL_INIT_FAILED`，表示 DLL 初始化失败。截图没有具体模块名，
+也不能确定发生故障的 nightly 日期，因此尚未确认根因。
+
+检查使用了两个实际构建产物，而非只检查本地开发构建：
+
+| 样本 | 来源 | 解调器 SHA-256 |
+| --- | --- | --- |
+| 旧 nightly 对照包 | `v1.5.5-nightly.20261023` 的 Windows ZIP | `c689772d9d128194fff2d124c08726c9f1137f1932ce88fb6d4c068e95012393` |
+| 当前开发包 | CI run `40094162515`，提交 `7ccd174`，安装器运行文件输入包 | `0266bf91e7157ba03fd7b23934101255e43bd9efc9f4ec4f0274f6ec3c74a43b` |
+
+两包各检查 60 个 EXE/DLL（含 Qt 插件）：均为 x86_64；静态和延迟导入检查
+没有发现缺少的 DLL 或包内导出符号不匹配。此检查不能覆盖运行时按名称加载
+的所有模块，也不能代表 DLL 初始化一定成功。
+
+两包根目录的 53 个 DLL 中，52 个内容相同，只有 `gnuradio-lilacsat.dll`
+不同；所带 MSVC 运行库均为 `14.51.36247.0`。不能声称当前包已经通过更新
+运行库修复了这次反馈。
+
+在 Windows 10 22H2（19045.6466）上，清除开发环境 DLL 搜索路径、使用全新
+应用设置和离线 WAV 后，两包解调器均完成初始化、输出截图并以 0 退出。
+这没有复现用户报告，也不能替代 Windows 11 26H2 实测。
+
+旧文件混用、第三方注入 DLL 或特定系统环境下的依赖初始化失败均仍是可能方向，
+目前没有证据将其中任何一个认定为根因。现有截图不足以将本问题标记为已修复。
+
+## 构建后的启动检查
+
+Windows 上对已组装完整依赖的运行目录执行：
+
+```powershell
+python ci/check_windows_startup.py dist/windows/portable --output work/windows-startup
+```
+
+`dist/windows/portable` 是安装器的内部输入目录，不是新增的便携包发行需求。
+检查脚本仅为子进程设置系统 PATH 和新的配置目录，不更改用户现有配置。
+它验证启动器目录检查、解调器离线 WAV 初始化和 SatNOGS 上传器预览，
+不发送观测数据。每次运行使用独立输出目录，避免残留截图或 ready 文件误判。
+
+程序必须在 30 秒内正常退出；解调器还必须写出初始化完成标记和 PNG 截图。
+仅仅保持进程存活不算通过。失败时保留十六进制退出状态、标准输出和错误输出，
+CI 将这些文件保存为 `windows-startup-diagnostics` 构建附件。Windows 加载器
+在程序入口之前失败时，应用日志可能为空，仍需依据退出状态继续排查。
+
+CI 使用 Windows Server 2022 runner；通过 CI 不等同于覆盖所有 Windows 11
+版本。若能在受影响机器上继续排查，优先用独立的新安装目录复测，再记录确切
+软件构建、系统内部版本和故障模块；不要通过向 System32 随意复制 DLL 来尝试修复。

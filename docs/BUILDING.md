@@ -2,6 +2,9 @@
 
 ## Windows（当前完整支持）
 
+安装器运行目录的隔离启动检查、`0xc0000142` 调查结果与验证范围，见
+[Windows 启动故障与验证](WINDOWS_STARTUP.md)。
+
 已验证的构建组合：
 
 - Windows 10/11 x64
