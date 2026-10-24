@@ -45,7 +45,9 @@ bash setup.sh --lang zh --with-sdrpp --yes
 ```
 
 `--yes` 自动确认覆盖安装和可选 SDR++ 安装；若不需要 SDR++，请同时传入
-`--without-sdrpp`。它不会跳过 `sudo` 密码输入。`--lang` 选择安装提示语言，
+`--without-sdrpp`。它不会跳过 `sudo` 密码输入。旧版 `setup.sh` 创建的目录
+没有标记文件，但会按 ASRTU 的 `AppRun`/`ASRTU1_Launcher` 布局识别并允许
+升级；普通同名目录不会被覆盖。`--lang` 选择安装提示语言，
 应用界面默认跟随系统语言；也可用 `asrtu --language=zh`（或 `en`、`ja`）指定。
 
 自定义目录可以包含空格，安装和卸载时使用同一个 `--prefix`：

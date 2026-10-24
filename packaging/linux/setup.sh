@@ -131,6 +131,7 @@ validate_prefix() {
     # Resolve aliases before checking ancestors. Never follow an installation
     # symlink, including a path supplied with a trailing slash.
     local requested="${PREFIX%/}" resolved user_dir protected
+    local legacy=0
     if [[ -z "$requested" || -L "$requested" || "$PREFIX" == *[$'\n\r\t']* ]]; then
         printf "$(say unsafe_prefix)\n" "$PREFIX" >&2
         return 1
@@ -144,10 +145,19 @@ validate_prefix() {
         fi
     done
     PREFIX=$resolved
+    if [[ -d "$PREFIX" && ! -L "$PREFIX/AppRun" &&
+          -f "$PREFIX/AppRun" && ! -L "$PREFIX/usr/bin/ASRTU1_Launcher" &&
+          -f "$PREFIX/usr/bin/ASRTU1_Launcher" ]]; then
+        # Installer versions before the marker file used this exact layout.
+        # Accept them for a one-time upgrade, but never treat an arbitrary
+        # directory with a same-named file as managed.
+        legacy=1
+    fi
     if [[ -e "$PREFIX" ]]; then
-        if [[ ! -d "$PREFIX" || ! -f "$PREFIX/$INSTALL_MARKER" ||
-              -L "$PREFIX/$INSTALL_MARKER" ]] ||
-           [[ "$(cat -- "$PREFIX/$INSTALL_MARKER")" != "$INSTALL_ID" ]]; then
+        if ((!legacy)) &&
+           { [[ ! -d "$PREFIX" || ! -f "$PREFIX/$INSTALL_MARKER" ||
+                -L "$PREFIX/$INSTALL_MARKER" ]] ||
+             [[ "$(cat -- "$PREFIX/$INSTALL_MARKER")" != "$INSTALL_ID" ]]; }; then
             printf "$(say unmanaged_prefix)\n" "$PREFIX" >&2
             return 1
         fi
