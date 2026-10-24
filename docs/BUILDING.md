@@ -112,8 +112,9 @@ Linux 当前范围与限制：
   AppImage 还会检查内部 ELF 和最终 AppImage 启动程序的 glibc 要求不高于
   2.35；未知的命名 ABI、私有 ABI 和无法解析的 ELF 都会使检查失败。CI 构建测试
   与发布包构建使用不同 runner，避免新系统的 ABI 混入发布包。
-- Linux 发行包按 `ASRTU_Series_Receiver-<版本>-x86_64-LinuxAppImage.AppImage`
-  命名。Linux 发行包属于 CI 产物，正式发布仅由 `v*` tag 触发；运行时硬件和 OOT
+- Linux 最终安装包按 `ASRTU_Series_Receiver-<版本>-x86_64-LinuxAppImage.zip`
+  命名，内含 `setup.sh`、同名 AppImage、可选 SDR++ 和插件。
+  Linux 安装包属于 CI 产物，正式发布仅由 `v*` tag 触发；运行时硬件和 OOT
   模块兼容性仍需在目标发行版上实测。Debian/RPM 包不再构建。
 - AppImage 是一次性便携文件，不是安装器，因此没有安装时的组件勾选页。
   默认 AppImage 不携带 SDR++；需要「带 SDR++」版本时，把一个包含
