@@ -97,7 +97,9 @@ recovered by the primary path; the unique payload set did not regress.
 
 ## SNR interpretation
 
-The benchmark also records the primary path's final SVR estimate. On the four
+These historical benchmark results recorded the primary path's final SVR
+estimate. Current 1.5.5 development builds use synchronized symbol Es/N0
+instead; see [DSP](DSP.md). The two metrics are not directly comparable. On the four
 long regression recordings, the new DSP ended at `12.84/11.24/12.70/12.77 dB`;
 the old single-path, feed-forward-AGC DSP ended at
 `13.53/11.68/13.55/13.07 dB`. Thus the displayed final SVR is about 0.30–0.85

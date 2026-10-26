@@ -111,31 +111,30 @@ int main(int argc, char* argv[])
         fileTimeSeconds(kernelAfter) + fileTimeSeconds(userAfter) -
         fileTimeSeconds(kernelBefore) - fileTimeSeconds(userBefore);
     QJsonObject result{
-        { QStringLiteral("implementation"),
-          options.use_legacy_feedforward_agc
-              ? QStringLiteral("cqt-legacy-feedforward-agc")
-              : QStringLiteral("cqt-causal-agc2") },
-        { QStringLiteral("wav"), wavPath },
-        { QStringLiteral("wall_seconds"), wallSeconds },
-        { QStringLiteral("cpu_seconds"), cpuSeconds },
-        { QStringLiteral("peak_working_set_bytes"),
-          double(memory.PeakWorkingSetSize) },
-        { QStringLiteral("frame_count"), hashes.size() },
-        { QStringLiteral("primary_frame_count"),
-          double(flowgraph.primaryFrameCount()) },
-        { QStringLiteral("openhoshimi_frame_count"),
-          double(flowgraph.openHoshimiFrameCount()) },
-        { QStringLiteral("suppressed_duplicate_count"),
-          double(flowgraph.suppressedDuplicateCount()) },
-        { QStringLiteral("stereo_iq_content_mismatch"),
-          flowgraph.stereoIqContentMismatch() },
-        { QStringLiteral("final_svr_snr_db"), flowgraph.snr() },
-        { QStringLiteral("first_frame_log"), firstFrameLog },
-        { QStringLiteral("complete_223_count"),
-          std::count(frameLengths.begin(), frameLengths.end(), 223) },
-        { QStringLiteral("frame_lengths"), lengths },
-        { QStringLiteral("frame_hashes"), hashes }
-    };
+	{QStringLiteral("implementation"),
+	 options.use_legacy_feedforward_agc
+	     ? QStringLiteral("cqt-legacy-feedforward-agc")
+	     : QStringLiteral("cqt-causal-agc2")},
+	{QStringLiteral("wav"), wavPath},
+	{QStringLiteral("wall_seconds"), wallSeconds},
+	{QStringLiteral("cpu_seconds"), cpuSeconds},
+	{QStringLiteral("peak_working_set_bytes"),
+	 double(memory.PeakWorkingSetSize)},
+	{QStringLiteral("frame_count"), hashes.size()},
+	{QStringLiteral("primary_frame_count"),
+	 double(flowgraph.primaryFrameCount())},
+	{QStringLiteral("openhoshimi_frame_count"),
+	 double(flowgraph.openHoshimiFrameCount())},
+	{QStringLiteral("suppressed_duplicate_count"),
+	 double(flowgraph.suppressedDuplicateCount())},
+	{QStringLiteral("stereo_iq_content_mismatch"),
+	 flowgraph.stereoIqContentMismatch()},
+	{QStringLiteral("final_symbol_esn0_db"), flowgraph.snr()},
+	{QStringLiteral("first_frame_log"), firstFrameLog},
+	{QStringLiteral("complete_223_count"),
+	 std::count(frameLengths.begin(), frameLengths.end(), 223)},
+	{QStringLiteral("frame_lengths"), lengths},
+	{QStringLiteral("frame_hashes"), hashes}};
 
     QFile frames(outputPath + QStringLiteral(".frames223.bin"));
     if (!frames.open(QIODevice::WriteOnly) ||

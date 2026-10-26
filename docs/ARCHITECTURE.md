@@ -9,7 +9,7 @@
 ```text
 SDR# shared memory ─┐
 stereo zero-IF ─────┼─> normalization / channel selection ─> BPSK loop
-mono +12 kHz IF ────┤                                      ├─> constellation/SNR
+mono +12 kHz IF ────┤                                      ├─> constellation
 WAV/OGG playback ───┘                                      └─> Viterbi + FEC
                                                                       │
                                                         TCP PDU 127.0.0.1:9985
@@ -21,6 +21,11 @@ WAV/OGG playback ───┘                                      └─> Viter
 输入频谱和输入瀑布图统一从主解调链的 AGC 输出取样。单声道实数中频先完成
 12 kHz 中心频率搬移、低通滤波、固定增益和 AGC，再同时送往频谱/瀑布图与
 FLL/时钟/Costas 解调链。
+
+SNR 单独取自并行 OpenHoshimi 解码器的 Gardner/Costas 符号输出，计算符号端
+Es/N0，并由该解码器的有效 RS 帧控制有效期；不再使用主链 SVR 盲估计。
+零信号、无有效帧或断流显示 `--`。图表始终保留零刻度并使用整数网格，
+详见 [DSP 说明](DSP.md)。
 
 ## 进程间通信
 

@@ -4,9 +4,29 @@ Native Qt5/GNU Radio 3.10 rewrite of `demod_asrtu1_audio.grc`.
 
 It retains the live input spectrum, waterfall, RSSI bar, BPSK constellation,
 loop spectrum, SNR history, loop frequency offset, FEC frame monitoring and
-`SYNCED`/`NOSYNC` status. SNR sampling starts as soon as the flowgraph starts;
-it does not wait for the first decoded frame. `SYNCED` means that a valid FEC
-PDU was produced during the previous 1.5 seconds.
+`SYNCED`/`NOSYNC` status. `SYNCED` means that a valid FEC PDU was produced
+on either decoder during the previous 1.5 seconds.
+
+The SNR readout is now synchronized BPSK symbol **Es/N0** from the OpenHoshimi
+Gardner/Costas output, replacing the primary path's blind SVR probe. For
+locked BPSK and equal I/Q noise variances it estimates signal energy as
+`E[I²] - E[Q²]` and noise as `2 E[Q²]`, using non-overlapping 1920-symbol
+windows (approximately 200 ms). The result is `10 log10(signal/noise)`.
+Residual phase/timing error, interference and noncircular noise can bias it;
+it is not RF C/N over the receiver bandwidth, nor information-bit Eb/N0.
+
+A successful OpenHoshimi RS frame is required before displaying the estimate.
+After two seconds of symbols without another valid RS frame, silence,
+nonfinite input, or undefined signal/noise powers, the readout is `--` and
+the history has a gap. No-input detection also inserts gaps. A benchmark with
+`--no-openhoshimi` has no SNR estimate (JSON null); it does not fall back to SVR.
+The benchmark field is now `final_symbol_esn0_db`.
+
+The 60-second history always includes a labelled 0 dB line, with integer
+1/2/5-family grid steps (minimum 5 dB) and an initial -5 to 20 dB range.
+The range expands to cover the data, and only contracts when the candidate
+range is at most half the displayed range, preventing small fluctuations
+from continually rescaling the plot.
 
 The spectrum and waterfall display the normalized output of the same causal
 AGC that feeds the demodulator. This applies equally to real 12 kHz IF and

@@ -151,6 +151,7 @@ void sm_demod_init(struct sm_demod *d, float rolloff, float fll_bw,
 	float damping, denom;
 
 	memset(d, 0, sizeof(*d));
+	sm_snr_init(&d->snr);
 
 	d->ddc_phase = 0.0;
 	d->agc_index = 0;
@@ -465,6 +466,8 @@ static size_t sm_demod_symbols(struct sm_demod *d, const struct sm_cf *bb,
 	sm_fll_work(d, work_a, work_b, n);
 	n_sym = sm_gardner(d, work_b, syms, n, SM_BLOCK_FRAMES);
 	sm_costas(d, syms, n_sym);
+	for (i = 0; i < n_sym; i++)
+		sm_snr_push(&d->snr, syms[i].re, syms[i].im);
 
 	if (n_sym > cap)
 		n_sym = cap;

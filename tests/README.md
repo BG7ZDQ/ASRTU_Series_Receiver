@@ -6,6 +6,13 @@ Large satellite recordings, generated logs, screenshots, build outputs, callsign
 
 Maintenance scripts that generate translations, icons, and release archives belong in `tools/` and are version controlled. One-off investigation output belongs in ignored `outputs/` or `work/` directories.
 
+`snr_estimation_and_scale` checks synchronized BPSK Es/N0 against known
+signal/noise powers from -5 to 20 dB and across input gains, FEC validity and
+expiry, silence/nonfinite input, and integer grid scales that include zero.
+The 1.5.5 issue #27 regression also replayed SatNOGS JAMX observation 14907288:
+329 unique 223-byte frames, primary 310 / OpenHoshimi 303, with exactly the
+same payload hash set as before the SNR change. Recording files stay local.
+
 Windows bridge regression checks:
 
 ```powershell

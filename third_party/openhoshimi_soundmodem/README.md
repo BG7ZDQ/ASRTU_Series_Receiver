@@ -10,3 +10,10 @@ Source: https://github.com/IzumiChino/OpenHoshimi
 
 Credits include BG6HNY / Hyacinth Satellite Team and the upstream HIT LilacSat
 soundmodem authors identified in the individual source files.
+
+Local receiver extensions include failed-RS candidate routing, IQ filtering,
+and the `sm_decoder_snr()` synchronized-symbol Es/N0 API. The SNR accumulator
+observes the existing Gardner/Costas output without changing decoder samples.
+A successful RS frame gates validity; see [DSP notes](../../docs/DSP.md) for
+the estimator assumptions and timeout. These additions are local, not an
+upstream-provided SNR interface.

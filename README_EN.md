@@ -11,11 +11,13 @@ Contributors: **BG7ZDQ** **BI1NWO** **BG6HNY** **BG4QBF**
 - Shared-memory RAW I/Q, stereo zero-IF I/Q, mono 12 kHz real IF, and recorded-file inputs
 - BPSK demodulation, convolutional/Viterbi decoding, and FEC frame output
 - Live waterfall, spectrum, constellation, SNR, RSSI, loop frequency offset, and synchronization state
-- Optional automatic WAV recording with complete frames, SVR output, and per-session logs
+- Optional automatic WAV recording with complete frames, symbol SNR, and per-session logs
 - Multiple TLE sources, satellite selection, frequency presets, SGP4 tracking, and automatic SDR# Doppler control
 - Telemetry upload proxy with ground-station callsign and location configuration
 - Automatic Chinese, Japanese, or English UI selection from the operating-system language
 - A standalone cross-platform SatNOGS window showing frame data, station details, and server responses; recording playback is never submitted
+
+SNR shows synchronized symbol Es/N0 from the OpenHoshimi decoder. It displays `--` before valid frames or after loss of lock. The history keeps a labelled zero and integer grid steps. See [DSP notes](docs/DSP.md) for assumptions and limits.
 
 ## Usage
 
@@ -70,7 +72,7 @@ After choosing the mode and sound card, click **Start Receiver**. Enable **Autom
 - BPSK constellation points should cluster on the two sides of the I axis.
 - Rising SNR and a stabilizing loop offset indicate that the carrier and timing loops are entering a useful operating region.
 - `SYNCED` means usable frames have been received recently; `NOSYNC` means synchronization has not been obtained or the frame timeout has elapsed.
-- Use `FEC frame`, the complete hexadecimal PDU, and SVR entries in the log to confirm actual decoding. SNR alone is insufficient.
+- Use `FEC frame` and the complete hexadecimal PDU in the log to confirm actual decoding. `Symbol Es/N0` estimates signal quality; SNR alone does not prove successful decoding.
 
 ### 6. Telemetry upload
 

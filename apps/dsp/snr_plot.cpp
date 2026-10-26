@@ -33,6 +33,7 @@ void SnrPlot::addGap()
 void SnrPlot::clear()
 {
     values_.clear();
+    scale_ = {};
     update();
 }
 
@@ -56,30 +57,35 @@ void SnrPlot::paintEvent(QPaintEvent*)
     if (!finiteValues.isEmpty()) {
         const auto mm = std::minmax_element(finiteValues.cbegin(), finiteValues.cend());
         const double vmin = *mm.first, vmax = *mm.second;
-        if (vmax - vmin < 6.0) {
-            const double center = (vmax + vmin) * 0.5;
-            ymin = center - 3.0;
-            ymax = center + 3.0;
-        } else {
-            const double margin = (vmax - vmin) * 0.1;
-            ymin = vmin - margin;
-            ymax = vmax + margin;
-        }
+	const auto candidate = snrScale(vmin, vmax);
+	// Expand immediately; shrink only by at least half to avoid jitter.
+	if (candidate.minimum < scale_.minimum ||
+	    candidate.maximum > scale_.maximum ||
+	    candidate.maximum - candidate.minimum <=
+		(scale_.maximum - scale_.minimum) * 0.5)
+		scale_ = candidate;
+    } else {
+	    scale_ = {};
     }
+    ymin = scale_.minimum;
+    ymax = scale_.maximum;
 
     QFont plotFont(QStringLiteral("Microsoft YaHei UI"), 8);
     plotFont.setStyleStrategy(static_cast<QFont::StyleStrategy>(
         QFont::PreferAntialias | QFont::PreferQuality));
     p.setFont(plotFont);
-    for (int i = 0; i < 5; ++i) {
-        const double y = top + i * h / 4.0;
-        const double value = ymax - i * (ymax - ymin) / 4.0;
-        p.setPen(QPen(QColor(205, 210, 218), 1));
-        p.drawLine(QPointF(left, y), QPointF(left + w, y));
-        p.setPen(QPen(QColor(60, 65, 70), 1));
-        p.drawText(QRectF(0, y - 8, left - 5, 16),
-                   Qt::AlignRight | Qt::AlignVCenter,
-                   QString::number(value, 'f', 1));
+    const int intervals = int(std::lround((ymax - ymin) / scale_.step));
+    for (int i = 0; i <= intervals; ++i) {
+	    const double y = top + i * h / double(intervals);
+	    const double value = ymax - i * scale_.step;
+	    p.setPen(QPen(value == 0.0 ? QColor(120, 130, 145)
+				       : QColor(205, 210, 218),
+			  value == 0.0 ? 1.5 : 1.0));
+	    p.drawLine(QPointF(left, y), QPointF(left + w, y));
+	    p.setPen(QPen(QColor(60, 65, 70), 1));
+	    p.drawText(QRectF(0, y - 8, left - 5, 16),
+		       Qt::AlignRight | Qt::AlignVCenter,
+		       QString::number(value, 'f', 0));
     }
     p.setPen(QPen(QColor(215, 220, 228), 1));
     for (int i = 0; i < 7; ++i) {
@@ -90,7 +96,7 @@ void SnrPlot::paintEvent(QPaintEvent*)
     p.drawRect(left, top, w, h);
     p.drawText(4, 10, QStringLiteral("dB"));
     p.drawText(QRectF(left, top + h + 3, w, 18), Qt::AlignCenter,
-               QStringLiteral("Last 60 s"));
+	       QStringLiteral("60 s"));
 
     if (finiteValues.size() < 2)
         return;

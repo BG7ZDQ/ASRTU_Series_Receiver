@@ -48,6 +48,11 @@ void sm_decoder_feed_iq(struct sm_decoder *dec, const float *iq, size_t n);
  */
 void sm_decoder_flush(struct sm_decoder *dec);
 
+/* Local extension: synchronized BPSK symbol Es/N0 in dB. NAN before a
+ * successful RS frame, after two seconds of symbols without one, or when
+ * signal/noise power is undefined. Call only on the decoder's feed thread. */
+double sm_decoder_snr(const struct sm_decoder *dec);
+
 /*
  * Pop one decoded frame. Writes SM_FRAME_LEN bytes to @out and the RS
  * byte-correction count to @corrected. Returns 1 if a frame was written,

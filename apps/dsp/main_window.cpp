@@ -533,7 +533,7 @@ void MainWindow::buildUi()
 	infoFont.setBold(true);
 	infoFont.setStyleStrategy(static_cast<QFont::StyleStrategy>(
 	    QFont::PreferAntialias | QFont::PreferQuality));
-	snr_label_ = new QLabel(QStringLiteral("SNR: -- dB"), demod);
+	snr_label_ = new QLabel(QStringLiteral("SNR (Es/N0): -- dB"), demod);
 	frequency_label_ = new QLabel(QStringLiteral("Loop df: -- Hz"), demod);
 	sync_label_ = new QLabel(QStringLiteral("NOSYNC"), demod);
 	for (auto *label : {snr_label_, frequency_label_, sync_label_}) {
@@ -544,9 +544,11 @@ void MainWindow::buildUi()
 	sync_label_->setMinimumWidth(115);
 	setSyncDisplay(false);
 
-	status->addWidget(snr_label_);
-	status->addWidget(frequency_label_);
-	status->addStretch(1);
+	auto *metrics = new QVBoxLayout;
+	metrics->setSpacing(2);
+	metrics->addWidget(snr_label_);
+	metrics->addWidget(frequency_label_);
+	status->addLayout(metrics, 1);
 	status->addWidget(sync_label_);
 	demodLayout->addWidget(statusCard);
 	snr_plot_ = new SnrPlot(demod);
@@ -675,7 +677,8 @@ void MainWindow::updateStatus()
 			input_active_ticks_ = 0;
 			++input_inactive_ticks_;
 			snr_plot_->addGap();
-			snr_label_->setText(QStringLiteral("SNR: -- dB"));
+			snr_label_->setText(
+			    QStringLiteral("SNR (Es/N0): -- dB"));
 			frequency_label_->setText(
 			    QStringLiteral("Loop df: -- Hz"));
 			setSyncDisplay(false);
@@ -703,17 +706,21 @@ void MainWindow::updateStatus()
 			audio_restart_attempts_ = 0;
 		const double snr = flowgraph_->snr();
 		if (std::isfinite(snr)) {
-			snr_plot_->addValue(
-			    snr); // starts immediately, independent of frames
-			snr_label_->setText(
-			    QStringLiteral("SNR: %1 dB").arg(snr, 0, 'f', 2));
+			snr_plot_->addValue(snr);
+			snr_label_->setText(QStringLiteral("SNR (Es/N0): %1 dB")
+						.arg(snr, 0, 'f', 2));
 			const qint64 elapsed = snr_log_timer_.elapsed();
 			if (elapsed - last_snr_log_ms_ >= 1000) {
-				appendLog(QStringLiteral("SVR SNR: %1 dB")
+				appendLog(QStringLiteral("Symbol Es/N0: %1 dB")
 					      .arg(snr, 0, 'f', 6));
 				last_snr_log_ms_ = elapsed;
 			}
+		} else {
+			snr_plot_->addGap();
+			snr_label_->setText(
+			    QStringLiteral("SNR (Es/N0): -- dB"));
 		}
+
 		frequency_label_->setText(
 		    QStringLiteral("Loop df: %1 Hz")
 			.arg(flowgraph_->loopFrequencyHz(), 0, 'f', 1));

@@ -91,7 +91,10 @@ struct sm_costas {
  * Full demodulator state. One instance carries the whole sample-to-symbol
  * chain; sm_demod_run() consumes int16 samples and emits soft real symbols.
  */
+#include "sm_snr.h"
+
 struct sm_demod {
+	struct sm_snr snr;
 	double ddc_phase;
 
 	struct sm_cf agc_buffer[SM_AGC_WINDOW];

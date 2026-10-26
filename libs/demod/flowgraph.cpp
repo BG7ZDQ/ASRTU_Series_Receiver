@@ -3,6 +3,7 @@
 #include "async_wav_recorder_sink.h"
 #include "fec_candidate_sink.h"
 #include "openhoshimi_decoder_sink.h"
+#include <limits>
 #include "shared_iq_source.h"
 #include "wav_iq_source.h"
 #ifdef _WIN32
@@ -33,9 +34,7 @@
 #include <gnuradio/digital/costas_loop_cc.h>
 #include <gnuradio/digital/fll_band_edge_cc.h>
 #include <gnuradio/digital/linear_equalizer.h>
-#include <gnuradio/digital/mpsk_snr_est.h>
 #include <gnuradio/digital/pfb_clock_sync_ccf.h>
-#include <gnuradio/digital/probe_mpsk_snr_est_c.h>
 #include <gnuradio/digital/symbol_sync_cc.h>
 #include <gnuradio/digital/timing_error_detector_type.h>
 #include <gnuradio/fft/window.h>
@@ -421,8 +420,6 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options &options)
 	const auto fec_a = FecCandidateSink::make();
 	const auto fec_b = FecCandidateSink::make();
 
-	snr_probe_ = gr::digital::probe_mpsk_snr_est_c::make(
-	    gr::digital::SNR_EST_SVR, 10000, 0.001);
 	const auto rms = gr::blocks::rms_cf::make(0.0001);
 	const auto db = gr::blocks::nlog10_ff::make(20.0f, 1, 0.0f);
 	rssi_probe_ = gr::blocks::probe_signal_f::make();
@@ -486,9 +483,9 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options &options)
 	frame_monitor_ =
 	    FrameMonitor::make(std::move(callback), options.payload_callback,
 			       options.local_candidate_callback);
-	const auto openHoshimiDecoder = options.enable_openhoshimi_decoder
-					    ? OpenHoshimiDecoderSink::make()
-					    : OpenHoshimiDecoderSink::sptr{};
+	openhoshimi_decoder_ = options.enable_openhoshimi_decoder
+				   ? OpenHoshimiDecoderSink::make()
+				   : OpenHoshimiDecoderSink::sptr{};
 
 	if (!complexInput)
 		tb_->connect(source, 0, to_complex, 0);
@@ -551,8 +548,8 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options &options)
 	tb_->connect(mixer, 0, gain, 0);
 	// The reference decoder owns its exact LPF/AGC/FLL/Gardner/Costas
 	// chain, so branch before the native receiver's low-pass filter.
-	if (openHoshimiDecoder)
-		tb_->connect(gain, 0, openHoshimiDecoder, 0);
+	if (openhoshimi_decoder_)
+		tb_->connect(gain, 0, openhoshimi_decoder_, 0);
 	tb_->connect(gain, 0, lowpass, 0);
 	if (options.enable_gui) {
 		if (options.fast_playback) {
@@ -606,7 +603,6 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options &options)
 	tb_->connect(costas_, 0, equalizer, 0);
 	tb_->connect(equalizer, 0, sanitize, 0);
 	tb_->connect(sanitize, 0, to_real, 0);
-	tb_->connect(sanitize, 0, snr_probe_, 0);
 	if (options.enable_gui)
 		tb_->connect(sanitize, 0, constellation_sink_, 0);
 	tb_->connect(to_real, 0, viterbi_a, 0);
@@ -617,10 +613,10 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options &options)
 	tb_->connect(unpack_a, 0, fec_a, 0);
 	tb_->connect(unpack_b, 0, fec_b, 0);
 
-	if (openHoshimiDecoder) {
-		tb_->msg_connect(openHoshimiDecoder, "out", frame_monitor_,
+	if (openhoshimi_decoder_) {
+		tb_->msg_connect(openhoshimi_decoder_, "out", frame_monitor_,
 				 "openhoshimi");
-		tb_->msg_connect(openHoshimiDecoder, "failed", frame_monitor_,
+		tb_->msg_connect(openhoshimi_decoder_, "failed", frame_monitor_,
 				 "local_openhoshimi");
 	}
 
@@ -667,7 +663,8 @@ void AsrtuFlowgraph::waitForCompletion()
 
 double AsrtuFlowgraph::snr() const
 {
-	return snr_probe_->snr();
+	return openhoshimi_decoder_ ? openhoshimi_decoder_->snr()
+				    : std::numeric_limits<double>::quiet_NaN();
 }
 double AsrtuFlowgraph::rssi() const
 {

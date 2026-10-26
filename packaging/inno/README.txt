@@ -62,7 +62,9 @@ SDRSHARP_NOTICE.txt。启动器内置基于 SGP4 的卫星跟踪与多普勒控�
 PID 和启动检查结果，不再重定向 ncurses 画面，因此不会出现 ANSI 控制码。
 若代理立即退出，启动器会显示退出代码。套件内附代理所需的 xterm 终端描述。
 
-decoder.log 每秒保存一次界面所用的 GNU Radio SVR SNR 估计值；每个成功 FEC
+decoder.log 每秒保存一次有效的 OpenHoshimi 同步符号 Es/N0 估计值；每个成功 FEC
 帧以 GNU Radio Message Debug 风格完整保存全部 223 字节，不再截断为前 64 字节。
 本地内存共享 RAW 模式 I/Q 桥接连续 0.5 秒没有新样本时，SNR 曲线显示为空缺，SNR 与
 环路频偏不再沿用旧值，同步状态切换为 NOSYNC；样本恢复后自动继续。
+SNR 需要 OpenHoshimi 成功解出 RS 帧，连续两秒符号数据没有有效帧时显示 --。
+历史图始终包含 0 dB 和整数刻度；符号 Es/N0 不等同于接收带宽内的射频信噪比。

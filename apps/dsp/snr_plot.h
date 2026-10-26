@@ -2,6 +2,7 @@
 
 #include <QVector>
 #include <QWidget>
+#include "snr_scale.h"
 
 class SnrPlot final : public QWidget
 {
@@ -16,5 +17,6 @@ protected:
 
 private:
     QVector<double> values_;
+    SnrScale scale_;
     static constexpr int kMaxPoints = 300; // 200 ms * 300 = 60 s
 };

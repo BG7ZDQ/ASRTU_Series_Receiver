@@ -62,15 +62,18 @@ bool OpenHoshimiDecoderSink::stop()
 
 void OpenHoshimiDecoderSink::publishQueuedFrames()
 {
-    std::array<std::uint8_t, SM_FRAME_LEN> frame{};
-    int corrected = 0;
-    while (sm_decoder_poll(static_cast<sm_decoder*>(decoder_.get()),
-                           frame.data(), &corrected)) {
-        auto metadata = pmt::make_dict();
-        metadata = pmt::dict_add(metadata, pmt::intern("rs_corrected"),
-                                 pmt::from_long(corrected));
-        const auto bytes = pmt::init_u8vector(frame.size(), frame.data());
-        message_port_pub(pmt::intern(corrected < 0 ? "failed" : "out"),
-                         pmt::cons(metadata, bytes));
-    }
+	snr_db_.store(sm_decoder_snr(static_cast<sm_decoder *>(decoder_.get())),
+		      std::memory_order_relaxed);
+	std::array<std::uint8_t, SM_FRAME_LEN> frame{};
+	int corrected = 0;
+	while (sm_decoder_poll(static_cast<sm_decoder *>(decoder_.get()),
+			       frame.data(), &corrected)) {
+		auto metadata = pmt::make_dict();
+		metadata = pmt::dict_add(metadata, pmt::intern("rs_corrected"),
+					 pmt::from_long(corrected));
+		const auto bytes =
+		    pmt::init_u8vector(frame.size(), frame.data());
+		message_port_pub(pmt::intern(corrected < 0 ? "failed" : "out"),
+				 pmt::cons(metadata, bytes));
+	}
 }

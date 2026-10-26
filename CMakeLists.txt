@@ -384,6 +384,15 @@ asrtu_enable_strict_warnings(ASRTU1_Benchmark)
 endif()
 
 if(BUILD_TESTING)
+    add_executable(ASRTU1_SnrTest tests/snr_test.cpp)
+    target_include_directories(ASRTU1_SnrTest PRIVATE apps/dsp)
+    target_link_libraries(ASRTU1_SnrTest PRIVATE openhoshimi_soundmodem)
+    if(UNIX)
+        target_link_libraries(ASRTU1_SnrTest PRIVATE m)
+    endif()
+    asrtu_enable_strict_warnings(ASRTU1_SnrTest)
+    add_test(NAME snr_estimation_and_scale COMMAND ASRTU1_SnrTest)
+
     add_executable(ASRTU1_LauncherSdrTest tests/launcher_sdr_test.cpp libs/common/audio_devices.cpp
         libs/common/translation.cpp libs/common/runtime_paths.cpp
         apps/launcher/launcher_resources.qrc apps/dsp/application_icons.qrc)
