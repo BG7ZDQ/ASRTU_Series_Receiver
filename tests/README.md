@@ -9,6 +9,8 @@ Maintenance scripts that generate translations, icons, and release archives belo
 `snr_estimation_and_scale` checks synchronized BPSK Es/N0 against known
 signal/noise powers from -5 to 20 dB and across input gains, sustained estimates
 without frames, silence/nonfinite input, and integer grid scales including zero.
+It also verifies audio-time history at 1x/30x replay, the 60-second cutoff,
+irregular processing progress, invalid readings, pause/EOF and restart.
 The 1.5.5 issue #27 regression also replayed SatNOGS JAMX observation 14907288:
 329 unique 223-byte frames, primary 310 / OpenHoshimi 303, with exactly the
 same payload hash set as before the SNR change. Recording files stay local.

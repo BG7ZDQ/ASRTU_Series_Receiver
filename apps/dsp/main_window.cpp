@@ -723,8 +723,8 @@ void MainWindow::updateStatus()
 		    locked ? flowgraph_->snr() : flowgraph_->svrSnr();
 		const QString snrPrefix = locked ? QStringLiteral("SNR (Es/N0)")
 						 : QStringLiteral("SNR (SVR)");
-		if (std::isfinite(snr)) {
-			snr_plot_->addValue(snr);
+		if (snr_plot_->addValue(snr,
+					flowgraph_->processedInputSeconds())) {
 			snr_label_->setText(QStringLiteral("%1: %2 dB")
 						.arg(snrPrefix)
 						.arg(snr, 0, 'f', 2));

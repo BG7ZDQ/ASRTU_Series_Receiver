@@ -1,4 +1,5 @@
 #include "snr_scale.h"
+#include "snr_history.h"
 extern "C" {
 #include "sm_api.h"
 #include "sm_snr.h"
@@ -95,6 +96,43 @@ int main()
 				    6,
 				"Crowded grid");
 		}
+		// Two UI updates 100 ms apart must represent different amounts
+		// of audio at 1x versus 30x; irregular actual progress is
+		// authoritative.
+		SnrHistory realtime, fast;
+		realtime.add(1.0, 0.1);
+		realtime.add(2.0, 0.2);
+		fast.add(1.0, 3.0);
+		fast.add(2.0, 6.0);
+		require(
+		    std::abs((1.0 - fast.position(fast.points().front())) /
+				 (1.0 - realtime.position(
+					    realtime.points().front())) -
+			     30.0) < 1e-9,
+		    "Fast replay does not advance the time axis by audio time");
+		for (int i = 3; i <= 40; ++i)
+			fast.add(2.0, 3.0 * i);
+		require(fast.points().size() == 21 &&
+			    fast.points().front().seconds == 60.0 &&
+			    fast.points().back().seconds == 120.0,
+			"Replay history is not the last 60 audio seconds");
+		require(!fast.add(9.0, 120.0) &&
+			    fast.points().back().value == 2.0,
+			"Paused/EOF input changed the SNR display");
+		require(!fast.add(std::numeric_limits<double>::quiet_NaN(),
+				  130.0) &&
+			    fast.points().back().seconds == 120.0,
+			"Invalid SNR advanced history");
+		fast.add(3.0, 151.5);
+		require(
+		    std::abs(fast.position(fast.points().front()) - 0.025) <
+			1e-9,
+		    "Irregular audio progress was replaced with a fixed tick");
+		fast.add(4.0, 1.0);
+		require(fast.points().size() == 1 &&
+			    fast.position(fast.points().back()) == 1.0,
+			"Restarted replay retained timestamps from the "
+			"previous stream");
 		std::cout << "SNR calibration, validity, silence and scale "
 			     "checks passed\n";
 	} catch (const std::exception &e) {

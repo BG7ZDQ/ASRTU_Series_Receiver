@@ -57,8 +57,13 @@ After 500 ms without fresh input, the GUI freezes the last SNR label and
 history rather than clearing or advancing them. The lock lamp still turns
 red. Stop/EOF also freezes the display. Resuming samples resets acquisition
 and the estimator, then updates resume. Frozen values are historical, not
-new measurements. The plot holds 600 valid updates (nominally 60 seconds
-at 100 ms); invalid results and paused time do not consume history. A benchmark with
+new measurements. The plot spans the last 60 seconds of processed audio,
+using the decoder's consumed sample count at 48 kHz rather than counting
+100 ms GUI ticks. Fast replay advances the axis with actual audio progress
+(e.g. 30x replay covers 60 audio seconds in about two wall-clock seconds),
+even if processing cannot sustain the requested speed. No new samples means
+no new point, including at EOF. Invalid SNR keeps the last valid display;
+the next valid point uses its true audio timestamp. A benchmark with
 `--no-openhoshimi` has no synchronized SNR (JSON null). The benchmark field
 `final_symbol_esn0_db` contains synchronized Es/N0 only; `final_svr_snr_db`
 reports the separate primary-path SVR result.

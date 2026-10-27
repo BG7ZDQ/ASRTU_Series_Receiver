@@ -12,29 +12,19 @@ SnrPlot::SnrPlot(QWidget* parent) : QWidget(parent)
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 }
 
-void SnrPlot::addValue(double value)
+bool SnrPlot::addValue(double value, double audioSeconds)
 {
-    if (std::isfinite(value) && std::abs(value) < 1000.0) {
-        values_.append(value);
-        if (values_.size() > kMaxPoints)
-            values_.remove(0, values_.size() - kMaxPoints);
-    }
-    update();
-}
-
-void SnrPlot::addGap()
-{
-    values_.append(std::numeric_limits<double>::quiet_NaN());
-    if (values_.size() > kMaxPoints)
-        values_.remove(0, values_.size() - kMaxPoints);
-    update();
+	if (!history_.add(value, audioSeconds))
+		return false;
+	update();
+	return true;
 }
 
 void SnrPlot::clear()
 {
-    values_.clear();
-    scale_ = {};
-    update();
+	history_.clear();
+	scale_ = {};
+	update();
 }
 
 void SnrPlot::paintEvent(QPaintEvent*)
@@ -49,11 +39,9 @@ void SnrPlot::paintEvent(QPaintEvent*)
 
     double ymin = -5.0, ymax = 20.0;
     QVector<double> finiteValues;
-    finiteValues.reserve(values_.size());
-    for (const double value : values_) {
-        if (std::isfinite(value))
-            finiteValues.append(value);
-    }
+    finiteValues.reserve(int(history_.points().size()));
+    for (const auto &point : history_.points())
+	    finiteValues.append(point.value);
     if (!finiteValues.isEmpty()) {
         const auto mm = std::minmax_element(finiteValues.cbegin(), finiteValues.cend());
         const double vmin = *mm.first, vmax = *mm.second;
@@ -101,21 +89,17 @@ void SnrPlot::paintEvent(QPaintEvent*)
     if (finiteValues.size() < 2)
         return;
     QPainterPath path;
-    const int start = kMaxPoints - values_.size();
     bool segmentOpen = false;
-    for (int i = 0; i < values_.size(); ++i) {
-        if (!std::isfinite(values_[i])) {
-            segmentOpen = false;
-            continue;
-        }
-        const double x = left + (start + i) * w / double(kMaxPoints - 1);
-        const double y = top + (ymax - values_[i]) * h / std::max(0.001, ymax - ymin);
-        if (!segmentOpen) {
-            path.moveTo(x, y);
-            segmentOpen = true;
-        } else {
-            path.lineTo(x, y);
-        }
+    for (const auto &point : history_.points()) {
+	    const double x = left + history_.position(point) * w;
+	    const double y =
+		top + (ymax - point.value) * h / std::max(0.001, ymax - ymin);
+	    if (!segmentOpen) {
+		    path.moveTo(x, y);
+		    segmentOpen = true;
+	    } else {
+		    path.lineTo(x, y);
+	    }
     }
     p.setPen(QPen(QColor(0, 110, 220), 2));
     p.drawPath(path);

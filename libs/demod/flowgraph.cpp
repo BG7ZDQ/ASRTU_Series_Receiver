@@ -677,6 +677,13 @@ double AsrtuFlowgraph::svrSnr() const
 	return snr_probe_->snr();
 }
 
+double AsrtuFlowgraph::processedInputSeconds() const
+{
+	return openhoshimi_decoder_
+		   ? double(openhoshimi_decoder_->processedSamples()) / kIfRate
+		   : 0.0;
+}
+
 double AsrtuFlowgraph::rssi() const
 {
 	return rssi_probe_->level();

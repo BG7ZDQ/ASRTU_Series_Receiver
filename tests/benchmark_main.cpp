@@ -131,6 +131,8 @@ int main(int argc, char* argv[])
 	 flowgraph.stereoIqContentMismatch()},
 	{QStringLiteral("final_symbol_esn0_db"), flowgraph.snr()},
 	{QStringLiteral("final_svr_snr_db"), flowgraph.svrSnr()},
+	{QStringLiteral("processed_audio_seconds"),
+	 flowgraph.processedInputSeconds()},
 	{QStringLiteral("first_frame_log"), firstFrameLog},
 	{QStringLiteral("complete_223_count"),
 	 std::count(frameLengths.begin(), frameLengths.end(), 223)},

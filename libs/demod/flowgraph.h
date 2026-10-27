@@ -74,6 +74,8 @@ class AsrtuFlowgraph final
 
 	double snr() const;
 	double svrSnr() const;
+	// Audio time consumed by the decoder, independent of replay speed.
+	double processedInputSeconds() const;
 	double rssi() const;
 	double loopFrequencyHz() const;
 	bool stereoIqContentMismatch() const;

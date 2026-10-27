@@ -76,6 +76,10 @@ int OpenHoshimiDecoderSink::work(int noutput_items,
 				now);
     }
     publishQueuedFrames();
+    if (noutput_items > 0)
+	    processed_samples_.fetch_add(
+		static_cast<std::uint64_t>(noutput_items),
+		std::memory_order_release);
     return noutput_items;
 }
 
