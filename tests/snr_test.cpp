@@ -77,10 +77,10 @@ int main()
 			"Silent decoder acquired SNR");
 		sm_decoder_free(decoder);
 
-		for (const auto range : {std::pair<double, double>{12.1, 12.2},
-					 {-25.0, -20.0},
-					 {-30.0, 70.0},
-					 {900.0, 999.0}}) {
+		for (const auto &range : {std::pair<double, double>{12.1, 12.2},
+					  {-25.0, -20.0},
+					  {-30.0, 70.0},
+					  {900.0, 999.0}}) {
 			const auto scale = snrScale(range.first, range.second);
 			require(scale.minimum <= 0 && scale.maximum >= 0,
 				"Zero not visible");
