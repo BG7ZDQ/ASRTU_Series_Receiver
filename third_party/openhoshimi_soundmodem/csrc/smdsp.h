@@ -92,9 +92,11 @@ struct sm_costas {
  * chain; sm_demod_run() consumes int16 samples and emits soft real symbols.
  */
 #include "sm_snr.h"
+#include "sm_lock.h"
 
 struct sm_demod {
 	struct sm_snr snr;
+	struct sm_lock lock;
 	double ddc_phase;
 
 	struct sm_cf agc_buffer[SM_AGC_WINDOW];

@@ -14,9 +14,15 @@
 int main()
 {
 	std::atomic<int> candidates{0};
-	const auto monitor = FrameMonitor::make({}, {}, [&](const auto &) {
-		candidates.fetch_add(1, std::memory_order_relaxed);
-	});
+	std::atomic<int> receivedPackets{0};
+	const auto monitor = FrameMonitor::make(
+	    {},
+	    [&](const auto &) {
+		    receivedPackets.fetch_add(1, std::memory_order_relaxed);
+	    },
+	    [&](const auto &) {
+		    candidates.fetch_add(1, std::memory_order_relaxed);
+	    });
 	const auto local = gr::blocks::message_debug::make();
 	const auto graph = gr::make_top_block("frame-monitor-test");
 	std::vector<std::uint8_t> payload(223);
@@ -74,7 +80,7 @@ int main()
 	}
 	if (!normalized || monitor->frameCount() != 8 ||
 	    monitor->suppressedDuplicateCount() != 7 ||
-	    candidates.load() != 2) {
+	    candidates.load() != 2 || receivedPackets.load() != 1) {
 		std::cerr << "Frame monitor arbitration failed\n";
 		return 1;
 	}

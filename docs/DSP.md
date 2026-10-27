@@ -4,8 +4,33 @@ Native Qt5/GNU Radio 3.10 rewrite of `demod_asrtu1_audio.grc`.
 
 It retains the live input spectrum, waterfall, RSSI bar, BPSK constellation,
 loop spectrum, SNR history, loop frequency offset, FEC frame monitoring and
-`SYNCED`/`NOSYNC` status. `SYNCED` means that a valid FEC PDU was produced
-on either decoder during the previous 1.5 seconds.
+`LOCKED`/`UNLOCKED` status. The lamp now observes the OpenHoshimi
+carrier/timing loops independently of FEC frames. The primary GNU Radio
+constellation and loop-offset plots remain diagnostics of the primary path;
+they do not drive this lamp.
+
+The title bar refreshes the session packet total on the existing 100 ms status
+timer. It counts valid 223-byte payloads after the shared two-second duplicate
+suppression, excluding failed FEC/SSDV recovery candidates. The atomic counter
+belongs to the window, so input restarts/device changes preserve it; reopening
+the window resets it. It measures reception, not upload acknowledgements.
+
+The detector uses 1920-symbol (about 200 ms) windows after Gardner/Costas:
+DC-removed I/Q second moments must show a real-axis BPSK constellation,
+the normalized mean Gardner timing error must be small, and FLL, Costas
+and timing-frequency estimates must stay away from their limits. Acquire
+thresholds are axis/power > 0.25, |2 IQ covariance|/axis < 0.4 and
+|summed timing error|/power < 0.15; hold thresholds are 0.15, 0.8 and 0.25.
+At least 99% of the window's observed loop-limit checks must pass.
+Three consecutive good windows acquire lock, two bad windows release it.
+These are a practical lock estimate, not a guarantee of correct data or an
+absolute sensitivity specification. Circular noise, silence, stationary CW,
+rotating symbols and unsettled timing are covered by regression tests.
+
+The GUI also requires fresh decoder input (less than 500 ms old). Stop or
+EOF clears the lamp; after an input gap the detector must acquire again.
+`LOCKED` can appear before any valid frame. It does not certify successful
+CCSDS synchronization or FEC: use decoded frames/logs for that.
 
 The SNR readout is now synchronized BPSK symbol **Es/N0** from the OpenHoshimi
 Gardner/Costas output, replacing the primary path's blind SVR probe. For
@@ -15,7 +40,8 @@ windows (approximately 200 ms). The result is `10 log10(signal/noise)`.
 Residual phase/timing error, interference and noncircular noise can bias it;
 it is not RF C/N over the receiver bandwidth, nor information-bit Eb/N0.
 
-A successful OpenHoshimi RS frame is required before displaying the estimate.
+A locked demodulator and a successful OpenHoshimi RS frame are required before
+displaying the estimate. A green lamp with `SNR: --` is therefore possible.
 After two seconds of symbols without another valid RS frame, silence,
 nonfinite input, or undefined signal/noise powers, the readout is `--` and
 the history has a gap. No-input detection also inserts gaps. A benchmark with

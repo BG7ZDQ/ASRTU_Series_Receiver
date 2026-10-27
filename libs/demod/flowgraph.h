@@ -76,7 +76,7 @@ class AsrtuFlowgraph final
 	double loopFrequencyHz() const;
 	bool stereoIqContentMismatch() const;
 	bool inputActive(double timeoutSeconds = 0.5) const;
-	bool synced(double timeoutSeconds = 1.5) const;
+	bool demodLocked() const;
 	std::uint64_t frameCount() const;
 	std::uint64_t primaryFrameCount() const;
 	std::uint64_t openHoshimiFrameCount() const;

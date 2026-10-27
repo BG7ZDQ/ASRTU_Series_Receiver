@@ -717,10 +717,10 @@ double AsrtuFlowgraph::loopFrequencyHz() const
 	return fllHz + costasHz;
 }
 
-bool AsrtuFlowgraph::synced(double timeoutSeconds) const
+bool AsrtuFlowgraph::demodLocked() const
 {
-	return frame_monitor_->frameCount() > 0 &&
-	       frame_monitor_->secondsSinceFrame() <= timeoutSeconds;
+	return running_ && inputActive() && openhoshimi_decoder_ &&
+	       openhoshimi_decoder_->locked();
 }
 
 std::uint64_t AsrtuFlowgraph::frameCount() const

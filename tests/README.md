@@ -24,3 +24,12 @@ The native bridge test uses private mapping names and tests ownership, crash
 recovery, ring wraparound, and Doppler freshness. The managed test verifies
 SDR# contention and interoperability with the native ownership token. It exits
 without changing anything if production I/Q shared memory already exists.
+
+`demod_loop_lock` checks lock hysteresis, invalid-input reset, noise/CW/rotation
+and unsettled-timing rejection, and the 500 ms wall-clock freshness gate. It
+also feeds five seconds of random BPSK through the actual decoder with a
+100 Hz frequency offset: the loops must lock without any valid CCSDS frame.
+
+`frame_monitor` also checks that the callback used for the title-bar packet
+total fires only once for eight duplicate valid decoder results, and excludes
+short payloads and failed local recovery candidates.

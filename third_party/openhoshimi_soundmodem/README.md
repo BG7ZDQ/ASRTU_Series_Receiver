@@ -17,3 +17,7 @@ observes the existing Gardner/Costas output without changing decoder samples.
 A successful RS frame gates validity; see [DSP notes](../../docs/DSP.md) for
 the estimator assumptions and timeout. These additions are local, not an
 upstream-provided SNR interface.
+
+`sm_decoder_locked()` exposes a local carrier/timing lock detector independent
+of frame reception. `sm_decoder_reset_lock()` clears acquisition history after
+an input gap. The observer does not alter the DSP loop feedback or soft symbols.

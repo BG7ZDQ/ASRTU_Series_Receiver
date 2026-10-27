@@ -53,6 +53,11 @@ void sm_decoder_flush(struct sm_decoder *dec);
  * signal/noise power is undefined. Call only on the decoder's feed thread. */
 double sm_decoder_snr(const struct sm_decoder *dec);
 
+/* Local extension: carrier/timing lock independent of FEC. Feed-thread only.
+ * Reset the detector after an input gap before feeding resumed samples. */
+int sm_decoder_locked(const struct sm_decoder *dec);
+void sm_decoder_reset_lock(struct sm_decoder *dec);
+
 /*
  * Pop one decoded frame. Writes SM_FRAME_LEN bytes to @out and the RS
  * byte-correction count to @corrected. Returns 1 if a frame was written,

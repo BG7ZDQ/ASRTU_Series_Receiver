@@ -41,6 +41,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <functional>
+#include <limits>
 #include <stdexcept>
 #include <thread>
 
@@ -307,9 +308,7 @@ QString compactSessionPath(const QString &sessionDirectory, const QString &path)
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 {
-	setWindowTitle(
-	    QCoreApplication::translate("ASRTU", "阿斯图系列卫星接收解码") +
-	    QStringLiteral(" v") + QStringLiteral(ASRTU_VERSION));
+	updateWindowTitle();
 	setMinimumSize(760, 640);
 	if (const QScreen *screen = QGuiApplication::primaryScreen()) {
 		const QSize available = screen->availableGeometry().size();
@@ -535,21 +534,23 @@ void MainWindow::buildUi()
 	    QFont::PreferAntialias | QFont::PreferQuality));
 	snr_label_ = new QLabel(QStringLiteral("SNR (Es/N0): -- dB"), demod);
 	frequency_label_ = new QLabel(QStringLiteral("Loop df: -- Hz"), demod);
-	sync_label_ = new QLabel(QStringLiteral("NOSYNC"), demod);
-	for (auto *label : {snr_label_, frequency_label_, sync_label_}) {
+	lock_label_ = new QLabel(QStringLiteral("UNLOCKED"), demod);
+	for (auto *label : {snr_label_, frequency_label_, lock_label_}) {
 		label->setFont(infoFont);
 		label->setObjectName(QStringLiteral("metric"));
 	}
-	sync_label_->setAlignment(Qt::AlignCenter);
-	sync_label_->setMinimumWidth(115);
-	setSyncDisplay(false);
+	lock_label_->setAlignment(Qt::AlignCenter);
+	lock_label_->setMinimumWidth(115);
+	lock_label_->setToolTip(
+	    QStringLiteral("OpenHoshimi FLL / Gardner / Costas"));
+	setLockDisplay(false);
 
 	auto *metrics = new QVBoxLayout;
 	metrics->setSpacing(2);
 	metrics->addWidget(snr_label_);
 	metrics->addWidget(frequency_label_);
 	status->addLayout(metrics, 1);
-	status->addWidget(sync_label_);
+	status->addWidget(lock_label_);
 	demodLayout->addWidget(statusCard);
 	snr_plot_ = new SnrPlot(demod);
 	snr_plot_->setMaximumHeight(130);
@@ -621,10 +622,26 @@ void MainWindow::buildUi()
 	}
 }
 
+void MainWindow::updateWindowTitle()
+{
+	const QString title =
+	    QCoreApplication::translate("ASRTU", "阿斯图系列卫星接收解码") +
+	    QStringLiteral(" v") + QStringLiteral(ASRTU_VERSION) +
+	    QStringLiteral(" | ") +
+	    QCoreApplication::translate("ASRTU", "已接收 %1 包")
+		.arg(qulonglong(
+		    received_packet_count_.load(std::memory_order_relaxed)));
+	if (windowTitle() != title)
+		setWindowTitle(title);
+}
+
 void MainWindow::updateStatus()
 {
+	updateWindowTitle();
 	if (!flowgraph_ || !flowgraph_->running()) {
-		setSyncDisplay(false);
+		setLockDisplay(false);
+		snr_plot_->addGap();
+		snr_label_->setText(QStringLiteral("SNR (Es/N0): -- dB"));
 		return;
 	}
 	try {
@@ -681,7 +698,7 @@ void MainWindow::updateStatus()
 			    QStringLiteral("SNR (Es/N0): -- dB"));
 			frequency_label_->setText(
 			    QStringLiteral("Loop df: -- Hz"));
-			setSyncDisplay(false);
+			setLockDisplay(false);
 			if (playback_path_.isEmpty() && !shared_iq_bridge_ &&
 			    !audio_switch_in_progress_ &&
 			    input_inactive_ticks_ >= 20 &&
@@ -704,7 +721,10 @@ void MainWindow::updateStatus()
 		input_inactive_ticks_ = 0;
 		if (++input_active_ticks_ >= 50)
 			audio_restart_attempts_ = 0;
-		const double snr = flowgraph_->snr();
+		const bool locked = flowgraph_->demodLocked();
+		const double snr =
+		    locked ? flowgraph_->snr()
+			   : std::numeric_limits<double>::quiet_NaN();
 		if (std::isfinite(snr)) {
 			snr_plot_->addValue(snr);
 			snr_label_->setText(QStringLiteral("SNR (Es/N0): %1 dB")
@@ -746,25 +766,28 @@ void MainWindow::updateStatus()
 			}
 			rssi_meter_->setReading(rssi, rssi_min_, rssi_max_);
 		}
-		setSyncDisplay(flowgraph_->synced(2.0));
+		setLockDisplay(locked);
 	} catch (const std::exception &e) {
+		setLockDisplay(false);
+		snr_plot_->addGap();
+		snr_label_->setText(QStringLiteral("SNR (Es/N0): -- dB"));
 		appendLog(QStringLiteral("Status read failed: %1")
 			      .arg(QString::fromUtf8(e.what())));
 	}
 }
 
-void MainWindow::setSyncDisplay(bool synced)
+void MainWindow::setLockDisplay(bool locked)
 {
-	if (sync_display_valid_ && synced == sync_display_synced_)
+	if (lock_display_valid_ && locked == lock_display_locked_)
 		return;
-	sync_display_valid_ = true;
-	sync_display_synced_ = synced;
-	sync_label_->setText(synced ? QStringLiteral("SYNCED")
-				    : QStringLiteral("NOSYNC"));
-	sync_label_->setStyleSheet(
+	lock_display_valid_ = true;
+	lock_display_locked_ = locked;
+	lock_label_->setText(locked ? QStringLiteral("LOCKED")
+				    : QStringLiteral("UNLOCKED"));
+	lock_label_->setStyleSheet(
 	    QStringLiteral("QLabel { color:white; background:%1; "
 			   "border-radius:3px; padding:3px 10px; }")
-		.arg(synced ? QStringLiteral("#159447")
+		.arg(locked ? QStringLiteral("#159447")
 			    : QStringLiteral("#b43b3b")));
 }
 
@@ -798,6 +821,11 @@ MainWindow::createFlowgraph(int deviceId, const QString &recordingPath)
 	options.audio_device_id = deviceId;
 	options.payload_callback =
 	    [this](const std::vector<std::uint8_t> &payload) {
+		    // Only valid frames surviving the shared decoder
+		    // deduplicator reach this callback. Keep the session total
+		    // across restarts.
+		    received_packet_count_.fetch_add(1,
+						     std::memory_order_relaxed);
 		    const QByteArray frame(
 			reinterpret_cast<const char *>(payload.data()),
 			int(payload.size()));
@@ -891,7 +919,7 @@ void MainWindow::switchAudioDevice(int deviceId, bool forceRestart)
 		      .arg(audio_device_id_)
 		      .arg(deviceId));
 	status_timer_->stop();
-	setSyncDisplay(false);
+	setLockDisplay(false);
 	audio_switch_in_progress_ = true;
 	pending_audio_device_id_ = -1;
 	const int oldDeviceId = audio_device_id_;

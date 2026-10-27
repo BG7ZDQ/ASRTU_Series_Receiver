@@ -4,6 +4,7 @@
 #include <QElapsedTimer>
 #include <QMainWindow>
 #include <QByteArray>
+#include <atomic>
 #include <cstdint>
 #include <memory>
 
@@ -28,9 +29,10 @@ class MainWindow final : public QMainWindow
 
       private:
 	void updateStatus();
+	void updateWindowTitle();
 	void buildUi();
 	void appendLog(const QString &text);
-	void setSyncDisplay(bool synced);
+	void setLockDisplay(bool locked);
 	void setupControlServer();
 	void handleControlSocket(QLocalSocket *socket);
 	void switchAudioDevice(int deviceId, bool forceRestart = false);
@@ -46,10 +48,11 @@ class MainWindow final : public QMainWindow
 	RssiMeter *rssi_meter_ = nullptr;
 	QLabel *snr_label_ = nullptr;
 	QLabel *frequency_label_ = nullptr;
-	QLabel *sync_label_ = nullptr;
+	QLabel *lock_label_ = nullptr;
 	QTimer *status_timer_ = nullptr;
-	bool sync_display_valid_ = false;
-	bool sync_display_synced_ = false;
+	std::atomic<std::uint64_t> received_packet_count_{0};
+	bool lock_display_valid_ = false;
+	bool lock_display_locked_ = false;
 	QFile log_file_;
 	QElapsedTimer snr_log_timer_;
 	QString session_directory_;

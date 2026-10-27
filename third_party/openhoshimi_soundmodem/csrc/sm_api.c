@@ -111,6 +111,17 @@ double sm_decoder_snr(const struct sm_decoder *dec)
 	return dec ? sm_snr_read(&dec->demod.snr) : NAN;
 }
 
+int sm_decoder_locked(const struct sm_decoder *dec)
+{
+	return dec && dec->demod.lock.locked;
+}
+
+void sm_decoder_reset_lock(struct sm_decoder *dec)
+{
+	if (dec)
+		sm_lock_init(&dec->demod.lock);
+}
+
 /* Push one phase's soft symbols through Viterbi -> unpack -> CCSDS. */
 static void sm_decode_phase(struct sm_phase *ph, const float *syms, size_t n)
 {

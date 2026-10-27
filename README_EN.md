@@ -58,7 +58,7 @@ network PlutoSDR devices, enter a URI such as `ip:192.168.1.10` in
 **PlutoSDR Source → IIO URI**. The bundled RTL-SDR Blog 1.4.0 driver is shared by
 SDR++ and SDR# and supports RTL-SDR Blog V4 / R828D.
 
-The decoder remains `NOSYNC` until SDR# supplies samples. A stale SNR value after SDR# is paused or closed must not be interpreted as an active signal.
+The decoder remains `UNLOCKED` until SDR# supplies samples. A stale SNR value after SDR# is paused or closed must not be interpreted as an active signal.
 
 ### 4. Sound-card input
 
@@ -71,7 +71,8 @@ After choosing the mode and sound card, click **Start Receiver**. Enable **Autom
 - The input waterfall should show a persistent target signal rather than only broadband noise.
 - BPSK constellation points should cluster on the two sides of the I axis.
 - Rising SNR and a stabilizing loop offset indicate that the carrier and timing loops are entering a useful operating region.
-- `SYNCED` means usable frames have been received recently; `NOSYNC` means synchronization has not been obtained or the frame timeout has elapsed.
+- `LOCKED` indicates carrier/timing lock in the OpenHoshimi demodulator; `UNLOCKED` indicates no lock or interrupted input. The lamp does not depend on FEC frames and does not prove successful decoding.
+- The title bar counts valid packets received in this decoder window, counting duplicate decoder results once. Changing audio devices or restarting input preserves the total; reopening the window resets it to zero.
 - Use `FEC frame` and the complete hexadecimal PDU in the log to confirm actual decoding. `Symbol Es/N0` estimates signal quality; SNR alone does not prove successful decoding.
 
 ### 6. Telemetry upload
@@ -87,7 +88,7 @@ Keep the computer clock, callsign, and coordinates accurate. SatNOGS submission 
 
 Click **Satellite / Doppler Tracking** to open Tiny Doppler. You can manage satellite NORAD IDs, names, and multiple frequencies, and configure TLE or GP/OMM JSON sources. Settings are saved in the installed main directory on Windows (or the system configuration directory on Linux/macOS). Verify azimuth, elevation, range, and orbit-data epoch before enabling automatic Doppler in the SDR# plugin.
 
-Doppler correction only adjusts the receiver frequency; it does not prove successful decoding. Use `SYNCED`, FEC frames, and logs as the final criteria.
+Doppler correction only adjusts the receiver frequency; it does not prove successful decoding. Use FEC frames and logs to confirm decoding; loop lock alone is insufficient.
 
 ### 8. Recording and playback
 
@@ -98,7 +99,7 @@ Doppler correction only adjusts the receiver frequency; it does not prove succes
 
 ### 9. Troubleshooting
 
-- **Always NOSYNC:** Check the pass, tuned frequency and Doppler, input mode, and whether the waterfall actually contains a signal.
+- **Always UNLOCKED:** Check the pass, tuned frequency and Doppler, input mode, and whether the waterfall actually contains a signal.
 - **Mirrored or aliased spectrum:** Confirm that mono real IF was not selected as stereo I/Q and that the I/Q channels are not swapped.
 - **No samples after startup:** For shared memory, ensure SDR# is running and its bridge is enabled. For sound-card mode, select an input device that is currently present.
 - **SNR but no frames:** Inspect the constellation, loop offset, and FEC log. A carrier does not guarantee frame synchronization or successful correction.

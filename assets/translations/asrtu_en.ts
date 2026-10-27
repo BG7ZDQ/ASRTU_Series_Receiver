@@ -3,6 +3,10 @@
     <context>
         <name>ASRTU</name>
         <message>
+            <source>已接收 %1 包</source>
+            <translation>Received: %1 packets</translation>
+        </message>
+        <message>
             <source>本地内存共享 RAW 模式 I/Q 桥接（SDR++）</source>
             <translation type="vanished">Local shared-memory RAW I/Q bridge (SDR++)</translation>
         </message>

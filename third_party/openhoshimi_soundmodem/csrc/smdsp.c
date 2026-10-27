@@ -368,7 +368,8 @@ static inline struct sm_cf sm_interp_at(const struct sm_gardner *g, float t_rel)
  * upstream gardner_process_block() (sps = 5, delay D = 3).
  */
 static size_t sm_gardner(struct sm_demod *d, const struct sm_cf *in,
-			 struct sm_cf *out, size_t n, size_t cap)
+			 struct sm_cf *out, float *timing_errors, size_t n,
+			 size_t cap)
 {
 	struct sm_gardner *g = &d->gardner;
 	const float f0 = 1.0f / (float)SM_SPS;
@@ -412,8 +413,10 @@ static size_t sm_gardner(struct sm_demod *d, const struct sm_cf *in,
 			freq = f0 - df;
 		g->freq = freq;
 
-		if (out_cnt < cap)
+		if (out_cnt < cap) {
+			timing_errors[out_cnt] = err;
 			out[out_cnt++] = y_mid;
+		}
 	}
 	return out_cnt;
 }
@@ -459,15 +462,27 @@ static size_t sm_demod_symbols(struct sm_demod *d, const struct sm_cf *bb,
 	struct sm_cf work_a[SM_BLOCK_FRAMES];
 	struct sm_cf work_b[SM_BLOCK_FRAMES];
 	struct sm_cf syms[SM_BLOCK_FRAMES];
+	float timing_errors[SM_BLOCK_FRAMES];
 	size_t n_sym;
 	size_t i;
 
 	sm_agc(d, bb, work_a, n);
 	sm_fll_work(d, work_a, work_b, n);
-	n_sym = sm_gardner(d, work_b, syms, n, SM_BLOCK_FRAMES);
+	n_sym = sm_gardner(d, work_b, syms, timing_errors, n, SM_BLOCK_FRAMES);
 	sm_costas(d, syms, n_sym);
-	for (i = 0; i < n_sym; i++)
+	for (i = 0; i < n_sym; i++) {
+		const int healthy =
+		    isfinite(d->gardner.freq) &&
+		    d->gardner.freq > 0.9901f / SM_SPS &&
+		    d->gardner.freq < 1.0099f / SM_SPS &&
+		    isfinite(d->costas.freq) &&
+		    fabsf(d->costas.freq) < 0.99f * d->costas.max_freq &&
+		    isfinite(d->fll.freq) &&
+		    fabsf(d->fll.freq) < 0.99f * d->fll.max_freq;
+		sm_lock_push(&d->lock, syms[i].re, syms[i].im, timing_errors[i],
+			     healthy);
 		sm_snr_push(&d->snr, syms[i].re, syms[i].im);
+	}
 
 	if (n_sym > cap)
 		n_sym = cap;

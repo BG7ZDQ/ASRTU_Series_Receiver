@@ -9,7 +9,23 @@ extern "C" {
 #include <pmt/pmt.h>
 
 #include <array>
+#include <chrono>
 #include <stdexcept>
+
+namespace
+{
+std::int64_t nowMs()
+{
+	return std::chrono::duration_cast<std::chrono::milliseconds>(
+		   std::chrono::steady_clock::now().time_since_epoch())
+	    .count();
+}
+} // namespace
+
+bool OpenHoshimiDecoderSink::locked() const
+{
+	return lock_status_.locked(nowMs());
+}
 
 OpenHoshimiDecoderSink::sptr OpenHoshimiDecoderSink::make()
 {
@@ -40,6 +56,10 @@ int OpenHoshimiDecoderSink::work(int noutput_items,
                                  gr_vector_void_star&)
 {
     const auto* samples = static_cast<const gr_complex*>(input_items[0]);
+    const auto now = nowMs();
+    if (last_input_ms_ != 0 &&
+	now - last_input_ms_ >= DemodLockStatus::inputTimeoutMs)
+	    sm_decoder_reset_lock(static_cast<sm_decoder *>(decoder_.get()));
     // std::complex<float> is represented by adjacent I/Q floats on all
     // supported GNU Radio targets. Copying also keeps the C ABI independent.
     interleaved_.resize(static_cast<std::size_t>(noutput_items) * 2U);
@@ -49,6 +69,12 @@ int OpenHoshimiDecoderSink::work(int noutput_items,
     }
     sm_decoder_feed_iq(static_cast<sm_decoder*>(decoder_.get()),
                        interleaved_.data(), static_cast<std::size_t>(noutput_items));
+    if (noutput_items > 0) {
+	    last_input_ms_ = now;
+	    lock_status_.update(sm_decoder_locked(static_cast<sm_decoder *>(
+				    decoder_.get())) != 0,
+				now);
+    }
     publishQueuedFrames();
     return noutput_items;
 }
@@ -57,6 +83,7 @@ bool OpenHoshimiDecoderSink::stop()
 {
     sm_decoder_flush(static_cast<sm_decoder*>(decoder_.get()));
     publishQueuedFrames();
+    lock_status_.update(false, 0);
     return gr::sync_block::stop();
 }
 
