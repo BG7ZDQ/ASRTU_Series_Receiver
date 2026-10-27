@@ -7,15 +7,16 @@
 
 class SnrPlot final : public QWidget
 {
-public:
-    explicit SnrPlot(QWidget* parent = nullptr);
-    bool addValue(double value, double audioSeconds);
-    void clear();
+      public:
+	explicit SnrPlot(QWidget *parent = nullptr);
+	bool addValue(double value, double audioSeconds,
+		      bool synchronized = true);
+	void clear();
 
-protected:
-    void paintEvent(QPaintEvent* event) override;
+      protected:
+	void paintEvent(QPaintEvent *event) override;
 
-private:
-  SnrHistory history_;
-  SnrScale scale_;
+      private:
+	SnrHistory history_;
+	SnrScale scale_;
 };

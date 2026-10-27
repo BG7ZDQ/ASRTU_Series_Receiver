@@ -1,7 +1,15 @@
 #pragma once
 
+#include <algorithm>
 #include <cmath>
 #include <deque>
+
+inline constexpr double kSnrFloorDb = -25.0;
+
+inline double clampSnrDb(double value)
+{
+	return std::max(value, kSnrFloorDb);
+}
 
 // Timestamps are decoded audio time, not UI refresh ticks or wall time.
 class SnrHistory final
@@ -10,10 +18,11 @@ class SnrHistory final
 	struct Point {
 		double seconds;
 		double value;
+		bool synchronized = true;
 	};
 	static constexpr double windowSeconds = 60.0;
 
-	bool add(double value, double seconds)
+	bool add(double value, double seconds, bool synchronized = true)
 	{
 		if (!std::isfinite(value) || std::abs(value) >= 1000.0 ||
 		    !std::isfinite(seconds) || seconds <= 0.0)
@@ -26,7 +35,7 @@ class SnrHistory final
 				clear(); // New input stream or replay
 					 // restarted.
 		}
-		points_.push_back({seconds, value});
+		points_.push_back({seconds, clampSnrDb(value), synchronized});
 		while (points_.front().seconds < seconds - windowSeconds)
 			points_.pop_front();
 		return true;

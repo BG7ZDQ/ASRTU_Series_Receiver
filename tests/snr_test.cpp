@@ -133,6 +133,14 @@ int main()
 			    fast.position(fast.points().back()) == 1.0,
 			"Restarted replay retained timestamps from the "
 			"previous stream");
+		SnrHistory clamped;
+		require(clamped.add(-100.0, 1.0, false) &&
+			    clamped.points().back().value == kSnrFloorDb &&
+			    !clamped.points().back().synchronized,
+			"SNR floor or SVR marker was not retained");
+		require(clamped.add(8.0, 2.0, true) &&
+			    clamped.points().back().synchronized,
+			"Es/N0 marker was not retained");
 		std::cout << "SNR calibration, validity, silence and scale "
 			     "checks passed\n";
 	} catch (const std::exception &e) {

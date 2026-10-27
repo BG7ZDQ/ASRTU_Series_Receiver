@@ -1,7 +1,6 @@
 #include "snr_plot.h"
 
 #include <QPainter>
-#include <QPainterPath>
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -12,9 +11,9 @@ SnrPlot::SnrPlot(QWidget* parent) : QWidget(parent)
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 }
 
-bool SnrPlot::addValue(double value, double audioSeconds)
+bool SnrPlot::addValue(double value, double audioSeconds, bool synchronized)
 {
-	if (!history_.add(value, audioSeconds))
+	if (!history_.add(value, audioSeconds, synchronized))
 		return false;
 	update();
 	return true;
@@ -87,20 +86,25 @@ void SnrPlot::paintEvent(QPaintEvent*)
 	       QStringLiteral("60 s"));
 
     if (finiteValues.size() < 2)
-        return;
-    QPainterPath path;
-    bool segmentOpen = false;
+	    return;
+    // Es/N0 is green, SVR is blue. Draw one segment per pair so the color
+    // changes exactly at the algorithm transition without breaking the line.
+    QPointF previous;
+    bool hasPrevious = false;
     for (const auto &point : history_.points()) {
-	    const double x = left + history_.position(point) * w;
-	    const double y =
-		top + (ymax - point.value) * h / std::max(0.001, ymax - ymin);
-	    if (!segmentOpen) {
-		    path.moveTo(x, y);
-		    segmentOpen = true;
-	    } else {
-		    path.lineTo(x, y);
+	    const QPointF current(left + history_.position(point) * w,
+				  top + (ymax - point.value) * h /
+					    std::max(0.001, ymax - ymin));
+	    if (hasPrevious) {
+		    QPen pen(point.synchronized ? QColor(0, 150, 70)
+						: QColor(0, 110, 220),
+			     2);
+		    pen.setCapStyle(Qt::RoundCap);
+		    pen.setJoinStyle(Qt::RoundJoin);
+		    p.setPen(pen);
+		    p.drawLine(previous, current);
 	    }
+	    previous = current;
+	    hasPrevious = true;
     }
-    p.setPen(QPen(QColor(0, 110, 220), 2));
-    p.drawPath(path);
 }

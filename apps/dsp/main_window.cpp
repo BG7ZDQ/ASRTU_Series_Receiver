@@ -693,17 +693,20 @@ void MainWindow::updateStatus()
 		// so the final replay batch is not lost when input stops.
 		std::optional<SnrSample> latestSnr;
 		for (const auto &sample : flowgraph_->takeSnrSamples()) {
-			if (snr_plot_->addValue(sample.value, sample.seconds))
+			if (snr_plot_->addValue(sample.value, sample.seconds,
+						sample.synchronized))
 				latestSnr = sample;
 		}
 		if (latestSnr) {
 			const auto &sample = *latestSnr;
+			const double displayedValue = clampSnrDb(sample.value);
 			const QString prefix =
 			    sample.synchronized ? QStringLiteral("SNR (Es/N0)")
 						: QStringLiteral("SNR (SVR)");
-			snr_label_->setText(QStringLiteral("%1: %2 dB")
-						.arg(prefix)
-						.arg(sample.value, 0, 'f', 2));
+			snr_label_->setText(
+			    QStringLiteral("%1: %2 dB")
+				.arg(prefix)
+				.arg(displayedValue, 0, 'f', 2));
 			const qint64 elapsed = snr_log_timer_.elapsed();
 			if (elapsed - last_snr_log_ms_ >= 1000) {
 				appendLog(
@@ -711,7 +714,7 @@ void MainWindow::updateStatus()
 					.arg(sample.synchronized
 						 ? QString()
 						 : QStringLiteral(" (SVR)"))
-					.arg(sample.value, 0, 'f', 6));
+					.arg(displayedValue, 0, 'f', 6));
 				last_snr_log_ms_ = elapsed;
 			}
 		}

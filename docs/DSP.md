@@ -74,7 +74,11 @@ The GUI drains all accumulated readings on its 100 ms timer; at 30x replay a
 refresh can consume about 15 readings instead of discarding all but the last.
 The nominal 60-second plot therefore retains about 300 intervals at any speed;
 invalid readings are still omitted. Each interval uses its historical loop
-lock to choose Es/N0 or SVR. Primary symbol timestamps use the nominal 9600
+lock to choose Es/N0 or SVR. The plot draws Es/N0 segments in green and SVR
+segments in blue; adjacent segments share their endpoint so an algorithm
+switch is a seamless color change, not a break in the curve. Displayed and
+plotted SNR is clamped to a floor of -25 dB (values below -25 are shown as
+-25); raw benchmark diagnostics remain unclamped. Primary symbol timestamps use the nominal 9600
 baud rate; filter delay and recovered clock variation can slightly offset the
 two paths. The joined buffer holds at most 600 intervals (120 audio seconds),
 keeping memory bounded if the UI stalls. Already consumed intervals cannot
