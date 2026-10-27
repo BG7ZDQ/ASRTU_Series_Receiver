@@ -7,8 +7,8 @@ Large satellite recordings, generated logs, screenshots, build outputs, callsign
 Maintenance scripts that generate translations, icons, and release archives belong in `tools/` and are version controlled. One-off investigation output belongs in ignored `outputs/` or `work/` directories.
 
 `snr_estimation_and_scale` checks synchronized BPSK Es/N0 against known
-signal/noise powers from -5 to 20 dB and across input gains, FEC validity and
-expiry, silence/nonfinite input, and integer grid scales that include zero.
+signal/noise powers from -5 to 20 dB and across input gains, sustained estimates
+without frames, silence/nonfinite input, and integer grid scales including zero.
 The 1.5.5 issue #27 regression also replayed SatNOGS JAMX observation 14907288:
 329 unique 223-byte frames, primary 310 / OpenHoshimi 303, with exactly the
 same payload hash set as before the SNR change. Recording files stay local.
@@ -28,7 +28,11 @@ without changing anything if production I/Q shared memory already exists.
 `demod_loop_lock` checks lock hysteresis, invalid-input reset, noise/CW/rotation
 and unsettled-timing rejection, and the 500 ms wall-clock freshness gate. It
 also feeds five seconds of random BPSK through the actual decoder with a
-100 Hz frequency offset: the loops must lock without any valid CCSDS frame.
+100 Hz frequency offset: the loops must lock and expose finite SNR without any
+valid CCSDS frame. Input-gap reset must clear the estimator; unlocked input
+can expose a blind estimate without falsely lighting the lock indicator.
+M2/M4 tests use exact Gaussian second/fourth moments and rotating symbols
+across -5 to 20 dB and three input gains.
 
 `frame_monitor` also checks that the callback used for the title-bar packet
 total fires only once for eight duplicate valid decoder results, and excludes

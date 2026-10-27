@@ -41,7 +41,6 @@
 #include <cmath>
 #include <cstdlib>
 #include <functional>
-#include <limits>
 #include <stdexcept>
 #include <thread>
 
@@ -640,8 +639,6 @@ void MainWindow::updateStatus()
 	updateWindowTitle();
 	if (!flowgraph_ || !flowgraph_->running()) {
 		setLockDisplay(false);
-		snr_plot_->addGap();
-		snr_label_->setText(QStringLiteral("SNR (Es/N0): -- dB"));
 		return;
 	}
 	try {
@@ -693,9 +690,8 @@ void MainWindow::updateStatus()
 		if (!flowgraph_->inputActive(0.5)) {
 			input_active_ticks_ = 0;
 			++input_inactive_ticks_;
-			snr_plot_->addGap();
-			snr_label_->setText(
-			    QStringLiteral("SNR (Es/N0): -- dB"));
+			// Freeze the last SNR value and history until samples
+			// resume.
 			frequency_label_->setText(
 			    QStringLiteral("Loop df: -- Hz"));
 			setLockDisplay(false);
@@ -722,23 +718,29 @@ void MainWindow::updateStatus()
 		if (++input_active_ticks_ >= 50)
 			audio_restart_attempts_ = 0;
 		const bool locked = flowgraph_->demodLocked();
-		const double snr =
-		    locked ? flowgraph_->snr()
-			   : std::numeric_limits<double>::quiet_NaN();
+		const double snr = flowgraph_->snr();
+		const QString snrPrefix =
+		    locked ? QStringLiteral("SNR (Es/N0)")
+			   : QCoreApplication::translate("ASRTU", "SNR (估算)");
 		if (std::isfinite(snr)) {
 			snr_plot_->addValue(snr);
-			snr_label_->setText(QStringLiteral("SNR (Es/N0): %1 dB")
+			snr_label_->setText(QStringLiteral("%1: %2 dB")
+						.arg(snrPrefix)
 						.arg(snr, 0, 'f', 2));
 			const qint64 elapsed = snr_log_timer_.elapsed();
 			if (elapsed - last_snr_log_ms_ >= 1000) {
-				appendLog(QStringLiteral("Symbol Es/N0: %1 dB")
-					      .arg(snr, 0, 'f', 6));
+				appendLog(
+				    QStringLiteral("Symbol Es/N0%1: %2 dB")
+					.arg(locked ? QString()
+						    : QStringLiteral(
+							  " (blind M2/M4)"))
+					.arg(snr, 0, 'f', 6));
 				last_snr_log_ms_ = elapsed;
 			}
 		} else {
 			snr_plot_->addGap();
 			snr_label_->setText(
-			    QStringLiteral("SNR (Es/N0): -- dB"));
+			    QStringLiteral("%1: -- dB").arg(snrPrefix));
 		}
 
 		frequency_label_->setText(
@@ -769,8 +771,6 @@ void MainWindow::updateStatus()
 		setLockDisplay(locked);
 	} catch (const std::exception &e) {
 		setLockDisplay(false);
-		snr_plot_->addGap();
-		snr_label_->setText(QStringLiteral("SNR (Es/N0): -- dB"));
 		appendLog(QStringLiteral("Status read failed: %1")
 			      .arg(QString::fromUtf8(e.what())));
 	}

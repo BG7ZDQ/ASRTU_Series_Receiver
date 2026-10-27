@@ -18,5 +18,6 @@ protected:
 private:
     QVector<double> values_;
     SnrScale scale_;
-    static constexpr int kMaxPoints = 300; // 200 ms * 300 = 60 s
+    static constexpr int kMaxPoints =
+	600; // 100 ms * 600 = 60 s of active input
 };

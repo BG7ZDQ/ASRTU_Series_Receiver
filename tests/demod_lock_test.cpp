@@ -130,9 +130,13 @@ int main()
 			"Actual loops did not lock");
 		require(validFrames == 0,
 			"Unexpected valid frame in random-bit fixture");
+		require(std::isfinite(sm_decoder_snr(decoder.get())),
+			"Locked decoder without valid frames has no SNR");
 		sm_decoder_reset_lock(decoder.get());
 		require(!sm_decoder_locked(decoder.get()),
 			"Input-gap reset failed");
+		require(std::isnan(sm_decoder_snr(decoder.get())),
+			"Input-gap reset retained SNR");
 		for (int kind = 0; kind < 2; ++kind) {
 			decoder.reset(sm_decoder_new());
 			require(bool(decoder), "Decoder allocation failed");
@@ -168,6 +172,10 @@ int main()
 				    !sm_decoder_locked(decoder.get()),
 				    "Actual loops falsely locked to noise/CW");
 			}
+			if (kind == 1)
+				require(std::isfinite(
+					    sm_decoder_snr(decoder.get())),
+					"Unlocked input has no blind estimate");
 		}
 		std::cout << "Demodulator lock, no-frame acquisition, "
 			     "rejection and freshness passed\n";

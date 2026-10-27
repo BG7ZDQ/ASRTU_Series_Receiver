@@ -40,13 +40,25 @@ windows (approximately 200 ms). The result is `10 log10(signal/noise)`.
 Residual phase/timing error, interference and noncircular noise can bias it;
 it is not RF C/N over the receiver bandwidth, nor information-bit Eb/N0.
 
-A locked demodulator and a successful OpenHoshimi RS frame are required before
-displaying the estimate. A green lamp with `SNR: --` is therefore possible.
-After two seconds of symbols without another valid RS frame, silence,
-nonfinite input, or undefined signal/noise powers, the readout is `--` and
-the history has a gap. No-input detection also inserts gaps. A benchmark with
-`--no-openhoshimi` has no SNR estimate (JSON null); it does not fall back to SVR.
-The benchmark field is now `final_symbol_esn0_db`.
+Neither estimate depends on valid CCSDS/RS packets. While unlocked, the same
+symbol stream provides a phase-invariant M2/M4 blind estimate, labelled
+`SNR (estimated)` in the UI and `blind M2/M4` in the log. With
+`M2 = E[|x|²]` and `M4 = E[|x|⁴]`, signal power is
+`sqrt(2 M2² - M4)` and noise power is `M2 - signal`. This uses the same
+constant-envelope PSK/circular Gaussian noise model as
+[GNU Radio's M2/M4 estimator](https://github.com/gnuradio/gnuradio/blob/main/gr-digital/lib/mpsk_snr_est.cc).
+Unsettled timing, noise-only input and interference can bias this blind result;
+a finite estimate does not certify BPSK reception or loop lock. Silence,
+nonfinite samples or invalid power estimates display `--` and insert a gap.
+
+After 500 ms without fresh input, the GUI freezes the last SNR label and
+history rather than clearing or advancing them. The lock lamp still turns
+red. Stop/EOF also freezes the display. Resuming samples resets acquisition
+and the estimator, then updates resume. Frozen values are historical, not
+new measurements. The plot spans 60 seconds of active updates (600 points
+at 100 ms); paused time does not consume history. A benchmark with
+`--no-openhoshimi` has no SNR estimate (JSON null). The benchmark field
+`final_symbol_esn0_db` can contain a synchronized or blind estimate.
 
 The 60-second history always includes a labelled 0 dB line, with integer
 1/2/5-family grid steps (minimum 5 dB) and an initial -5 to 20 dB range.

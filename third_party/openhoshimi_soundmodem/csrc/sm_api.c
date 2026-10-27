@@ -63,10 +63,6 @@ static void sm_frame_hook(uint8_t *buf, uint16_t len, int16_t byte_corr,
 	struct sm_decoder *dec = (struct sm_decoder *)obj_ptr;
 	struct sm_frame *f;
 	size_t n;
-	if (byte_corr >= 0) {
-		dec->demod.snr.valid_frame = 1;
-		dec->demod.snr.frame_age = 0;
-	}
 
 	if (dec->q_count >= SM_FRAME_QUEUE)	/* queue full, drop */
 		return;
@@ -108,7 +104,10 @@ void sm_decoder_free(struct sm_decoder *dec)
 
 double sm_decoder_snr(const struct sm_decoder *dec)
 {
-	return dec ? sm_snr_read(&dec->demod.snr) : NAN;
+	if (!dec)
+		return NAN;
+	return dec->demod.lock.locked ? sm_snr_read(&dec->demod.snr)
+				      : dec->demod.snr.blind_db;
 }
 
 int sm_decoder_locked(const struct sm_decoder *dec)
@@ -118,8 +117,10 @@ int sm_decoder_locked(const struct sm_decoder *dec)
 
 void sm_decoder_reset_lock(struct sm_decoder *dec)
 {
-	if (dec)
+	if (dec) {
 		sm_lock_init(&dec->demod.lock);
+		sm_snr_init(&dec->demod.snr);
+	}
 }
 
 /* Push one phase's soft symbols through Viterbi -> unpack -> CCSDS. */

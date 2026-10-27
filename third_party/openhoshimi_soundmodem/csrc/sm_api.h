@@ -48,13 +48,13 @@ void sm_decoder_feed_iq(struct sm_decoder *dec, const float *iq, size_t n);
  */
 void sm_decoder_flush(struct sm_decoder *dec);
 
-/* Local extension: synchronized BPSK symbol Es/N0 in dB. NAN before a
- * successful RS frame, after two seconds of symbols without one, or when
- * signal/noise power is undefined. Call only on the decoder's feed thread. */
+/* Local extension: BPSK symbol Es/N0 in dB, independent of FEC. Uses I/Q
+ * residuals while locked and a blind M2/M4 estimate otherwise. NAN for an
+ * incomplete window or undefined powers. Feed-thread only. */
 double sm_decoder_snr(const struct sm_decoder *dec);
 
 /* Local extension: carrier/timing lock independent of FEC. Feed-thread only.
- * Reset the detector after an input gap before feeding resumed samples. */
+ * Reset the detector and SNR after an input gap before resuming samples. */
 int sm_decoder_locked(const struct sm_decoder *dec);
 void sm_decoder_reset_lock(struct sm_decoder *dec);
 
