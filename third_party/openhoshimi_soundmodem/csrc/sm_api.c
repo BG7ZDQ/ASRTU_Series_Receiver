@@ -104,10 +104,8 @@ void sm_decoder_free(struct sm_decoder *dec)
 
 double sm_decoder_snr(const struct sm_decoder *dec)
 {
-	if (!dec)
-		return NAN;
-	return dec->demod.lock.locked ? sm_snr_read(&dec->demod.snr)
-				      : dec->demod.snr.blind_db;
+	return dec && dec->demod.lock.locked ? sm_snr_read(&dec->demod.snr)
+					     : NAN;
 }
 
 int sm_decoder_locked(const struct sm_decoder *dec)

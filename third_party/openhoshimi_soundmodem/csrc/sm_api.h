@@ -48,8 +48,8 @@ void sm_decoder_feed_iq(struct sm_decoder *dec, const float *iq, size_t n);
  */
 void sm_decoder_flush(struct sm_decoder *dec);
 
-/* Local extension: BPSK symbol Es/N0 in dB, independent of FEC. Uses I/Q
- * residuals while locked and a blind M2/M4 estimate otherwise. NAN for an
+/* Local extension: BPSK symbol Es/N0 in dB, independent of FEC. Uses
+ * synchronized I/Q residuals while locked. NAN while unlocked, for an
  * incomplete window or undefined powers. Feed-thread only. */
 double sm_decoder_snr(const struct sm_decoder *dec);
 

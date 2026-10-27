@@ -24,6 +24,7 @@ namespace digital
 class costas_loop_cc;
 class fll_band_edge_cc;
 class pfb_clock_sync_ccf;
+class probe_mpsk_snr_est_c;
 } // namespace digital
 namespace qtgui
 {
@@ -72,6 +73,7 @@ class AsrtuFlowgraph final
 	}
 
 	double snr() const;
+	double svrSnr() const;
 	double rssi() const;
 	double loopFrequencyHz() const;
 	bool stereoIqContentMismatch() const;
@@ -105,6 +107,7 @@ class AsrtuFlowgraph final
 
 	gr::top_block_sptr tb_;
 	std::shared_ptr<OpenHoshimiDecoderSink> openhoshimi_decoder_;
+	std::shared_ptr<gr::digital::probe_mpsk_snr_est_c> snr_probe_;
 	std::shared_ptr<SharedIqSource> shared_iq_source_;
 #ifdef _WIN32
 	std::shared_ptr<WinmmIqSource> winmm_iq_source_;

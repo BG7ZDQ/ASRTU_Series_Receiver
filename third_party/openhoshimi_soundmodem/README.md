@@ -14,8 +14,9 @@ soundmodem authors identified in the individual source files.
 Local receiver extensions include failed-RS candidate routing, IQ filtering,
 and the `sm_decoder_snr()` synchronized-symbol Es/N0 API. The SNR accumulator
 observes the existing Gardner/Costas output without changing decoder samples.
-Carrier/timing lock selects the synchronized estimator; unlocked input uses
-a phase-invariant M2/M4 blind estimate. Neither depends on RS frames. See
+The API exposes synchronized SNR only while carrier/timing loops are locked,
+independently of RS frames. The receiver separately uses GNU Radio SVR while
+unlocked. See
 [DSP notes](../../docs/DSP.md) for assumptions and input freshness. These
 additions are local, not an upstream-provided SNR interface.
 

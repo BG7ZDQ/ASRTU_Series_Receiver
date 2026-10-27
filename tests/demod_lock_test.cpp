@@ -172,10 +172,8 @@ int main()
 				    !sm_decoder_locked(decoder.get()),
 				    "Actual loops falsely locked to noise/CW");
 			}
-			if (kind == 1)
-				require(std::isfinite(
-					    sm_decoder_snr(decoder.get())),
-					"Unlocked input has no blind estimate");
+			require(std::isnan(sm_decoder_snr(decoder.get())),
+				"Unlocked decoder exposed synchronized SNR");
 		}
 		std::cout << "Demodulator lock, no-frame acquisition, "
 			     "rejection and freshness passed\n";

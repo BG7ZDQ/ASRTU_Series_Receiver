@@ -30,9 +30,7 @@ and unsettled-timing rejection, and the 500 ms wall-clock freshness gate. It
 also feeds five seconds of random BPSK through the actual decoder with a
 100 Hz frequency offset: the loops must lock and expose finite SNR without any
 valid CCSDS frame. Input-gap reset must clear the estimator; unlocked input
-can expose a blind estimate without falsely lighting the lock indicator.
-M2/M4 tests use exact Gaussian second/fourth moments and rotating symbols
-across -5 to 20 dB and three input gains.
+must not expose synchronized SNR or falsely light the lock indicator.
 
 `frame_monitor` also checks that the callback used for the title-bar packet
 total fires only once for eight duplicate valid decoder results, and excludes

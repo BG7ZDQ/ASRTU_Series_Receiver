@@ -32,34 +32,36 @@ EOF clears the lamp; after an input gap the detector must acquire again.
 `LOCKED` can appear before any valid frame. It does not certify successful
 CCSDS synchronization or FEC: use decoded frames/logs for that.
 
-The single status row shows SNR, loop frequency offset (`df`) and lock state.
-`SNR (I/Q)` is synchronized BPSK symbol **Es/N0** from the OpenHoshimi
-Gardner/Costas output, replacing the primary path's blind SVR probe. For
+The single status row shows SNR, loop frequency offset (`Loop df`) and lock state.
+`SNR (Es/N0)` is synchronized BPSK symbol **Es/N0** from the OpenHoshimi
+Gardner/Costas output. For
 locked BPSK and equal I/Q noise variances it estimates signal energy as
 `E[I²] - E[Q²]` and noise as `2 E[Q²]`, using non-overlapping 1920-symbol
 windows (approximately 200 ms). The result is `10 log10(signal/noise)`.
 Residual phase/timing error, interference and noncircular noise can bias it;
 it is not RF C/N over the receiver bandwidth, nor information-bit Eb/N0.
 
-Neither estimate depends on valid CCSDS/RS packets. While unlocked, the same
-symbol stream provides a phase-invariant M2/M4 blind estimate, labelled
-`SNR (M2/M4)` in the UI and `blind M2/M4` in the log. With
-`M2 = E[|x|²]` and `M4 = E[|x|⁴]`, signal power is
-`sqrt(2 M2² - M4)` and noise power is `M2 - signal`. This uses the same
-constant-envelope PSK/circular Gaussian noise model as
-[GNU Radio's M2/M4 estimator](https://github.com/gnuradio/gnuradio/blob/main/gr-digital/lib/mpsk_snr_est.cc).
+Neither estimate depends on valid CCSDS/RS packets. While unlocked, the UI
+uses the original 1.5.4 GNU Radio SVR probe on the primary equalized/sanitized
+symbol stream, labelled `SNR (SVR)` (signal-to-variation ratio). It retains
+`SNR_EST_SVR`, a 10000-sample message interval and smoothing alpha 0.001.
+See [GNU Radio's SVR implementation](https://github.com/gnuradio/gnuradio/blob/main/gr-digital/lib/mpsk_snr_est.cc).
 Unsettled timing, noise-only input and interference can bias this blind result;
-a finite estimate does not certify BPSK reception or loop lock. Silence,
-nonfinite samples or invalid power estimates display `--` and insert a gap.
+a finite value does not certify BPSK reception or loop lock. Like 1.5.4,
+invalid results retain the last valid value and its algorithm label, and do
+not advance history. Before the first valid result the label shows `--`.
+The status row also follows 1.5.4: SNR and `Loop df` are adjacent on the left,
+with the lock indicator on the right and the original 10-point bold font.
 
 After 500 ms without fresh input, the GUI freezes the last SNR label and
 history rather than clearing or advancing them. The lock lamp still turns
 red. Stop/EOF also freezes the display. Resuming samples resets acquisition
 and the estimator, then updates resume. Frozen values are historical, not
-new measurements. The plot spans 60 seconds of active updates (600 points
-at 100 ms); paused time does not consume history. A benchmark with
-`--no-openhoshimi` has no SNR estimate (JSON null). The benchmark field
-`final_symbol_esn0_db` can contain a synchronized or blind estimate.
+new measurements. The plot holds 600 valid updates (nominally 60 seconds
+at 100 ms); invalid results and paused time do not consume history. A benchmark with
+`--no-openhoshimi` has no synchronized SNR (JSON null). The benchmark field
+`final_symbol_esn0_db` contains synchronized Es/N0 only; `final_svr_snr_db`
+reports the separate primary-path SVR result.
 
 The 60-second history always includes a labelled 0 dB line, with integer
 1/2/5-family grid steps (minimum 5 dB) and an initial -5 to 20 dB range.

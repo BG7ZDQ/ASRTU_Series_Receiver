@@ -32,6 +32,8 @@
 #include <gnuradio/digital/adaptive_algorithm.h>
 #include <gnuradio/digital/constellation.h>
 #include <gnuradio/digital/costas_loop_cc.h>
+#include <gnuradio/digital/mpsk_snr_est.h>
+#include <gnuradio/digital/probe_mpsk_snr_est_c.h>
 #include <gnuradio/digital/fll_band_edge_cc.h>
 #include <gnuradio/digital/linear_equalizer.h>
 #include <gnuradio/digital/pfb_clock_sync_ccf.h>
@@ -480,6 +482,9 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options &options)
 		constellation_sink_->disable_legend();
 	}
 
+	// Preserve the 1.5.4 blind estimator path for unlocked reception.
+	snr_probe_ = gr::digital::probe_mpsk_snr_est_c::make(
+	    gr::digital::SNR_EST_SVR, 10000, 0.001);
 	frame_monitor_ =
 	    FrameMonitor::make(std::move(callback), options.payload_callback,
 			       options.local_candidate_callback);
@@ -603,6 +608,7 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options &options)
 	tb_->connect(costas_, 0, equalizer, 0);
 	tb_->connect(equalizer, 0, sanitize, 0);
 	tb_->connect(sanitize, 0, to_real, 0);
+	tb_->connect(sanitize, 0, snr_probe_, 0);
 	if (options.enable_gui)
 		tb_->connect(sanitize, 0, constellation_sink_, 0);
 	tb_->connect(to_real, 0, viterbi_a, 0);
@@ -666,6 +672,11 @@ double AsrtuFlowgraph::snr() const
 	return openhoshimi_decoder_ ? openhoshimi_decoder_->snr()
 				    : std::numeric_limits<double>::quiet_NaN();
 }
+double AsrtuFlowgraph::svrSnr() const
+{
+	return snr_probe_->snr();
+}
+
 double AsrtuFlowgraph::rssi() const
 {
 	return rssi_probe_->level();
