@@ -37,3 +37,9 @@ must not expose synchronized SNR or falsely light the lock indicator.
 `frame_monitor` also checks that the callback used for the title-bar packet
 total fires only once for eight duplicate valid decoder results, and excludes
 short payloads and failed local recovery candidates.
+
+`snr_stream_sampling` feeds identical symbols/IQ through tiny and large work
+batches and checks all 200 ms readings, timestamps and historical algorithm
+selection. It compares SVR against the GNU Radio kernel, checks intermediate
+signal changes, delayed producers, pause/EOF and bounded buffering. This
+catches fast replay losing points between GUI refreshes.

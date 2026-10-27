@@ -8,6 +8,7 @@ extern "C" {
 #include <gnuradio/io_signature.h>
 #include <pmt/pmt.h>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <stdexcept>
@@ -27,16 +28,18 @@ bool OpenHoshimiDecoderSink::locked() const
 	return lock_status_.locked(nowMs());
 }
 
-OpenHoshimiDecoderSink::sptr OpenHoshimiDecoderSink::make()
+OpenHoshimiDecoderSink::sptr
+OpenHoshimiDecoderSink::make(std::shared_ptr<SnrSampleBuffer> buffer)
 {
-    return sptr(new OpenHoshimiDecoderSink());
+	return sptr(new OpenHoshimiDecoderSink(std::move(buffer)));
 }
 
-OpenHoshimiDecoderSink::OpenHoshimiDecoderSink()
+OpenHoshimiDecoderSink::OpenHoshimiDecoderSink(
+    std::shared_ptr<SnrSampleBuffer> buffer)
     : gr::sync_block("openhoshimi_decoder_sink",
-                     gr::io_signature::make(1, 1, sizeof(gr_complex)),
-                     gr::io_signature::make(0, 0, 0)),
-      decoder_(sm_decoder_new())
+		     gr::io_signature::make(1, 1, sizeof(gr_complex)),
+		     gr::io_signature::make(0, 0, 0)),
+      decoder_(sm_decoder_new()), snr_samples_(std::move(buffer))
 {
     if (!decoder_)
         throw std::runtime_error("Unable to create OpenHoshimi decoder");
@@ -67,8 +70,27 @@ int OpenHoshimiDecoderSink::work(int noutput_items,
         interleaved_[2U * i] = samples[i].real();
         interleaved_[2U * i + 1U] = samples[i].imag();
     }
-    sm_decoder_feed_iq(static_cast<sm_decoder*>(decoder_.get()),
-                       interleaved_.data(), static_cast<std::size_t>(noutput_items));
+    auto total = processed_samples_.load(std::memory_order_relaxed);
+    int offset = 0;
+    while (offset < noutput_items) {
+	    const auto remaining = SnrSampleBuffer::inputInterval -
+				   total % SnrSampleBuffer::inputInterval;
+	    const int count = std::min(noutput_items - offset, int(remaining));
+	    sm_decoder_feed_iq(static_cast<sm_decoder *>(decoder_.get()),
+			       interleaved_.data() + 2U * offset,
+			       std::size_t(count));
+	    offset += count;
+	    total += std::uint64_t(count);
+	    if (total % SnrSampleBuffer::inputInterval == 0) {
+		    snr_samples_->decoder(
+			total / SnrSampleBuffer::inputInterval,
+			sm_decoder_snr(
+			    static_cast<sm_decoder *>(decoder_.get())),
+			sm_decoder_locked(
+			    static_cast<sm_decoder *>(decoder_.get())) != 0);
+	    }
+	    publishQueuedFrames();
+    }
     if (noutput_items > 0) {
 	    last_input_ms_ = now;
 	    lock_status_.update(sm_decoder_locked(static_cast<sm_decoder *>(

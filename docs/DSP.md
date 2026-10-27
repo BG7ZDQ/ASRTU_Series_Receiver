@@ -42,9 +42,11 @@ Residual phase/timing error, interference and noncircular noise can bias it;
 it is not RF C/N over the receiver bandwidth, nor information-bit Eb/N0.
 
 Neither estimate depends on valid CCSDS/RS packets. While unlocked, the UI
-uses the original 1.5.4 GNU Radio SVR probe on the primary equalized/sanitized
-symbol stream, labelled `SNR (SVR)` (signal-to-variation ratio). It retains
-`SNR_EST_SVR`, a 10000-sample message interval and smoothing alpha 0.001.
+uses the original 1.5.4 GNU Radio SVR estimator on the primary equalized/
+sanitized symbol stream, labelled `SNR (SVR)` (signal-to-variation ratio).
+The streaming sink uses the same `mpsk_snr_est_svr` kernel, smoothing alpha
+0.001 and two-symbol history as the original probe. It captures results at
+fixed audio intervals rather than querying the probe on the GUI timer.
 See [GNU Radio's SVR implementation](https://github.com/gnuradio/gnuradio/blob/main/gr-digital/lib/mpsk_snr_est.cc).
 Unsettled timing, noise-only input and interference can bias this blind result;
 a finite value does not certify BPSK reception or loop lock. Like 1.5.4,
@@ -63,10 +65,26 @@ using the decoder's consumed sample count at 48 kHz rather than counting
 (e.g. 30x replay covers 60 audio seconds in about two wall-clock seconds),
 even if processing cannot sustain the requested speed. No new samples means
 no new point, including at EOF. Invalid SNR keeps the last valid display;
-the next valid point uses its true audio timestamp. A benchmark with
+the next valid point uses its true audio timestamp.
+
+Both DSP threads capture one reading per 200 ms of audio (9600 decoder input
+samples or 1920 primary-path symbols), splitting scheduler batches at these
+boundaries. This matches the synchronized estimator's nominal 200 ms window.
+The GUI drains all accumulated readings on its 100 ms timer; at 30x replay a
+refresh can consume about 15 readings instead of discarding all but the last.
+The nominal 60-second plot therefore retains about 300 intervals at any speed;
+invalid readings are still omitted. Each interval uses its historical loop
+lock to choose Es/N0 or SVR. Primary symbol timestamps use the nominal 9600
+baud rate; filter delay and recovered clock variation can slightly offset the
+two paths. The joined buffer holds at most 600 intervals (120 audio seconds),
+keeping memory bounded if the UI stalls. Already consumed intervals cannot
+be reintroduced by a late producer. Final queued readings are drained before
+the input-freshness check. No interpolation creates intermediate measurements.
+A benchmark with
 `--no-openhoshimi` has no synchronized SNR (JSON null). The benchmark field
 `final_symbol_esn0_db` contains synchronized Es/N0 only; `final_svr_snr_db`
-reports the separate primary-path SVR result.
+reports the separate primary-path SVR result. `snr_samples` contains the
+remaining bounded batch of timestamped readings at completion.
 
 The 60-second history always includes a labelled 0 dB line, with integer
 1/2/5-family grid steps (minimum 5 dB) and an initial -5 to 20 dB range.

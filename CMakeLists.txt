@@ -402,6 +402,20 @@ if(BUILD_TESTING)
     asrtu_enable_strict_warnings(ASRTU1_SnrTest)
     add_test(NAME snr_estimation_and_scale COMMAND ASRTU1_SnrTest)
 
+    add_executable(ASRTU1_SnrStreamTest tests/snr_stream_test.cpp
+        libs/demod/openhoshimi_decoder_sink.cpp)
+    target_include_directories(ASRTU1_SnrStreamTest PRIVATE libs/demod)
+    target_link_libraries(ASRTU1_SnrStreamTest PRIVATE openhoshimi_soundmodem
+        gnuradio::gnuradio-runtime gnuradio::gnuradio-digital)
+    if(UNIX)
+        target_link_libraries(ASRTU1_SnrStreamTest PRIVATE m)
+    endif()
+    if(WIN32)
+        target_compile_definitions(ASRTU1_SnrStreamTest PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+    endif()
+    asrtu_enable_strict_warnings(ASRTU1_SnrStreamTest)
+    add_test(NAME snr_stream_sampling COMMAND ASRTU1_SnrStreamTest)
+
     add_executable(ASRTU1_LauncherSdrTest tests/launcher_sdr_test.cpp libs/common/audio_devices.cpp
         libs/common/translation.cpp libs/common/runtime_paths.cpp
         apps/launcher/launcher_resources.qrc apps/dsp/application_icons.qrc)

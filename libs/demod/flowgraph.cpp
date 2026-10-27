@@ -3,6 +3,7 @@
 #include "async_wav_recorder_sink.h"
 #include "fec_candidate_sink.h"
 #include "openhoshimi_decoder_sink.h"
+#include "svr_snr_sink.h"
 #include <limits>
 #include "shared_iq_source.h"
 #include "wav_iq_source.h"
@@ -33,7 +34,6 @@
 #include <gnuradio/digital/constellation.h>
 #include <gnuradio/digital/costas_loop_cc.h>
 #include <gnuradio/digital/mpsk_snr_est.h>
-#include <gnuradio/digital/probe_mpsk_snr_est_c.h>
 #include <gnuradio/digital/fll_band_edge_cc.h>
 #include <gnuradio/digital/linear_equalizer.h>
 #include <gnuradio/digital/pfb_clock_sync_ccf.h>
@@ -483,13 +483,14 @@ void AsrtuFlowgraph::build(LogCallback callback, const Options &options)
 	}
 
 	// Preserve the 1.5.4 blind estimator path for unlocked reception.
-	snr_probe_ = gr::digital::probe_mpsk_snr_est_c::make(
-	    gr::digital::SNR_EST_SVR, 10000, 0.001);
+	snr_samples_ = std::make_shared<SnrSampleBuffer>(
+	    options.enable_openhoshimi_decoder);
+	snr_probe_ = SvrSnrSink::make(snr_samples_);
 	frame_monitor_ =
 	    FrameMonitor::make(std::move(callback), options.payload_callback,
 			       options.local_candidate_callback);
 	openhoshimi_decoder_ = options.enable_openhoshimi_decoder
-				   ? OpenHoshimiDecoderSink::make()
+				   ? OpenHoshimiDecoderSink::make(snr_samples_)
 				   : OpenHoshimiDecoderSink::sptr{};
 
 	if (!complexInput)
@@ -675,6 +676,11 @@ double AsrtuFlowgraph::snr() const
 double AsrtuFlowgraph::svrSnr() const
 {
 	return snr_probe_->snr();
+}
+
+std::vector<SnrSample> AsrtuFlowgraph::takeSnrSamples()
+{
+	return snr_samples_->take();
 }
 
 double AsrtuFlowgraph::processedInputSeconds() const

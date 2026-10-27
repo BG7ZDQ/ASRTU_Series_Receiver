@@ -2,6 +2,7 @@
 
 #include <gnuradio/sync_block.h>
 #include "demod_lock_status.h"
+#include "snr_sample_buffer.h"
 
 #include <cstdint>
 #include <memory>
@@ -14,7 +15,7 @@ class OpenHoshimiDecoderSink final : public gr::sync_block
 public:
     using sptr = std::shared_ptr<OpenHoshimiDecoderSink>;
 
-    static sptr make();
+    static sptr make(std::shared_ptr<SnrSampleBuffer> buffer);
     ~OpenHoshimiDecoderSink() override;
 
     int work(int noutput_items,
@@ -32,14 +33,15 @@ public:
     }
 
 private:
-    OpenHoshimiDecoderSink();
-    void publishQueuedFrames();
+  OpenHoshimiDecoderSink(std::shared_ptr<SnrSampleBuffer> buffer);
+  void publishQueuedFrames();
 
-    struct DecoderDeleter {
-        void operator()(void* decoder) const noexcept;
+  struct DecoderDeleter {
+	  void operator()(void *decoder) const noexcept;
     };
     std::unique_ptr<void, DecoderDeleter> decoder_;
     std::vector<float> interleaved_;
+    std::shared_ptr<SnrSampleBuffer> snr_samples_;
     std::atomic<double> snr_db_{std::numeric_limits<double>::quiet_NaN()};
     std::atomic<std::uint64_t> processed_samples_{0};
     DemodLockStatus lock_status_;

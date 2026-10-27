@@ -41,6 +41,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <functional>
+#include <optional>
 #include <stdexcept>
 #include <thread>
 
@@ -688,6 +689,32 @@ void MainWindow::updateStatus()
 			    QStringLiteral("WAV recording stopped accepting "
 					   "data after a disk write failure"));
 		}
+		// Drain every historical DSP reading before the freshness check
+		// so the final replay batch is not lost when input stops.
+		std::optional<SnrSample> latestSnr;
+		for (const auto &sample : flowgraph_->takeSnrSamples()) {
+			if (snr_plot_->addValue(sample.value, sample.seconds))
+				latestSnr = sample;
+		}
+		if (latestSnr) {
+			const auto &sample = *latestSnr;
+			const QString prefix =
+			    sample.synchronized ? QStringLiteral("SNR (Es/N0)")
+						: QStringLiteral("SNR (SVR)");
+			snr_label_->setText(QStringLiteral("%1: %2 dB")
+						.arg(prefix)
+						.arg(sample.value, 0, 'f', 2));
+			const qint64 elapsed = snr_log_timer_.elapsed();
+			if (elapsed - last_snr_log_ms_ >= 1000) {
+				appendLog(
+				    QStringLiteral("Symbol Es/N0%1: %2 dB")
+					.arg(sample.synchronized
+						 ? QString()
+						 : QStringLiteral(" (SVR)"))
+					.arg(sample.value, 0, 'f', 6));
+				last_snr_log_ms_ = elapsed;
+			}
+		}
 		if (!flowgraph_->inputActive(0.5)) {
 			input_active_ticks_ = 0;
 			++input_inactive_ticks_;
@@ -719,27 +746,6 @@ void MainWindow::updateStatus()
 		if (++input_active_ticks_ >= 50)
 			audio_restart_attempts_ = 0;
 		const bool locked = flowgraph_->demodLocked();
-		const double snr =
-		    locked ? flowgraph_->snr() : flowgraph_->svrSnr();
-		const QString snrPrefix = locked ? QStringLiteral("SNR (Es/N0)")
-						 : QStringLiteral("SNR (SVR)");
-		if (snr_plot_->addValue(snr,
-					flowgraph_->processedInputSeconds())) {
-			snr_label_->setText(QStringLiteral("%1: %2 dB")
-						.arg(snrPrefix)
-						.arg(snr, 0, 'f', 2));
-			const qint64 elapsed = snr_log_timer_.elapsed();
-			if (elapsed - last_snr_log_ms_ >= 1000) {
-				appendLog(
-				    QStringLiteral("Symbol Es/N0%1: %2 dB")
-					.arg(locked ? QString()
-						    : QStringLiteral(" (SVR)"))
-					.arg(snr, 0, 'f', 6));
-				last_snr_log_ms_ = elapsed;
-			}
-		}
-		// Match 1.5.4: invalid readings preserve the last valid value,
-		// its algorithm label and the history until a valid update.
 
 		frequency_label_->setText(
 		    QStringLiteral("Loop df: %1 Hz")
@@ -767,6 +773,9 @@ void MainWindow::updateStatus()
 			rssi_meter_->setReading(rssi, rssi_min_, rssi_max_);
 		}
 		setLockDisplay(locked);
+		// Apply changed label widths in the same refresh, even when
+		// fast replay keeps the Qt event queue busy.
+		snr_label_->parentWidget()->layout()->activate();
 	} catch (const std::exception &e) {
 		setLockDisplay(false);
 		appendLog(QStringLiteral("Status read failed: %1")

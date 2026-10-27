@@ -110,6 +110,13 @@ int main(int argc, char* argv[])
     const double cpuSeconds =
         fileTimeSeconds(kernelAfter) + fileTimeSeconds(userAfter) -
         fileTimeSeconds(kernelBefore) - fileTimeSeconds(userBefore);
+    QJsonArray snrSamples;
+    for (const auto &sample : flowgraph.takeSnrSamples()) {
+	    snrSamples.append(QJsonObject{
+		{QStringLiteral("audio_seconds"), sample.seconds},
+		{QStringLiteral("snr_db"), sample.value},
+		{QStringLiteral("synchronized"), sample.synchronized}});
+    }
     QJsonObject result{
 	{QStringLiteral("implementation"),
 	 options.use_legacy_feedforward_agc
@@ -137,7 +144,8 @@ int main(int argc, char* argv[])
 	{QStringLiteral("complete_223_count"),
 	 std::count(frameLengths.begin(), frameLengths.end(), 223)},
 	{QStringLiteral("frame_lengths"), lengths},
-	{QStringLiteral("frame_hashes"), hashes}};
+	{QStringLiteral("frame_hashes"), hashes},
+	{QStringLiteral("snr_samples"), snrSamples}};
 
     QFile frames(outputPath + QStringLiteral(".frames223.bin"));
     if (!frames.open(QIODevice::WriteOnly) ||
