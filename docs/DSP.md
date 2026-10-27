@@ -32,7 +32,8 @@ EOF clears the lamp; after an input gap the detector must acquire again.
 `LOCKED` can appear before any valid frame. It does not certify successful
 CCSDS synchronization or FEC: use decoded frames/logs for that.
 
-The SNR readout is now synchronized BPSK symbol **Es/N0** from the OpenHoshimi
+The single status row shows SNR, loop frequency offset (`df`) and lock state.
+`SNR (I/Q)` is synchronized BPSK symbol **Es/N0** from the OpenHoshimi
 Gardner/Costas output, replacing the primary path's blind SVR probe. For
 locked BPSK and equal I/Q noise variances it estimates signal energy as
 `E[I²] - E[Q²]` and noise as `2 E[Q²]`, using non-overlapping 1920-symbol
@@ -42,7 +43,7 @@ it is not RF C/N over the receiver bandwidth, nor information-bit Eb/N0.
 
 Neither estimate depends on valid CCSDS/RS packets. While unlocked, the same
 symbol stream provides a phase-invariant M2/M4 blind estimate, labelled
-`SNR (estimated)` in the UI and `blind M2/M4` in the log. With
+`SNR (M2/M4)` in the UI and `blind M2/M4` in the log. With
 `M2 = E[|x|²]` and `M4 = E[|x|⁴]`, signal power is
 `sqrt(2 M2² - M4)` and noise power is `M2 - signal`. This uses the same
 constant-envelope PSK/circular Gaussian noise model as

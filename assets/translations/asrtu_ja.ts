@@ -3,10 +3,6 @@
     <context>
         <name>ASRTU</name>
         <message>
-            <source>SNR (估算)</source>
-            <translation>SNR (推定値)</translation>
-        </message>
-        <message>
             <source>已接收 %1 包</source>
             <translation>受信パケット数: %1</translation>
         </message>

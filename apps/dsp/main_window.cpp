@@ -524,31 +524,33 @@ void MainWindow::buildUi()
 	auto *statusCard = new QFrame(demod);
 	statusCard->setObjectName(QStringLiteral("statusCard"));
 	auto *status = new QHBoxLayout(statusCard);
-	status->setContentsMargins(12, 7, 9, 7);
-	status->setSpacing(8);
+	status->setContentsMargins(8, 7, 8, 7);
+	status->setSpacing(6);
 	QFont infoFont = font();
-	infoFont.setPointSize(10);
+	infoFont.setPointSize(9);
 	infoFont.setBold(true);
 	infoFont.setStyleStrategy(static_cast<QFont::StyleStrategy>(
 	    QFont::PreferAntialias | QFont::PreferQuality));
-	snr_label_ = new QLabel(QStringLiteral("SNR (Es/N0): -- dB"), demod);
-	frequency_label_ = new QLabel(QStringLiteral("Loop df: -- Hz"), demod);
+	snr_label_ = new QLabel(QStringLiteral("SNR (M2/M4): -- dB"), demod);
+	snr_label_->setToolTip(QStringLiteral("Symbol Es/N0: synchronized I/Q "
+					      "power / blind M2/M4"));
+	frequency_label_ = new QLabel(QStringLiteral("df: -- Hz"), demod);
+	frequency_label_->setToolTip(QStringLiteral("Loop frequency offset"));
 	lock_label_ = new QLabel(QStringLiteral("UNLOCKED"), demod);
 	for (auto *label : {snr_label_, frequency_label_, lock_label_}) {
 		label->setFont(infoFont);
 		label->setObjectName(QStringLiteral("metric"));
 	}
 	lock_label_->setAlignment(Qt::AlignCenter);
-	lock_label_->setMinimumWidth(115);
+	lock_label_->setSizePolicy(QSizePolicy::Minimum,
+				   QSizePolicy::Preferred);
 	lock_label_->setToolTip(
 	    QStringLiteral("OpenHoshimi FLL / Gardner / Costas"));
 	setLockDisplay(false);
 
-	auto *metrics = new QVBoxLayout;
-	metrics->setSpacing(2);
-	metrics->addWidget(snr_label_);
-	metrics->addWidget(frequency_label_);
-	status->addLayout(metrics, 1);
+	status->addWidget(snr_label_);
+	status->addStretch(1);
+	status->addWidget(frequency_label_);
 	status->addWidget(lock_label_);
 	demodLayout->addWidget(statusCard);
 	snr_plot_ = new SnrPlot(demod);
@@ -692,8 +694,7 @@ void MainWindow::updateStatus()
 			++input_inactive_ticks_;
 			// Freeze the last SNR value and history until samples
 			// resume.
-			frequency_label_->setText(
-			    QStringLiteral("Loop df: -- Hz"));
+			frequency_label_->setText(QStringLiteral("df: -- Hz"));
 			setLockDisplay(false);
 			if (playback_path_.isEmpty() && !shared_iq_bridge_ &&
 			    !audio_switch_in_progress_ &&
@@ -719,9 +720,9 @@ void MainWindow::updateStatus()
 			audio_restart_attempts_ = 0;
 		const bool locked = flowgraph_->demodLocked();
 		const double snr = flowgraph_->snr();
-		const QString snrPrefix =
-		    locked ? QStringLiteral("SNR (Es/N0)")
-			   : QCoreApplication::translate("ASRTU", "SNR (估算)");
+		const QString snrPrefix = locked
+					      ? QStringLiteral("SNR (I/Q)")
+					      : QStringLiteral("SNR (M2/M4)");
 		if (std::isfinite(snr)) {
 			snr_plot_->addValue(snr);
 			snr_label_->setText(QStringLiteral("%1: %2 dB")
@@ -744,7 +745,7 @@ void MainWindow::updateStatus()
 		}
 
 		frequency_label_->setText(
-		    QStringLiteral("Loop df: %1 Hz")
+		    QStringLiteral("df: %1 Hz")
 			.arg(flowgraph_->loopFrequencyHz(), 0, 'f', 1));
 		const double rssi = flowgraph_->rssi();
 		if (std::isfinite(rssi)) {
@@ -786,7 +787,7 @@ void MainWindow::setLockDisplay(bool locked)
 				    : QStringLiteral("UNLOCKED"));
 	lock_label_->setStyleSheet(
 	    QStringLiteral("QLabel { color:white; background:%1; "
-			   "border-radius:3px; padding:3px 10px; }")
+			   "border-radius:3px; padding:3px 6px; }")
 		.arg(locked ? QStringLiteral("#159447")
 			    : QStringLiteral("#b43b3b")));
 }

@@ -17,7 +17,7 @@ Contributors: **BG7ZDQ** **BI1NWO** **BG6HNY** **BG4QBF**
 - Automatic Chinese, Japanese, or English UI selection from the operating-system language
 - A standalone cross-platform SatNOGS window showing frame data, station details, and server responses; recording playback is never submitted
 
-SNR does not require valid packets. It shows synchronized symbol Es/N0 while locked and a labelled blind estimate while unlocked with active input. Interrupted input freezes the last value and plot until samples resume; undefined estimates display `--`. The history keeps a labelled zero and integer grid steps. See [DSP notes](docs/DSP.md) for assumptions and limits.
+SNR does not require valid packets. It shows `SNR (I/Q)` for synchronized I/Q symbol Es/N0 while locked and `SNR (M2/M4)` while unlocked with active input. Interrupted input freezes the last value and plot until samples resume; undefined estimates display `--`. The history keeps a labelled zero and integer grid steps. See [DSP notes](docs/DSP.md) for assumptions and limits.
 
 ## Usage
 
