@@ -22,7 +22,7 @@ and timing-frequency estimates must stay away from their limits. Acquire
 thresholds are axis/power > 0.25, |2 IQ covariance|/axis < 0.4 and
 |summed timing error|/power < 0.15; hold thresholds are 0.15, 0.8 and 0.25.
 At least 99% of the window's observed loop-limit checks must pass.
-Three consecutive good windows acquire lock, two bad windows release it.
+Two consecutive good windows acquire lock, two bad windows release it.
 These are a practical lock estimate, not a guarantee of correct data or an
 absolute sensitivity specification. Circular noise, silence, stationary CW,
 rotating symbols and unsettled timing are covered by regression tests.

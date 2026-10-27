@@ -48,7 +48,6 @@ int main()
 	try {
 		sm_lock state{};
 		window(state);
-		window(state);
 		require(!state.locked, "Acquired without debounce");
 		window(state);
 		require(state.locked, "BPSK did not acquire");
@@ -74,7 +73,7 @@ int main()
 		for (int i = 0; i < 4; ++i)
 			window(state, 7);
 		require(!state.locked, "Hold-only signal acquired new lock");
-		for (int i = 0; i < 3; ++i)
+		for (int i = 0; i < 2; ++i)
 			window(state);
 		require(state.locked, "Reacquisition failed");
 		sm_lock_push(&state, std::numeric_limits<float>::quiet_NaN(), 0,

@@ -56,9 +56,9 @@ static inline void sm_lock_push(struct sm_lock *s, float re, float im,
 				 s->healthy >= SM_LOCK_WINDOW * 99U / 100U;
 		if (good) {
 			s->bad_windows = 0;
-			if (s->good_windows < 3U)
+			if (s->good_windows < 2U)
 				++s->good_windows;
-			if (s->good_windows >= 3U)
+			if (s->good_windows >= 2U)
 				s->locked = 1;
 		} else {
 			s->good_windows = 0;
