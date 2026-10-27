@@ -97,7 +97,7 @@ void SnrPlot::paintEvent(QPaintEvent*)
 					    std::max(0.001, ymax - ymin));
 	    if (hasPrevious) {
 		    QPen pen(point.synchronized ? QColor(0, 150, 70)
-						: QColor(0, 110, 220),
+						: QColor(176, 112, 112),
 			     2);
 		    pen.setCapStyle(Qt::RoundCap);
 		    pen.setJoinStyle(Qt::RoundJoin);
