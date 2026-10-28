@@ -45,7 +45,12 @@ signal changes, delayed producers, pause/EOF and bounded buffering. This
 catches fast replay losing points between GUI refreshes.
 
 The lock regression includes 30 seconds each of noise and noisy CW, as well
-as acquisition/release debounce. The response audit uses local JAMX sections
+as acquisition/release debounce. It additionally checks nine microphone-like
+fixtures for 30 seconds each in both zero-IF I/Q and real 12 kHz IF paths:
+real white noise, duplicated channels, colored noise, clipped colored noise,
+synthetic voiced harmonics, 300/2400 Hz tones, two tones and AM.
+Real noise must also release an existing lock. Random, unframed BPSK remains
+a positive control; the lock detector never requires valid FEC frames. The response audit uses local JAMX sections
 with known switch times; see DSP notes for observed latency and its limits.
 
 Windows installer layout regression (after building the installer):

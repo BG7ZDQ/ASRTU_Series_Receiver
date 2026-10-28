@@ -21,6 +21,17 @@ the normalized mean Gardner timing error must be small, and FLL, Costas
 and timing-frequency estimates must stay away from their limits. Acquire
 thresholds are axis/power > 0.25, |2 IQ covariance|/axis < 0.4 and
 |summed timing error|/power < 0.15; hold thresholds are 0.15, 0.8 and 0.25.
+Axis alignment and zero-mean timing error alone also accepted real microphone
+noise, duplicated stereo channels and tones. The detector additionally requires
+negative fourth cumulant of the centered I symbols: with unnormalized variance
+sums `vi`, `vq` and centered fourth-moment sum `m4`,
+`3*vi*vi - N*m4 > shape*(vi-vq)^2` (shape 0.75 acquire, 0.5 hold).
+For BPSK with independent Gaussian I/Q noise, the left side tends to
+`2*N*N*A^4`; Gaussian real noise has zero fourth cumulant even with Q absent.
+Absolute centered symbol correlations at lags 1 through 4 must each stay below
+0.25 to acquire / 0.35 to hold. Multiple lags reject tones whose lag-one
+correlation happens to vanish. This assumes the scrambled telemetry's weakly
+correlated symbols, not an arbitrary repeating BPSK test pattern.
 At least 99% of the window's observed loop-limit checks must pass.
 Two consecutive good windows acquire lock, two bad windows release it
 (about 200 ms of confirmation). This excludes the time needed for the actual
@@ -28,7 +39,18 @@ carrier/timing loops to converge: the indicator does not move historical
 colors forward or claim lock while the constellation is still rotating.
 These are a practical lock estimate, not a guarantee of correct data or an
 absolute sensitivity specification. Circular noise, silence, stationary CW,
-rotating symbols and unsettled timing are covered by regression tests.
+rotating symbols and unsettled timing are covered by regression tests. Each
+sound-card path also rejects 30-second fixtures of real Gaussian noise,
+duplicated channels, colored/clipped noise, synthetic voiced harmonics, tones,
+two tones and AM. No microphone recording was captured for these tests.
+The fix only observes symbols: loop updates and the FEC path are unchanged.
+Validation against the 553-second JAMX observation 14907288 retained all 329
+unique 223-byte payloads, with identical SHA-256 sets. The bounded final
+120-second lock history was unchanged. In the separate 35-second transition
+fixture, acquisition remained at 6.6/22.4 seconds; one release advanced from
+30.4 to 30.2 seconds. Clean and noisy random BPSK still acquire with zero
+valid FEC frames. These fixtures do not guarantee rejection of every possible
+interferer; loop lock alone remains insufficient to identify a satellite.
 
 The GUI also requires fresh decoder input (less than 500 ms old). Stop or
 EOF clears the lamp; after an input gap the detector must acquire again.

@@ -73,7 +73,7 @@ After choosing the mode and sound card, click **Start Receiver**. Enable **Autom
 - The input waterfall should show a persistent target signal rather than only broadband noise.
 - BPSK constellation points should cluster on the two sides of the I axis.
 - Rising SNR and a stabilizing loop offset indicate that the carrier and timing loops are entering a useful operating region.
-- `LOCKED` indicates carrier/timing lock in the OpenHoshimi demodulator; `UNLOCKED` indicates no lock or interrupted input. The lamp does not depend on FEC frames and does not prove successful decoding.
+- `LOCKED` indicates carrier/timing lock in the OpenHoshimi demodulator; `UNLOCKED` indicates no lock or interrupted input. Symbol-distribution and correlation checks reduce false locks caused by microphone noise, duplicated audio channels and tones. The lamp does not depend on FEC frames and does not prove successful decoding.
 - The title bar counts valid packets received in this decoder window, counting duplicate decoder results once. Changing audio devices or restarting input preserves the total; reopening the window resets it to zero.
 - Use `FEC frame` and the complete hexadecimal PDU in the log to confirm actual decoding. `Symbol Es/N0` estimates signal quality; SNR alone does not prove successful decoding.
 
