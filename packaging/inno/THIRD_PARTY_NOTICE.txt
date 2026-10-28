@@ -15,7 +15,7 @@ https://github.com/AlexandreRouma/SDRPlusPlus 获取；GPL 许可全文
 随组件安装在 sdrpp\COPYING。
 
 内置卫星轨道计算使用 Andrew C. Young 的 sgp4 C99 实现，按 MIT License
-授权；完整许可文本见 decoder\SGP4_LICENSE.txt。
+授权；完整许可文本见 bin\SGP4_LICENSE.txt。
 
 DSP 的并行 ASRTU 解码链包含来自 OpenHoshimi 的 soundmodem 核心，原作者
 包括 BG6HNY / Hyacinth Satellite Team 及源文件中列明的 HIT LilacSat

@@ -19,7 +19,7 @@ VersionInfoProductName=ASRTU Series Satellite Receiver and Upload
 DefaultDirName={localappdata}\Programs\ASRTU_Series_Receiver
 DefaultGroupName={cm:ProgramGroup}
 UninstallDisplayName={cm:ProgramGroup}
-UninstallDisplayIcon={app}\launcher\ASRTU1_Launcher.exe
+UninstallDisplayIcon={app}\bin\ASRTU1_Launcher.exe
 SetupIconFile=..\..\assets\branding\astro_series_launcher.ico
 OutputDir=dist
 OutputBaseFilename=ASRTU_Series_Receiver-{#AppVersion}-x86_64-WinInstaller{#AppBuildSuffix}
@@ -138,7 +138,6 @@ Name: "sdrpp"; Description: "{cm:SdrppComponent}"; Types: full
 
 [Files]
 #include "stage\core-files.iss"
-Source: "stage\proxy\*"; DestDir: "{app}\proxy"; Excludes: "config.cfg"; Components: core; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "stage\sdrsharp\*"; DestDir: "{app}\sdrsharp"; Excludes: "SDRSharp.config,SDRSharp.Layout.xml,Frequencies.xml,BandPlan.xml,notches.xml"; Components: sdrsharp; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "stage\sdrsharp\SDRSharp.config"; DestDir: "{app}\sdrsharp"; Components: sdrsharp; Flags: onlyifdoesntexist
 Source: "stage\sdrsharp\SDRSharp.Layout.xml"; DestDir: "{app}\sdrsharp"; Components: sdrsharp; Flags: onlyifdoesntexist
@@ -157,7 +156,7 @@ Source: "stage\sdrpp\*.json"; DestDir: "{app}\sdrpp"; Components: sdrpp; Flags: 
 Source: "stage\plutosdr-driver\*"; DestDir: "{app}\drivers\plutosdr"; Components: sdrpp; Flags: ignoreversion recursesubdirs createallsubdirs
 #endif
 #endif
-Source: "..\..\assets\icons\sdrsharp.ico"; DestDir: "{app}\launcher"; Components: sdrsharp; Flags: ignoreversion
+Source: "..\..\assets\icons\sdrsharp.ico"; DestDir: "{app}\bin"; Components: sdrsharp; Flags: ignoreversion
 Source: "README.txt"; DestDir: "{app}"; Components: core; Flags: ignoreversion
 Source: "SDRSHARP_NOTICE.txt"; DestDir: "{app}"; Languages: chinesesimp; Flags: ignoreversion
 Source: "SDRSHARP_NOTICE.en.txt"; DestDir: "{app}"; DestName: "SDRSHARP_NOTICE.txt"; Languages: english; Flags: ignoreversion
@@ -167,11 +166,11 @@ Source: "THIRD_PARTY_NOTICE.en.txt"; DestDir: "{app}"; DestName: "THIRD_PARTY_NO
 Source: "THIRD_PARTY_NOTICE.ja.txt"; DestDir: "{app}"; DestName: "THIRD_PARTY_NOTICE.txt"; Languages: japanese; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\{cm:ProgramGroup}\{cm:LauncherShortcut}"; Filename: "{app}\launcher\ASRTU1_Launcher.exe"; WorkingDir: "{app}\launcher"
-Name: "{autodesktop}\{cm:LauncherShortcut}"; Filename: "{app}\launcher\ASRTU1_Launcher.exe"; WorkingDir: "{app}\launcher"
-Name: "{autoprograms}\{cm:ProgramGroup}\{cm:SdrShortcut}"; Filename: "{app}\launcher\ASRTU1_Launcher.exe"; Parameters: "--sdrsharp"; WorkingDir: "{app}\launcher"; IconFilename: "{app}\launcher\sdrsharp.ico"; Components: sdrsharp
+Name: "{autoprograms}\{cm:ProgramGroup}\{cm:LauncherShortcut}"; Filename: "{app}\bin\ASRTU1_Launcher.exe"; WorkingDir: "{app}\bin"
+Name: "{autodesktop}\{cm:LauncherShortcut}"; Filename: "{app}\bin\ASRTU1_Launcher.exe"; WorkingDir: "{app}\bin"
+Name: "{autoprograms}\{cm:ProgramGroup}\{cm:SdrShortcut}"; Filename: "{app}\bin\ASRTU1_Launcher.exe"; Parameters: "--sdrsharp"; WorkingDir: "{app}\bin"; IconFilename: "{app}\bin\sdrsharp.ico"; Components: sdrsharp
 #ifdef SdrppAvailable
-Name: "{autoprograms}\{cm:ProgramGroup}\{cm:SdrppShortcut}"; Filename: "{app}\launcher\ASRTU1_Launcher.exe"; Parameters: "--sdrpp"; WorkingDir: "{app}\launcher"; IconFilename: "{app}\sdrpp\res\icons\sdrpp.ico"; Components: sdrpp
+Name: "{autoprograms}\{cm:ProgramGroup}\{cm:SdrppShortcut}"; Filename: "{app}\bin\ASRTU1_Launcher.exe"; Parameters: "--sdrpp"; WorkingDir: "{app}\bin"; IconFilename: "{app}\sdrpp\res\icons\sdrpp.ico"; Components: sdrpp
 #endif
 #ifdef SdrppAvailable
 #ifdef PlutoAvailable
@@ -180,13 +179,10 @@ Name: "{autoprograms}\{cm:ProgramGroup}\{cm:InstallPlutoDriver}"; Filename: "{ap
 #endif
 
 [INI]
-Filename: "{app}\launcher\ui-language.ini"; Section: "UI"; Key: "Language"; String: "{cm:UiLanguage}"; Flags: uninsdeleteentry uninsdeletesectionifempty
-Filename: "{app}\decoder\ui-language.ini"; Section: "UI"; Key: "Language"; String: "{cm:UiLanguage}"; Flags: uninsdeleteentry uninsdeletesectionifempty
-Filename: "{app}\doppler\ui-language.ini"; Section: "UI"; Key: "Language"; String: "{cm:UiLanguage}"; Flags: uninsdeleteentry uninsdeletesectionifempty
-Filename: "{app}\satnogs-uploader\ui-language.ini"; Section: "UI"; Key: "Language"; String: "{cm:UiLanguage}"; Flags: uninsdeleteentry uninsdeletesectionifempty
+Filename: "{app}\bin\ui-language.ini"; Section: "UI"; Key: "Language"; String: "{cm:UiLanguage}"; Flags: uninsdeleteentry uninsdeletesectionifempty
 
 [Run]
-Filename: "{app}\launcher\ASRTU1_Launcher.exe"; Parameters: "--language={cm:UiLanguage}"; Description: "{cm:OpenLauncher}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\bin\ASRTU1_Launcher.exe"; Parameters: "--language={cm:UiLanguage}"; Description: "{cm:OpenLauncher}"; Flags: nowait postinstall skipifsilent
 
 [InstallDelete]
 #include "stage\core-stale.iss"
@@ -197,6 +193,7 @@ Type: files; Name: "{app}\sdrsharp\VCRUNTIME140_1.dll"
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\gnuradio-cache"
+Type: dirifempty; Name: "{app}\bin"
 Type: dirifempty; Name: "{app}\proxy"
 Type: dirifempty; Name: "{app}\decoder"
 Type: dirifempty; Name: "{app}\launcher"
@@ -210,44 +207,6 @@ var
   StationPage: TInputQueryWizardPage;
   StationValuesLoaded: Boolean;
   ParamNickname, ParamLongitude, ParamLatitude, ParamAltitude: String;
-
-function CreateHardLink(lpFileName, lpExistingFileName: String;
-  lpSecurityAttributes: Integer): Boolean;
-  external 'CreateHardLinkW@kernel32.dll stdcall';
-
-function CollapseHardLink(const Destination, Source: String): Boolean;
-var
-  Temporary, Backup: String;
-begin
-  Result := False;
-  if (not FileExists(Destination)) or (not FileExists(Source)) then
-    Exit;
-  Temporary := Destination + '.asrtu-hardlink';
-  DeleteFile(Temporary);
-  if not CreateHardLink(Temporary, Source, 0) then
-    Exit;
-  Backup := Destination + '.asrtu-original';
-  { Hard-link deduplication is optional; keep the installed copy on failure. }
-  if FileExists(Backup) or (not RenameFile(Destination, Backup)) then
-  begin
-    DeleteFile(Temporary);
-    Exit;
-  end;
-  if not RenameFile(Temporary, Destination) then
-  begin
-    if not RenameFile(Backup, Destination) then
-      RaiseException('Unable to restore installed dependency: ' + Destination);
-    DeleteFile(Temporary);
-    Exit;
-  end;
-  DeleteFile(Backup);
-  Result := True;
-end;
-
-procedure CollapseDuplicateFiles;
-begin
-#include "stage\core-hardlinks.iss"
-end;
 
 function ConfigStringValue(const Text, Key, Fallback: String): String;
 var
@@ -479,9 +438,6 @@ begin
 #endif
   if CurStep <> ssPostInstall then
     Exit;
-
-  { Keep module-local DLL paths while sharing identical runtime files on disk. }
-  CollapseDuplicateFiles;
 
 #ifdef SdrppAvailable
   if WizardIsComponentSelected('sdrpp') then

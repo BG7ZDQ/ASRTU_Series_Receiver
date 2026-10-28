@@ -147,8 +147,8 @@ not a guaranteed acquisition time. Diagnostic constellation moments showed
 that actual carrier convergence, rather than GUI repainting, dominated the
 remaining delay. Decoder loop bandwidths and thresholds are unchanged.
 
-Windows packaging keeps the transitive DLL dependencies beside each module's
-EXE. The earlier installer moved duplicate DLLs into `launcher/` and relied on
+Windows packaging puts the four suite EXEs and one copy of their transitive
+DLL dependencies in a shared `bin` directory. The earlier installer moved duplicate DLLs into `launcher/` and relied on
 PATH; this allowed an old system MSVCP140.dll to win the standard DLL search
 order. A user report loaded System32 version 14.16.27033.0 and faulted with
 0xc0000005. The wrong loader choice was reproduced using the old installer
@@ -156,8 +156,11 @@ manifest, even with `launcher/` first on PATH. The exact remote fault stack
 was not available. Microsoft requires a runtime at least as new as the build
 toolset; see [runtime requirements](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist)
 and [DLL search order](https://learn.microsoft.com/en-us/windows/win32/dlls/dynamic-link-library-search-order).
-Archive-source reuse and optional post-install hard links still deduplicate
-files while retaining every module-local path. A failed hard-link replacement
-restores the installed copy. CI recreates the generated Inno core manifest in
-an isolated directory, verifies app-local CRT presence and observes the
-decoder's loaded CRT paths, without installing into the user's account.
+The shared `bin` layout uses ordinary files, without hard links or junctions.
+The application directory locates the install root, sibling SDR/proxy modules
+and existing recordings; TinyDoppler continues using the original root-level
+catalog/settings. No absolute install path is saved. Upgrades remove only
+known legacy package files, leaving user configuration (including Rigctl) alone.
+CI recreates the generated Inno core manifest in an isolated directory,
+verifies the shared runtime and observes loaded CRT paths in the decoder and
+TinyDoppler, without installing into the user's account.

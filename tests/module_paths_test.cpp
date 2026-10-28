@@ -32,5 +32,17 @@ int main(int argc, char* argv[])
         assert(asrtu::moduleDirectory(module, executable, launcher) == launcher);
     }
     assert(asrtu::moduleDirectory("missing", "missing.exe", launcher) == launcher);
+    assert(root.mkpath("bin"));
+    const QString sharedBin = root.filePath("bin");
+    for (const QString& module : {QStringLiteral("decoder"), QStringLiteral("doppler"),
+                                  QStringLiteral("satnogs-uploader")}) {
+        const QString executable = module + QStringLiteral(".exe");
+        QFile binary(QDir(sharedBin).filePath(executable));
+        assert(binary.open(QIODevice::WriteOnly));
+        binary.close();
+        // Prefer shared bin even if legacy sibling directories still exist.
+        assert(asrtu::moduleDirectory(module, executable, sharedBin) == sharedBin);
+    }
+    assert(asrtu::commonDirectory(sharedBin) == sharedBin);
     return 0;
 }

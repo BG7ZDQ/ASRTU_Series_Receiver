@@ -20,7 +20,7 @@
 
 内蔵の衛星軌道計算には、Andrew C. Young による sgp4 の C99 実装を
 MIT License に基づいて使用しています。ライセンス全文は
-decoder\SGP4_LICENSE.txt に収録されています。
+bin\SGP4_LICENSE.txt に収録されています。
 
 DSP の並列 ASRTU デコード系統には、OpenHoshimi の soundmodem コアが
 含まれています。原作者には BG6HNY / Hyacinth Satellite Team および

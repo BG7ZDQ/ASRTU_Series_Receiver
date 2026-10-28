@@ -123,7 +123,7 @@ def check(runtime, output, installed_layout=False):
     environment = {
         key: value for key, value in os.environ.items()
         if key.upper() not in {"PATH", "TEMP", "TMP", "LOCALAPPDATA", "APPDATA"}
-        and not key.upper().startswith(("QT_", "CONDA", "PYTHON", "GR_"))
+        and not key.upper().startswith(("QT_", "CONDA", "PYTHON", "GR_", "TINY_DOPPLER_"))
     }
     windows = Path(os.environ["SystemRoot"])
     environment["PATH"] = f"{windows / 'System32'};{windows}"
@@ -133,28 +133,35 @@ def check(runtime, output, installed_layout=False):
         directory.mkdir(exist_ok=True)
         environment[variable] = str(directory)
 
-    def executable(module, name):
-        return runtime / module / name if installed_layout else runtime / name
+    application_dir = runtime / "bin" if installed_layout else runtime
+
+    def executable(name):
+        return application_dir / name
 
     # Missing local CRT files must fail even on CI hosts with a new system CRT.
-    for module in ("launcher", "decoder", "doppler", "satnogs-uploader"):
-        directory = runtime / module if installed_layout else runtime
-        for name in ("msvcp140.dll", "vcruntime140.dll"):
-            if not (directory / name).is_file():
-                raise RuntimeError(f"Missing application-local runtime: {directory / name}")
+    for name in ("msvcp140.dll", "vcruntime140.dll"):
+        if not (application_dir / name).is_file():
+            raise RuntimeError(f"Missing application-local runtime: {application_dir / name}")
+    if installed_layout:
+        for module in ("launcher", "decoder", "doppler", "satnogs-uploader"):
+            if (runtime / module).exists():
+                raise RuntimeError(f"Unexpected duplicated runtime directory: {module}")
+        for path in runtime.rglob("*"):
+            if path.is_file() and (path.is_symlink() or path.stat().st_nlink != 1):
+                raise RuntimeError(f"Installed file must be an ordinary single-link file: {path}")
 
     wav = output / "silence.wav"
     with wave.open(str(wav), "wb") as stream:
         stream.setparams((2, 2, 48000, 0, "NONE", "not compressed"))
         stream.writeframes(bytes(48000 * 4 * 10))
 
-    run(executable("launcher", "ASRTU1_Launcher.exe"), ["--check-session-directory"],
+    run(executable("ASRTU1_Launcher.exe"), ["--check-session-directory"],
         output, environment)
     ready = output / "demod-ready.txt"
     screenshot = output / "demod.png"
     # The marker is written after MainWindow constructs the GNU Radio flow graph.
     # A live process alone is insufficient: it could be stuck in an error dialog.
-    run(executable("decoder", "ASRTU1_Demod_CQt.exe"),
+    run(executable("ASRTU1_Demod_CQt.exe"),
         ["--screenshot", screenshot, "--wav", wav, "--ready-file", ready],
         output, environment, verify_crt=True)
     if not ready.is_file() or ready.read_text() != "ready":
@@ -163,10 +170,16 @@ def check(runtime, output, installed_layout=False):
 
     # Preview mode renders the uploader without sending any observations.
     screenshot = output / "satnogs.png"
-    run(executable("satnogs-uploader", "ASRTU_SatnogsUploader.exe"),
+    run(executable("ASRTU_SatnogsUploader.exe"),
         ["--satellite", "JAMX", "--norad-id", "100470", "--source", "CI-TEST",
          "--longitude", "0", "--latitude", "0", "--altitude", "0",
          "--screenshot", screenshot], output, environment)
+    require_png(screenshot)
+    screenshot = output / "doppler.png"
+    if not installed_layout:
+        environment["TINY_DOPPLER_CONFIG_DIR"] = str(output / "doppler-config")
+    run(executable("TinyDoppler.exe"), ["--screenshot-catalog", screenshot],
+        output, environment, verify_crt=True)
     require_png(screenshot)
     print(f"Packaged Windows startup checks passed: {output}", flush=True)
 

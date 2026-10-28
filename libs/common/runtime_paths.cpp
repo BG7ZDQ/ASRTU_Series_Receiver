@@ -14,7 +14,7 @@ QString moduleDirectory(const QString& module, const QString& executable,
     const QDir current(applicationDirectory.isEmpty()
                            ? QCoreApplication::applicationDirPath()
                            : applicationDirectory);
-    // Build trees and portable packages keep executables together.
+    // Windows installations, build trees and flat packages share an EXE directory.
     if (QFileInfo::exists(current.filePath(executable)))
         return current.absolutePath();
     const QDir sibling(current.absoluteFilePath(QStringLiteral("../") + module));
@@ -31,9 +31,8 @@ QString commonDirectory(const QString& applicationDirectory)
     const QDir current(applicationDirectory.isEmpty()
                            ? QCoreApplication::applicationDirPath()
                            : applicationDirectory);
-    // The launcher directory is the shared runtime directory in installed
-    // layouts.  Keeping this as the application directory also works for
-    // flat build and portable layouts.
+    // Windows installs keep all suite executables and their DLLs in bin/.
+    // The application directory also works for old split and build layouts.
     return QDir::cleanPath(current.absolutePath());
 }
 

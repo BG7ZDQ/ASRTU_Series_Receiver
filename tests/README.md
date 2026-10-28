@@ -55,8 +55,9 @@ python ci/check_windows_startup.py packaging/inno/stage --installer-stage --outp
 ```
 
 This materializes the generated Inno core file manifest into a temporary
-layout and verifies module-local CRT presence, actual loaded CRT paths,
-decoder readiness and Qt screenshots with developer PATH/settings removed.
+layout and verifies the shared `bin` runtime, ordinary files without hard
+links, actual loaded CRT paths, decoder readiness and Qt screenshots
+(including TinyDoppler) with developer PATH/settings removed.
 Flat-runtime smoke tests alone cannot catch DLLs removed during installer
 staging. The previous layout fails both app-local presence and loader-path
 checks. No real installation, registry change or observation upload occurs.

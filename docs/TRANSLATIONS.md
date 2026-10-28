@@ -1,6 +1,6 @@
 # 翻译维护
 
-界面源语言是中文。语言优先级为：命令行 `--language=zh|en|ja`、程序目录内 `ui-language.ini` 的 `[UI] Language`、系统语言。Inno 安装器每次将用户本次选择的语言写入 `decoder/ui-language.ini`，不改变地面站配置；现有快捷方式和直接运行 EXE 都读取此设置，启动器会向子窗口传递实际使用的语言。无安装配置的便携版默认按系统语言选择：中文直接显示源文本，日文加载 `translations/asrtu_ja.qm`，其他语言加载 `translations/asrtu_en.qm`。`--language en` 形式也受支持。
+界面源语言是中文。语言优先级为：命令行 `--language=zh|en|ja`、程序目录内 `ui-language.ini` 的 `[UI] Language`、系统语言。Inno 安装器每次将用户本次选择的语言写入 `bin/ui-language.ini`，不改变地面站配置；现有快捷方式和直接运行 EXE 都读取此设置，启动器会向子窗口传递实际使用的语言。无安装配置的便携版默认按系统语言选择：中文直接显示源文本，日文加载 `translations/asrtu_ja.qm`，其他语言加载 `translations/asrtu_en.qm`。`--language en` 形式也受支持。
 
 相关文件：
 

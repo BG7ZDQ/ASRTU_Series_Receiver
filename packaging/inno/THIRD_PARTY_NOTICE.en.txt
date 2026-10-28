@@ -18,7 +18,7 @@ copy of the GPL is installed with the component as sdrpp\COPYING.
 
 The built-in satellite orbit calculations use Andrew C. Young's sgp4 C99
 implementation under the MIT License. The full license text is provided in
-decoder\SGP4_LICENSE.txt.
+bin\SGP4_LICENSE.txt.
 
 The DSP's parallel ASRTU decoding chain includes the soundmodem core from
 OpenHoshimi. Its original authors include BG6HNY / Hyacinth Satellite Team and
