@@ -10,7 +10,7 @@
 #include <math.h>
 #include <stddef.h>
 
-#define SM_SNR_WINDOW 1920U	    /* 200 ms at 9600 symbols/s */
+#define SM_SNR_WINDOW 960U /* 100 ms at 9600 symbols/s */
 
 struct sm_snr {
 	double i_power, q_power;

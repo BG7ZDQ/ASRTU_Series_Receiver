@@ -12,15 +12,15 @@ struct SnrSample {
 	bool synchronized;
 };
 
-// Both DSP paths publish every 200 ms of audio. Joining by interval keeps
+// Both DSP paths publish every 100 ms of audio. Joining by interval keeps
 // algorithm selection tied to historical loop lock, not the current UI state.
 class SnrSampleBuffer final
 {
       public:
-	static constexpr std::uint64_t inputInterval = 9600;  // 48 kHz
-	static constexpr std::uint64_t symbolInterval = 1920; // 9.6 kbaud
-	static constexpr double intervalSeconds = 0.2;
-	static constexpr std::size_t capacity = 600; // 120 s; plot shows 60 s
+	static constexpr std::uint64_t inputInterval = 4800; // 48 kHz
+	static constexpr std::uint64_t symbolInterval = 960; // 9.6 kbaud
+	static constexpr double intervalSeconds = 0.1;
+	static constexpr std::size_t capacity = 1200; // 120 s; plot shows 60 s
 
 	explicit SnrSampleBuffer(bool useDecoder = true)
 	    : use_decoder_(useDecoder)

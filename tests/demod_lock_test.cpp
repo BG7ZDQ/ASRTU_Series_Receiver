@@ -139,7 +139,7 @@ int main()
 		for (int kind = 0; kind < 2; ++kind) {
 			decoder.reset(sm_decoder_new());
 			require(bool(decoder), "Decoder allocation failed");
-			for (int block = 0; block < 125; ++block) {
+			for (int block = 0; block < 750; ++block) {
 				for (int i = 0; i < 1920; ++i) {
 					random =
 					    random * 1664525U + 1013904223U;

@@ -39,7 +39,11 @@ total fires only once for eight duplicate valid decoder results, and excludes
 short payloads and failed local recovery candidates.
 
 `snr_stream_sampling` feeds identical symbols/IQ through tiny and large work
-batches and checks all 200 ms readings, timestamps and historical algorithm
+batches and checks all 100 ms readings, timestamps and historical algorithm
 selection. It compares SVR against the GNU Radio kernel, checks intermediate
 signal changes, delayed producers, pause/EOF and bounded buffering. This
 catches fast replay losing points between GUI refreshes.
+
+The lock regression includes 30 seconds each of noise and noisy CW, as well
+as acquisition/release debounce. The response audit uses local JAMX sections
+with known switch times; see DSP notes for observed latency and its limits.

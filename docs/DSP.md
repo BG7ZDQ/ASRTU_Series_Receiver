@@ -15,14 +15,17 @@ suppression, excluding failed FEC/SSDV recovery candidates. The atomic counter
 belongs to the window, so input restarts/device changes preserve it; reopening
 the window resets it. It measures reception, not upload acknowledgements.
 
-The detector uses 1920-symbol (about 200 ms) windows after Gardner/Costas:
+The detector uses 960-symbol (about 100 ms) windows after Gardner/Costas:
 DC-removed I/Q second moments must show a real-axis BPSK constellation,
 the normalized mean Gardner timing error must be small, and FLL, Costas
 and timing-frequency estimates must stay away from their limits. Acquire
 thresholds are axis/power > 0.25, |2 IQ covariance|/axis < 0.4 and
 |summed timing error|/power < 0.15; hold thresholds are 0.15, 0.8 and 0.25.
 At least 99% of the window's observed loop-limit checks must pass.
-Two consecutive good windows acquire lock, two bad windows release it.
+Two consecutive good windows acquire lock, two bad windows release it
+(about 200 ms of confirmation). This excludes the time needed for the actual
+carrier/timing loops to converge: the indicator does not move historical
+colors forward or claim lock while the constellation is still rotating.
 These are a practical lock estimate, not a guarantee of correct data or an
 absolute sensitivity specification. Circular noise, silence, stationary CW,
 rotating symbols and unsettled timing are covered by regression tests.
@@ -36,8 +39,8 @@ The single status row shows SNR, loop frequency offset (`Loop df`) and lock stat
 `SNR (Es/N0)` is synchronized BPSK symbol **Es/N0** from the OpenHoshimi
 Gardner/Costas output. For
 locked BPSK and equal I/Q noise variances it estimates signal energy as
-`E[I²] - E[Q²]` and noise as `2 E[Q²]`, using non-overlapping 1920-symbol
-windows (approximately 200 ms). The result is `10 log10(signal/noise)`.
+`E[I²] - E[Q²]` and noise as `2 E[Q²]`, using non-overlapping 960-symbol
+windows (approximately 100 ms). The result is `10 log10(signal/noise)`.
 Residual phase/timing error, interference and noncircular noise can bias it;
 it is not RF C/N over the receiver bandwidth, nor information-bit Eb/N0.
 
@@ -67,12 +70,12 @@ even if processing cannot sustain the requested speed. No new samples means
 no new point, including at EOF. Invalid SNR keeps the last valid display;
 the next valid point uses its true audio timestamp.
 
-Both DSP threads capture one reading per 200 ms of audio (9600 decoder input
-samples or 1920 primary-path symbols), splitting scheduler batches at these
-boundaries. This matches the synchronized estimator's nominal 200 ms window.
+Both DSP threads capture one reading per 100 ms of audio (4800 decoder input
+samples or 960 primary-path symbols), splitting scheduler batches at these
+boundaries. This matches the synchronized estimator's nominal 100 ms window.
 The GUI drains all accumulated readings on its 100 ms timer; at 30x replay a
-refresh can consume about 15 readings instead of discarding all but the last.
-The nominal 60-second plot therefore retains about 300 intervals at any speed;
+refresh can consume about 30 readings instead of discarding all but the last.
+The nominal 60-second plot therefore retains about 600 intervals at any speed;
 invalid readings are still omitted. Each interval uses its historical loop
 lock to choose Es/N0 or SVR. The plot draws Es/N0 segments in green and SVR
 segments in a muted red; adjacent segments share their endpoint so an algorithm
@@ -80,7 +83,7 @@ switch is a seamless color change, not a break in the curve. Displayed and
 plotted SNR is clamped to a floor of -25 dB (values below -25 are shown as
 -25); raw benchmark diagnostics remain unclamped. Primary symbol timestamps use the nominal 9600
 baud rate; filter delay and recovered clock variation can slightly offset the
-two paths. The joined buffer holds at most 600 intervals (120 audio seconds),
+two paths. The joined buffer holds at most 1200 intervals (120 audio seconds),
 keeping memory bounded if the UI stalls. Already consumed intervals cannot
 be reintroduced by a late producer. Final queued readings are drained before
 the input-freshness check. No interpolation creates intermediate measurements.
@@ -135,3 +138,11 @@ transitive runtime DLLs and the Qt Windows platform plugin.
 For this machine, `build_release.ps1` performs configure, Release build and
 portable dependency collection in one command. It also works around launchers
 that inject duplicate `PATH`/`Path` environment keys.
+
+A response audit spliced real JAMX sections into strong-signal intervals at
+5-15 s and 20-30 s. Reducing measurement/confirmation windows from 200 to
+100 ms changed acquisitions from 6.6/22.6 s to 6.6/22.4 s. One loss-of-lock
+transition advanced from 15.4 to 15.2 s. These are recording-specific results,
+not a guaranteed acquisition time. Diagnostic constellation moments showed
+that actual carrier convergence, rather than GUI repainting, dominated the
+remaining delay. Decoder loop bandwidths and thresholds are unchanged.

@@ -8,7 +8,7 @@
 #include <stddef.h>
 #include <string.h>
 
-#define SM_LOCK_WINDOW 1920U /* 200 ms at 9600 symbols/s */
+#define SM_LOCK_WINDOW 960U /* 100 ms at 9600 symbols/s */
 
 struct sm_lock {
 	double i_sum, q_sum, i2, q2, iq, timing_error;

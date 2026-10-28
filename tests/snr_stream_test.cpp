@@ -32,7 +32,7 @@ static std::vector<SnrSample> runDecoder(const std::vector<gr_complex> &data,
 	auto buffer = std::make_shared<SnrSampleBuffer>();
 	auto sink = OpenHoshimiDecoderSink::make(buffer);
 	// A distinctive fallback makes lock/algorithm selection observable.
-	for (std::uint64_t tick = 1; tick <= 50; ++tick)
+	for (std::uint64_t tick = 1; tick <= 100; ++tick)
 		buffer->svr(tick, -10.0);
 	gr_vector_void_star output;
 	for (int offset = 0; offset < int(data.size());) {
@@ -49,10 +49,11 @@ static std::vector<SnrSample> runDecoder(const std::vector<gr_complex> &data,
 static void compare(const std::vector<SnrSample> &a,
 		    const std::vector<SnrSample> &b)
 {
-	require(a.size() == 50 && b.size() == 50,
-		"Lost 200 ms samples between UI refreshes");
+	require(a.size() == 100 && b.size() == 100,
+		"Lost 100 ms samples between UI refreshes");
 	for (std::size_t i = 0; i < a.size(); ++i) {
-		require(a[i].seconds == double(i + 1) * 0.2 &&
+		require(a[i].seconds == double(i + 1) *
+					    SnrSampleBuffer::intervalSeconds &&
 			    a[i].seconds == b[i].seconds,
 			"Timestamps depend on scheduler batch size");
 		require(a[i].synchronized == b[i].synchronized,
@@ -72,7 +73,9 @@ int main()
 			// Changing amplitude exposes replacing intermediate
 			// readings with repeated copies of the last value in a
 			// work batch.
-			const float amplitude = (i / 1920) % 2 ? 0.4f : 1.0f;
+			const float amplitude =
+			    (i / SnrSampleBuffer::symbolInterval) % 2 ? 0.4f
+								      : 1.0f;
 			symbols[i] = {
 			    ((random() & 1U) ? amplitude : -amplitude) +
 				noise(random),
@@ -127,7 +130,8 @@ int main()
 		auto recent = bounded.take();
 		require(
 		    recent.size() == SnrSampleBuffer::capacity &&
-			recent.back().seconds == 2000.0,
+			recent.back().seconds ==
+			    10000 * SnrSampleBuffer::intervalSeconds,
 		    "Slow UI causes unbounded history or loses latest data");
 		std::cout << "Dense SNR sampling, batch invariance, historical "
 			     "selection and bounded buffering passed\n";
