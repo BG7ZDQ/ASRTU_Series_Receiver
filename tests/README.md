@@ -47,3 +47,16 @@ catches fast replay losing points between GUI refreshes.
 The lock regression includes 30 seconds each of noise and noisy CW, as well
 as acquisition/release debounce. The response audit uses local JAMX sections
 with known switch times; see DSP notes for observed latency and its limits.
+
+Windows installer layout regression (after building the installer):
+
+```powershell
+python ci/check_windows_startup.py packaging/inno/stage --installer-stage --output work/installed-startup
+```
+
+This materializes the generated Inno core file manifest into a temporary
+layout and verifies module-local CRT presence, actual loaded CRT paths,
+decoder readiness and Qt screenshots with developer PATH/settings removed.
+Flat-runtime smoke tests alone cannot catch DLLs removed during installer
+staging. The previous layout fails both app-local presence and loader-path
+checks. No real installation, registry change or observation upload occurs.

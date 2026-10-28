@@ -231,6 +231,8 @@ jobs:
           .\build_installer.ps1 `
             -DecoderSource $env:ASRTU_PORTABLE `
             -InnoSetup $env:ASRTU_ISCC
+          python ci/check_windows_startup.py packaging/inno/stage --installer-stage --output "$env:RUNNER_TEMP/asrtu-installed-startup"
+          if ($LASTEXITCODE -ne 0) { throw 'Installed-layout startup verification failed.' }
           $versionLine = Select-String -LiteralPath 'CMakeLists.txt' `
             -Pattern 'project\(ASRTU1Qt VERSION ([0-9.]+)' | Select-Object -First 1
           if (-not $versionLine) {

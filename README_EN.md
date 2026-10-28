@@ -31,6 +31,8 @@ SNR does not require valid packets. It shows `SNR (Es/N0)` for synchronized I/Q 
 3. Enter your callsign, longitude, latitude, and altitude. These coordinates are used for satellite tracking and Doppler calculation and are stored locally.
 4. Select an input appropriate for your receiving chain. The sound-card selector is shown only for sound-card modes.
 
+The Windows installer keeps VC++ runtime DLLs beside each executable. If an older build fails at startup and Event Viewer points to an old system `MSVCP140.dll`, install the corrected package over it; installing or repairing the [official Microsoft x64 VC++ runtime](https://aka.ms/vc14/vc_redist.x64.exe) is also a workaround.
+
 ### 2. Input modes
 
 | Input | Intended use | Signal format |

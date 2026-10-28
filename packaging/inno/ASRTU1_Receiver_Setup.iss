@@ -217,7 +217,7 @@ function CreateHardLink(lpFileName, lpExistingFileName: String;
 
 function CollapseHardLink(const Destination, Source: String): Boolean;
 var
-  Temporary: String;
+  Temporary, Backup: String;
 begin
   Result := False;
   if (not FileExists(Destination)) or (not FileExists(Source)) then
@@ -226,16 +226,21 @@ begin
   DeleteFile(Temporary);
   if not CreateHardLink(Temporary, Source, 0) then
     Exit;
-  if not DeleteFile(Destination) then
+  Backup := Destination + '.asrtu-original';
+  { Hard-link deduplication is optional; keep the installed copy on failure. }
+  if FileExists(Backup) or (not RenameFile(Destination, Backup)) then
   begin
     DeleteFile(Temporary);
     Exit;
   end;
   if not RenameFile(Temporary, Destination) then
   begin
+    if not RenameFile(Backup, Destination) then
+      RaiseException('Unable to restore installed dependency: ' + Destination);
     DeleteFile(Temporary);
     Exit;
   end;
+  DeleteFile(Backup);
   Result := True;
 end;
 
