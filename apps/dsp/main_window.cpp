@@ -359,7 +359,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 			.constData());
 
 	try {
+		appendLog(QStringLiteral("Initializing input and DSP flowgraph"));
 		flowgraph_ = createFlowgraph(audio_device_id_, recording_path_);
+		appendLog(QStringLiteral("Building decoder window"));
 		buildUi();
 		ssdv_window_ = new SsdvImageWindow(this);
 		ssdv_receiver_ = std::make_unique<SsdvReceiver>(

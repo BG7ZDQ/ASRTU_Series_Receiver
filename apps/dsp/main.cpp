@@ -17,6 +17,7 @@
 #include <QLockFile>
 #include <QLocalSocket>
 #include <QMessageBox>
+#include <QSaveFile>
 #include <QStandardPaths>
 #include <QTimer>
 #include <QTranslator>
@@ -30,6 +31,20 @@
 
 namespace
 {
+bool reportStartupFailure(const QStringList &arguments, int code,
+			  const QString &message)
+{
+	const int option = arguments.indexOf(QStringLiteral("--ready-file"));
+	if (option < 0 || option + 1 >= arguments.size())
+		return false;
+	// Publish failure before exiting. A detached child's PID may already
+	// be gone when the launcher next polls, losing its real exit status.
+	QSaveFile status(arguments.at(option + 1));
+	const auto data = QStringLiteral("error:%1\n%2").arg(code).arg(message).toUtf8();
+	return status.open(QIODevice::WriteOnly) &&
+	       status.write(data) == data.size() && status.commit();
+}
+
 bool lockOwnerIsLiveDecoder(QLockFile *lock)
 {
 	qint64 pid = 0;
@@ -139,15 +154,27 @@ int main(int argc, char *argv[])
 	liveReceiverLock.setStaleLockTime(0);
 	if (!arguments.contains(QStringLiteral("--wav"))) {
 		bool locked = liveReceiverLock.tryLock(100);
-		if (!locked && !lockOwnerIsLiveDecoder(&liveReceiverLock)) {
+		if (!locked && liveReceiverLock.error() == QLockFile::LockFailedError &&
+		    !lockOwnerIsLiveDecoder(&liveReceiverLock)) {
 			// A crashed decoder leaves a PID that Windows may reuse
 			// later. Never let an unrelated process block all
 			// future live receivers.
 			QFile::remove(liveReceiverLockPath);
 			locked = liveReceiverLock.tryLock(100);
 		}
-		if (!locked)
-			return 3;
+		if (!locked) {
+			const bool occupied = liveReceiverLock.error() == QLockFile::LockFailedError;
+			const int code = occupied ? 3 : 4;
+			const QString message = occupied
+			    ? QCoreApplication::translate("ASRTU", "实时解码器已在运行；不会重复启动。")
+			    : QCoreApplication::translate("ASRTU",
+				"无法创建实时解码器实例锁，请检查临时目录权限。\n%1")
+				.arg(liveReceiverLockPath);
+			std::cerr << message.toUtf8().constData() << '\n';
+			if (!reportStartupFailure(arguments, code, message) && !occupied)
+				QMessageBox::critical(nullptr, QStringLiteral("ASRTU"), message);
+			return code;
+		}
 	}
 
 	try {
@@ -224,8 +251,9 @@ int main(int argc, char *argv[])
 					 "输入”。\n\n底层错误：%1")
 				.arg(message);
 		}
-		QMessageBox::critical(
-		    nullptr, QStringLiteral("ASRTU fatal error"), message);
+		if (!reportStartupFailure(arguments, EXIT_FAILURE, message))
+			QMessageBox::critical(
+			    nullptr, QStringLiteral("ASRTU fatal error"), message);
 		return EXIT_FAILURE;
 	}
 }

@@ -767,6 +767,20 @@ Received: %2 UTC
             <translation type="vanished">Unable to create the decoder startup confirmation channel: %1</translation>
         </message>
         <message>
+            <source>无法创建实时解码器实例锁，请检查临时目录权限。
+%1</source>
+            <translation>Unable to create the live decoder instance lock. Check temporary-directory permissions.
+%1</translation>
+        </message>
+        <message>
+            <source>解码器在完成初始化前退出。请查看本次接收日志。</source>
+            <translation>The decoder exited before initialization completed. Check the log for this session.</translation>
+        </message>
+        <message>
+            <source>解码器未在 15 秒内完成初始化。</source>
+            <translation>The decoder did not finish initializing within 15 seconds.</translation>
+        </message>
+        <message>
             <source>实时解码器已在运行；不会重复启动。</source>
             <translation>A live decoder is already running; it will not be started again.</translation>
         </message>

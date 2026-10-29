@@ -52,7 +52,7 @@ def loaded_crt_modules(pid):
     return result
 
 
-def run(executable, arguments, output, environment, verify_crt=False):
+def run(executable, arguments, output, environment, verify_crt=False, expected_exit=0):
     startup = subprocess.STARTUPINFO()
     startup.dwFlags = subprocess.STARTF_USESHOWWINDOW
     startup.wShowWindow = 0
@@ -88,7 +88,7 @@ def run(executable, arguments, output, environment, verify_crt=False):
                 if verify_crt:
                     (output / f"{executable.stem}.loaded-crt.json").write_text(
                         json.dumps({k: str(v) for k, v in observed.items()}, indent=2), encoding="utf-8")
-    if code != 0:
+    if code != expected_exit:
         raise RuntimeError(f"{executable.name}: exit status 0x{code & 0xffffffff:08X}")
     if verify_crt and "msvcp140.dll" not in observed:
         raise RuntimeError(f"{executable.name}: could not verify loaded MSVCP140.dll")
@@ -114,6 +114,15 @@ def materialize_installer(stage, destination):
         entries += 1
     if not entries:
         raise RuntimeError("Installer contains no core files")
+    # Mirror the installer's executable-only post-install normalization.
+    # A copied file otherwise inherits Low integrity in a sandbox workspace.
+    icacls = Path(os.environ["SystemRoot"]) / "System32" / "icacls.exe"
+    for name in ("ASRTU1_Launcher.exe", "ASRTU1_Demod_CQt.exe", "TinyDoppler.exe",
+                 "ASRTU_SatnogsUploader.exe", "sndfile-convert.exe"):
+        path = destination / "bin" / name
+        if path.is_file():
+            subprocess.run([str(icacls), str(path), "/setintegritylevel", "M"],
+                           check=True, capture_output=True)
     return destination
 
 
@@ -181,7 +190,43 @@ def check(runtime, output, installed_layout=False):
     run(executable("TinyDoppler.exe"), ["--screenshot-catalog", screenshot],
         output, environment, verify_crt=True)
     require_png(screenshot)
+    if installed_layout:
+        check_live_startup(application_dir, output, environment)
     print(f"Packaged Windows startup checks passed: {output}", flush=True)
+
+
+def check_live_startup(application_dir, output, environment):
+    # --wav bypasses the live-instance lock, so playback-only smoke tests
+    # miss permissions failures. Use a fresh directory in the real user TEMP,
+    # not another Low-labelled directory under the source workspace.
+    user_temp = Path(os.environ["LOCALAPPDATA"]) / "Temp"
+    with tempfile.TemporaryDirectory(prefix="asrtu-live-check-", dir=user_temp) as temporary:
+        live_environment = environment.copy()
+        live_environment.update(TEMP=temporary, TMP=temporary)
+        live = output / "live-startup"
+        live.mkdir()
+        ready = live / "ready.txt"
+        run(application_dir / "ASRTU1_Demod_CQt.exe",
+            ["--screenshot", live / "live.png", "--shared-iq-bridge", "--no-record",
+             "--session-dir", live, "--ready-file", ready],
+            live, live_environment, verify_crt=True)
+        if ready.read_text() != "ready":
+            raise RuntimeError("Live decoder did not confirm initialization")
+        require_png(live / "live.png")
+
+        # A lock-path failure must be reported as an error, never as another
+        # running instance (exit 3). No actual microphone/SDR input is needed.
+        unavailable = Path(temporary) / "not-a-directory"
+        unavailable.write_text("fixture")
+        live_environment.update(TEMP=str(unavailable), TMP=str(unavailable))
+        failure = output / "lock-path-failure"
+        failure.mkdir()
+        status = failure / "status.txt"
+        run(application_dir / "ASRTU1_Demod_CQt.exe",
+            ["--shared-iq-bridge", "--no-record", "--ready-file", status],
+            failure, live_environment, expected_exit=4)
+        if not status.read_text(encoding="utf-8").startswith("error:4\n"):
+            raise RuntimeError("Lock-path failure was not published to the launcher")
 
 
 def require_png(path):

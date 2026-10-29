@@ -409,6 +409,8 @@ var
   ConfigText: String;
   LegacySdrpp, NewSdrpp, Destination: String;
   ConfigFile: TFindRec;
+  Executables: TArrayOfString;
+  I, IntegrityResult: Integer;
 begin
 #ifdef SdrppAvailable
   if (CurStep = ssInstall) and WizardIsComponentSelected('sdrpp') then
@@ -438,6 +440,26 @@ begin
 #endif
   if CurStep <> ssPostInstall then
     Exit;
+
+  { An install inside a Low-labelled development folder otherwise creates
+    Low executables. Windows then prevents them from creating the live
+    receiver lock in the user's normal TEMP. Set only our executable files
+    to normal user integrity; never change directory ACLs or user data. }
+  Executables := ['bin\ASRTU1_Launcher.exe', 'bin\ASRTU1_Demod_CQt.exe',
+                  'bin\TinyDoppler.exe', 'bin\ASRTU_SatnogsUploader.exe',
+                  'bin\sndfile-convert.exe', 'proxy\ASRTU_Proxy.exe',
+                  'proxy\proxy_mmt_gui.exe', 'sdrsharp\SDRSharp.exe',
+                  'sdrpp\sdrpp.exe'];
+  for I := 0 to GetArrayLength(Executables) - 1 do
+  begin
+    Destination := ExpandConstant('{app}\') + Executables[I];
+    if FileExists(Destination) then
+      if (not Exec(ExpandConstant('{sys}\icacls.exe'),
+                   '"' + Destination + '" /setintegritylevel M', '',
+                   SW_HIDE, ewWaitUntilTerminated, IntegrityResult)) or
+         (IntegrityResult <> 0) then
+        Log('Unable to set executable integrity to Medium: ' + Destination);
+  end;
 
 #ifdef SdrppAvailable
   if WizardIsComponentSelected('sdrpp') then

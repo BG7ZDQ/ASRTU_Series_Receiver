@@ -430,6 +430,10 @@ if(BUILD_TESTING)
         target_compile_options(ASRTU1_LauncherSdrTest PRIVATE /utf-8)
     endif()
     add_test(NAME launcher_sdr_layout COMMAND ASRTU1_LauncherSdrTest)
+    if(WIN32)
+        # The startup-failure regression launches the real decoder.
+        add_dependencies(ASRTU1_LauncherSdrTest ASRTU1_Demod_CQt)
+    endif()
     # Qt's widget/image helper threads destroy process-lifetime GUI objects at
     # exit; LeakSanitizer and TSan report that as false positives. Keep sanitizers
     # strict for the rest of the suite, but not for this GUI smoke test.

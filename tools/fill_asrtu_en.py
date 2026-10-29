@@ -6,6 +6,9 @@ ROOT = Path(__file__).resolve().parents[1]
 TS = ROOT / "assets" / "translations" / "asrtu_en.ts"
 
 TRANSLATIONS = {
+    '无法创建实时解码器实例锁，请检查临时目录权限。\n%1': 'Unable to create the live decoder instance lock. Check temporary-directory permissions.\n%1',
+    '解码器在完成初始化前退出。请查看本次接收日志。': 'The decoder exited before initialization completed. Check the log for this session.',
+    '解码器未在 15 秒内完成初始化。': 'The decoder did not finish initializing within 15 seconds.',
     "CRC未通过": "CRC failed",
     "已接收 %1 / %2 包　·　CRC未通过 %3 包　·　缺失 %4 包　·　完整率 %5%": "Received %1 / %2  ·  CRC failed %3  ·  Missing %4  ·  Integrity %5%",
     "已接收 %1 包　·　CRC未通过 %2 包　·　确认缺失 %3 包　·　最新包序号 %4　·　总包数待确定": "Received %1  ·  CRC failed %2  ·  Confirmed missing %3  ·  Latest packet %4  ·  Total pending EOI",

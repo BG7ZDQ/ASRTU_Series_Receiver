@@ -6,6 +6,41 @@
 #include <QTemporaryDir>
 #include <QFontDatabase>
 
+#ifdef Q_OS_WIN
+bool testDecoderStartupFailure()
+{
+	QTemporaryDir temporary;
+	if (!temporary.isValid())
+		return false;
+	const QString blocked = temporary.filePath(QStringLiteral("not-a-directory"));
+	QFile fixture(blocked);
+	if (!fixture.open(QIODevice::WriteOnly))
+		return false;
+	fixture.close();
+	const QByteArray originalTemp = qgetenv("TEMP");
+	const QByteArray originalTmp = qgetenv("TMP");
+	qputenv("TEMP", blocked.toLocal8Bit());
+	qputenv("TMP", blocked.toLocal8Bit());
+	QString session, error;
+	qint64 proxy = 0;
+	QElapsedTimer elapsed;
+	elapsed.start();
+	// Exercise the actual launcher -> decoder protocol, without microphone,
+	// SDR samples, recordings or uploads. Failure must survive a fast exit.
+	const bool started = startSuite(false, 2, {}, false, -1, false,
+					&session, &proxy, &error);
+	qputenv("TEMP", originalTemp);
+	qputenv("TMP", originalTmp);
+	QFile status(QDir(session).filePath(QStringLiteral("decoder.ready")));
+	const bool correct = !started && elapsed.elapsed() < 10000 &&
+		error.contains(QStringLiteral("无法创建实时解码器实例锁")) &&
+		status.open(QIODevice::ReadOnly) && status.readAll().startsWith("error:4\n");
+	if (!correct)
+		std::cerr << "Incorrect decoder startup failure: " << error.toUtf8().constData() << '\n';
+	return correct;
+}
+#endif
+
 bool testSdrppPresetMigration()
 {
 	QTemporaryDir temp;
@@ -166,6 +201,9 @@ int main(int argc, char **argv)
 	QCoreApplication::setApplicationName(QStringLiteral("Chooser"));
 	app.setFont(QFont(QStringLiteral("Microsoft YaHei UI"), 9));
 	bool ok = testSdrppPresetMigration();
+#ifdef Q_OS_WIN
+	ok = testDecoderStartupFailure() && ok;
+#endif
 	// Check the qrc entries directly. Rendering a QIcon starts Qt's
 	// threaded image loader, whose pool destruction is reported as a TSan
 	// race even though the resource is valid (and the same icon is

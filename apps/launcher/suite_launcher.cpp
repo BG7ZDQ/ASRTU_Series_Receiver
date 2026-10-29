@@ -1706,29 +1706,56 @@ bool startSuite(bool enableProxy, int inputMode, const QString &wavPath,
 	QElapsedTimer readyTimer;
 	readyTimer.start();
 	bool decoderReady = false;
+	bool decoderExited = false;
+	QString startupFailure;
 	quint32 decoderExitCode = 0;
 	while (readyTimer.elapsed() < 15000) {
 		QFile ready(readyFile);
-		if (ready.open(QIODevice::ReadOnly) &&
-		    ready.readAll().trimmed() == QByteArrayLiteral("ready")) {
-			decoderReady = true;
-			break;
+		if (ready.open(QIODevice::ReadOnly)) {
+			const QByteArray status = ready.read(65536).trimmed();
+			if (status == QByteArrayLiteral("ready")) {
+				decoderReady = true;
+				break;
+			}
+			if (status.startsWith("error:")) {
+				const int separator = status.indexOf('\n');
+				bool valid = false;
+				const uint code = status.mid(6, separator - 6).toUInt(&valid);
+				if (separator >= 6 && valid) {
+					decoderExitCode = code;
+					startupFailure = QString::fromUtf8(status.mid(separator + 1));
+					break;
+				}
+			}
 		}
-		if (!processSurvivedStartup(decoderPid, 0, &decoderExitCode))
+		if (decoderExited)
 			break;
+		if (!processSurvivedStartup(decoderPid, 0, &decoderExitCode)) {
+			decoderExited = true;
+			continue; // Re-read a failure committed just before exit.
+		}
 		QThread::msleep(25);
 	}
 	if (!decoderReady) {
-		terminateDetachedProcess(decoderPid);
+		// Reported errors exit on their own; never terminate an already
+		// exited child's PID, which could have been reused by Windows.
+		if (!decoderExited && startupFailure.isEmpty())
+			terminateDetachedProcess(decoderPid);
 		if (proxyPid > 0)
 			terminateDetachedProcess(proxyPid);
-		*error =
-		    decoderExitCode == 3
+		*error = !startupFailure.isEmpty()
+		    ? startupFailure
+		    : decoderExitCode == 3
 			? QCoreApplication::translate(
 			      "ASRTU", "实时解码器已在运行；不会重复启动。")
+			: decoderExited ? QCoreApplication::translate(
+			      "ASRTU", "解码器在完成初始化前退出。请查看本次接收日志。")
 			: QCoreApplication::translate(
 			      "ASRTU",
-			      "解码器未在 15 秒内完成初始化；已回滚本次启动。");
+			      "解码器未在 15 秒内完成初始化。");
+		const QString details = logTail(decoderLog);
+		if (startupFailure.isEmpty() && !details.isEmpty())
+			*error += QStringLiteral("\n\n") + details;
 		return false;
 	}
 	QFile::remove(readyFile);

@@ -33,6 +33,8 @@ SNR does not require valid packets. It shows `SNR (Es/N0)` for synchronized I/Q 
 
 The Windows installer places the launcher, decoder, TinyDoppler and SatNOGS uploader in one `bin` directory, dynamically loading one shared copy of the VC++/Qt dependencies beside the executables, without hard links. If an older build fails at startup and Event Viewer points to an old system `MSVCP140.dll`, install the corrected package over it; installing or repairing the [official Microsoft x64 VC++ runtime](https://aka.ms/vc14/vc_redist.x64.exe) is also a workaround.
 
+If startup immediately reports a 15-second timeout or incorrectly reports an existing decoder, the corrected build reports the actual initialization error and fixes inherited Low integrity labels on installed executables. See [Windows startup diagnostics](docs/WINDOWS_STARTUP.md).
+
 ### 2. Input modes
 
 | Input | Intended use | Signal format |

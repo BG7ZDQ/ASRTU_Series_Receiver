@@ -731,6 +731,20 @@ NORAD ID：%4
             <translation>新しい衛星追跡プログラム TinyDoppler.exe が見つかりません</translation>
         </message>
         <message>
+            <source>无法创建实时解码器实例锁，请检查临时目录权限。
+%1</source>
+            <translation>ライブデコーダーのインスタンスロックを作成できません。一時フォルダーのアクセス権を確認してください。
+%1</translation>
+        </message>
+        <message>
+            <source>解码器在完成初始化前退出。请查看本次接收日志。</source>
+            <translation>デコーダーが初期化完了前に終了しました。今回の受信ログを確認してください。</translation>
+        </message>
+        <message>
+            <source>解码器未在 15 秒内完成初始化。</source>
+            <translation>デコーダーが15秒以内に初期化を完了しませんでした。</translation>
+        </message>
+        <message>
             <source>实时解码器已在运行；不会重复启动。</source>
             <translation>ライブデコーダーは既に実行中です。重複起動しません。</translation>
         </message>

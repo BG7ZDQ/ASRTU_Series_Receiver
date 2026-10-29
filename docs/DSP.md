@@ -186,3 +186,12 @@ known legacy package files, leaving user configuration (including Rigctl) alone.
 CI recreates the generated Inno core manifest in an isolated directory,
 verifies the shared runtime and observes loaded CRT paths in the decoder and
 TinyDoppler, without installing into the user's account.
+
+The installer also sets known executable files to Medium integrity, preventing
+an inherited Low label in a development directory from blocking the live
+decoder's lock in normal user TEMP. It does not change directory ACLs or user
+configuration. Installed-layout checks now exercise live shared-I/Q startup
+with normal user TEMP, as WAV mode bypasses the instance lock. An invalid lock
+path must return exit 4 and publish `error:4` through the existing ready file;
+actual instance contention remains exit 3. The launcher distinguishes reported
+initialization failures, early process exit and a real 15-second timeout.
