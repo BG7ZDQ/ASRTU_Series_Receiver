@@ -1,11 +1,15 @@
 #include "main_window.h"
 
 #include "flowgraph.h"
+#include "ini_settings.h"
+#include "responsive_splitter.h"
 #include "rssi_meter.h"
 #include "runtime_paths.h"
 #include "snr_plot.h"
+#include "spectrum_card.h"
 #include "ssdv_image_window.h"
 #include "ssdv_receiver.h"
+#include "status_layout.h"
 #include "version.h"
 
 #include <QApplication>
@@ -16,7 +20,6 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QFrame>
-#include <QHBoxLayout>
 #include <QLabel>
 #include <QLocalServer>
 #include <QLocalSocket>
@@ -25,7 +28,6 @@
 #include <QMouseEvent>
 #include <QPointer>
 #include <QResizeEvent>
-#include <QSettings>
 #include <QScreen>
 #include <QSplitter>
 #include <QTextStream>
@@ -130,62 +132,6 @@ class EqualAxisScaleFilter final : public QObject
       private:
 	QwtPlot *plot_ = nullptr;
 	bool updating_ = false;
-};
-
-class ResponsivePlotSplitter final : public QSplitter
-{
-      public:
-	explicit ResponsivePlotSplitter(QWidget *parent = nullptr)
-	    : QSplitter(Qt::Vertical, parent)
-	{
-	}
-
-      protected:
-	void resizeEvent(QResizeEvent *event) override
-	{
-		QSplitter::resizeEvent(event);
-		const int available = height() - handleWidth();
-		if (available <= 0 || count() < 2)
-			return;
-		// The Qwt constellation widget needs roughly the right-column
-		// width as its outer height for the inner -2..2 canvas to
-		// appear square.
-		const int maxConstellationHeight =
-		    std::max(300, std::min(430, available - 150));
-		const int constellationHeight =
-		    std::clamp(width() - 20, 300, maxConstellationHeight);
-		setSizes(
-		    {constellationHeight, available - constellationHeight});
-	}
-};
-
-class ResponsiveMainSplitter final : public QSplitter
-{
-      public:
-	explicit ResponsiveMainSplitter(QWidget *parent = nullptr)
-	    : QSplitter(Qt::Horizontal, parent)
-	{
-	}
-
-      protected:
-	void resizeEvent(QResizeEvent *event) override
-	{
-		QSplitter::resizeEvent(event);
-		const int available = width() - handleWidth();
-		if (available <= 0 || count() < 2)
-			return;
-
-		// Keep the demodulator column close to the GNU Radio
-		// proportions. On a normal window it occupies about 48%; on a
-		// wide/full-screen window it stops growing at 520 px and the
-		// plots receive the rest.
-		const int maxRightWidth =
-		    std::max(500, std::min(520, available - 300));
-		const int rightWidth =
-		    std::clamp(static_cast<int>(std::lround(width() * 0.48)),
-			       500, maxRightWidth);
-		setSizes({available - rightWidth, rightWidth});
-	}
 };
 
 void installRightClickReset(QWidget *widget, QObject *owner,
@@ -445,8 +391,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 	updateStatus();
 	setupControlServer();
 
-	QSettings settings(QStringLiteral("ASRTU"),
-			   QStringLiteral("ASRTU1_Demod_CQt_v3"));
+	asrtu::IniSettings settings(QStringLiteral("decoder"));
 	const auto geometry =
 	    settings.value(QStringLiteral("geometry")).toByteArray();
 	if (!geometry.isEmpty()) {
@@ -486,6 +431,15 @@ void MainWindow::buildUi()
 	    "QFrame#statusCard { background:#ffffff; border:1px solid #d9e5f2; "
 	    "border-radius:8px; }"
 	    "QLabel#metric { color:#243447; font-weight:600; }"
+	    "QFrame#spectrumCard { background:transparent; border:0; }"
+	    "QToolButton#spectrumToggle { padding:0; color:#4b5563; "
+	    "background:transparent; border:1px solid transparent; "
+	    "border-radius:2px; "
+	    "font-weight:bold; }"
+	    "QToolButton#spectrumToggle:hover { background:#e9edf1; "
+	    "border-color:#b8bec6; }"
+	    "QToolButton#spectrumToggle:pressed { background:#dce1e7; }"
+	    "QToolButton#spectrumToggle:focus { border-color:#7b8794; }"
 	    "QDoubleSpinBox { min-height:28px; padding:0 7px; "
 	    "background:#ffffff; "
 	    "border:1px solid #cbd5e1; border-radius:5px; }"
@@ -495,12 +449,13 @@ void MainWindow::buildUi()
 	    "border-radius:2px; }"
 	    "QSlider::handle:horizontal { width:15px; margin:-5px 0; "
 	    "background:#ffffff; border:2px solid #2b7de9; border-radius:7px; }"
-	    "QSplitter::handle { background:#f7faff; }"
+	    "QSplitter::handle { background:#e4e9ef; }"
+	    "QSplitter::handle:hover { background:#b8c7d8; }"
 	    "QSplitter::handle:horizontal { width:8px; }"
 	    "QSplitter::handle:vertical { height:8px; }"));
 	auto *outerLayout = new QVBoxLayout(central);
 	outerLayout->setContentsMargins(10, 10, 10, 10);
-	outerLayout->setSpacing(0);
+	outerLayout->setSpacing(8);
 
 	auto *mainSplitter = new ResponsiveMainSplitter(central);
 	mainSplitter->setChildrenCollapsible(false);
@@ -515,7 +470,8 @@ void MainWindow::buildUi()
 
 	auto *demod = new QWidget(mainSplitter);
 	demod->setObjectName(QStringLiteral("demodPanel"));
-	demod->setMinimumWidth(500);
+	demod->setMinimumWidth(340);
+	leftSplitter->setMinimumWidth(340);
 	demod->setStyleSheet(
 	    QStringLiteral("QWidget#demodPanel { background:#ffffff; "
 			   "border:1px solid #d9e5f2; "
@@ -526,7 +482,7 @@ void MainWindow::buildUi()
 
 	auto *statusCard = new QFrame(demod);
 	statusCard->setObjectName(QStringLiteral("statusCard"));
-	auto *status = new QHBoxLayout(statusCard);
+	auto *status = new StatusLayout(statusCard);
 	status->setContentsMargins(12, 7, 9, 7);
 	status->setSpacing(8);
 	QFont infoFont = font();
@@ -552,7 +508,6 @@ void MainWindow::buildUi()
 
 	status->addWidget(snr_label_);
 	status->addWidget(frequency_label_);
-	status->addStretch(1);
 	status->addWidget(lock_label_);
 	demodLayout->addWidget(statusCard);
 	snr_plot_ = new SnrPlot(demod);
@@ -561,7 +516,7 @@ void MainWindow::buildUi()
 
 	rssi_meter_ = new RssiMeter(demod);
 	auto *constellation = flowgraph_->constellationWidget();
-	constellation->setMinimumHeight(300);
+	constellation->setMinimumHeight(220);
 	constellation->setSizePolicy(QSizePolicy::Expanding,
 				     QSizePolicy::Expanding);
 	QwtPlot *constellationPlot = dynamic_cast<QwtPlot *>(constellation);
@@ -585,7 +540,9 @@ void MainWindow::buildUi()
 	demodPlots->setOpaqueResize(false);
 	demodPlots->setHandleWidth(7);
 	demodPlots->addWidget(constellation);
-	demodPlots->addWidget(loopSpectrum);
+	demodPlots->addWidget(new SpectrumCard(
+	    loopSpectrum, QStringLiteral("Loop spectrum"),
+	    QStringLiteral("plots/loopSpectrumVisible"), demodPlots));
 	demodPlots->setStretchFactor(0, 4);
 	demodPlots->setStretchFactor(1, 1);
 	demodPlots->setSizes({420, 300});
@@ -596,7 +553,9 @@ void MainWindow::buildUi()
 	     {waterfall, inputSpectrum, constellation, loopSpectrum})
 		reducePlotTitleFont(plotWidget);
 	leftSplitter->addWidget(waterfall);
-	leftSplitter->addWidget(inputSpectrum);
+	leftSplitter->addWidget(new SpectrumCard(
+	    inputSpectrum, QStringLiteral("AGC output spectrum"),
+	    QStringLiteral("plots/agcSpectrumVisible"), leftSplitter));
 	leftSplitter->setStretchFactor(0, 1);
 	leftSplitter->setStretchFactor(1, 1);
 	leftSplitter->setSizes({500, 500});
@@ -1120,8 +1079,7 @@ void MainWindow::finishAudioDeviceSwitch(AsrtuFlowgraph *stoppedFlowgraph,
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-	QSettings settings(QStringLiteral("ASRTU"),
-			   QStringLiteral("ASRTU1_Demod_CQt_v3"));
+	asrtu::IniSettings settings(QStringLiteral("decoder"));
 	settings.setValue(QStringLiteral("geometry"), saveGeometry());
 	if (closing_) {
 		event->ignore();

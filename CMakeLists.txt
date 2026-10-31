@@ -1,6 +1,30 @@
 cmake_minimum_required(VERSION 3.20)
 project(ASRTU1Qt VERSION 1.5.5 LANGUAGES C CXX)
 
+# The TinyDoppler submodule also builds on its own (README and its CI run
+# `cmake -S .` inside the submodule), so it vendors a copy of the shared
+# Maidenhead locator header. When the submodule is present, both files must
+# exist and stay byte-identical; a checkout without the optional submodule
+# skips this check.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/external/TinyDoppler/CMakeLists.txt")
+    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/external/TinyDoppler/app/grid_locator.h")
+        message(FATAL_ERROR
+            "The TinyDoppler checkout is missing its vendored copy of "
+            "libs/common/grid_locator.h.")
+    endif()
+    file(SHA256 "${CMAKE_CURRENT_SOURCE_DIR}/libs/common/grid_locator.h"
+         ASRTU_GRID_LOCATOR_SHA256)
+    file(SHA256
+         "${CMAKE_CURRENT_SOURCE_DIR}/external/TinyDoppler/app/grid_locator.h"
+         ASRTU_VENDORED_GRID_LOCATOR_SHA256)
+    if(NOT ASRTU_GRID_LOCATOR_SHA256 STREQUAL
+       ASRTU_VENDORED_GRID_LOCATOR_SHA256)
+        message(FATAL_ERROR
+            "external/TinyDoppler/app/grid_locator.h is a vendored copy of "
+            "libs/common/grid_locator.h and must stay identical.")
+    endif()
+endif()
+
 # Windows RC version resources need a comma-separated number and a display
 # string; both are derived from the single PROJECT_VERSION source.
 string(REPLACE "." "," ASRTU_VERSION_COMMA ${PROJECT_VERSION})
@@ -393,6 +417,17 @@ if(BUILD_TESTING)
     asrtu_enable_strict_warnings(ASRTU1_DemodLockTest)
     add_test(NAME demod_loop_lock COMMAND ASRTU1_DemodLockTest)
 
+    add_executable(ASRTU1_SpectrumCardTest tests/spectrum_card_test.cpp)
+    target_include_directories(ASRTU1_SpectrumCardTest PRIVATE apps/dsp libs/common)
+    target_link_libraries(ASRTU1_SpectrumCardTest PRIVATE Qt5::Widgets)
+    asrtu_enable_strict_warnings(ASRTU1_SpectrumCardTest)
+    add_test(NAME spectrum_card COMMAND ASRTU1_SpectrumCardTest -platform offscreen)
+    # Qt's offscreen widgets destroy process-lifetime platform objects at exit;
+    # LeakSanitizer and TSan report that as a false positive. Keep sanitizers
+    # strict for the rest of the suite, but not for this GUI smoke test.
+    set_tests_properties(spectrum_card PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;ASAN_OPTIONS=detect_leaks=0;TSAN_OPTIONS=halt_on_error=0:exitcode=0")
+
     add_executable(ASRTU1_SnrTest tests/snr_test.cpp)
     target_include_directories(ASRTU1_SnrTest PRIVATE apps/dsp)
     target_link_libraries(ASRTU1_SnrTest PRIVATE openhoshimi_soundmodem)
@@ -430,6 +465,27 @@ if(BUILD_TESTING)
         target_compile_options(ASRTU1_LauncherSdrTest PRIVATE /utf-8)
     endif()
     add_test(NAME launcher_sdr_layout COMMAND ASRTU1_LauncherSdrTest)
+    add_executable(ASRTU1_LauncherGridTest tests/launcher_grid_test.cpp
+        libs/common/audio_devices.cpp
+        libs/common/translation.cpp libs/common/runtime_paths.cpp
+        apps/launcher/launcher_resources.qrc apps/dsp/application_icons.qrc)
+    target_include_directories(ASRTU1_LauncherGridTest PRIVATE libs/common)
+    target_link_libraries(ASRTU1_LauncherGridTest PRIVATE
+        Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network)
+    target_compile_definitions(ASRTU1_LauncherGridTest PRIVATE
+        ASRTU_VERSION="${PROJECT_VERSION}")
+    if(WIN32)
+        target_link_libraries(ASRTU1_LauncherGridTest PRIVATE winmm)
+        target_compile_definitions(ASRTU1_LauncherGridTest PRIVATE
+            NOMINMAX WIN32_LEAN_AND_MEAN)
+    endif()
+    if(MSVC)
+        target_compile_options(ASRTU1_LauncherGridTest PRIVATE /utf-8)
+    endif()
+    add_test(NAME launcher_grid COMMAND ASRTU1_LauncherGridTest
+        -platform offscreen)
+    set_tests_properties(launcher_grid PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;ASAN_OPTIONS=detect_leaks=0;TSAN_OPTIONS=halt_on_error=0:exitcode=0")
     if(WIN32)
         # The startup-failure regression launches the real decoder.
         add_dependencies(ASRTU1_LauncherSdrTest ASRTU1_Demod_CQt)
@@ -450,6 +506,19 @@ if(BUILD_TESTING)
     target_link_libraries(ASRTU1_LanguageTest PRIVATE
         Qt5::Core Qt5::Gui Qt5::Widgets)
     add_test(NAME application_language COMMAND ASRTU1_LanguageTest)
+    add_executable(ASRTU1_IniSettingsTest tests/ini_settings_test.cpp)
+    target_include_directories(ASRTU1_IniSettingsTest PRIVATE libs/common)
+    target_link_libraries(ASRTU1_IniSettingsTest PRIVATE Qt5::Core)
+    if(MSVC)
+        target_compile_options(ASRTU1_IniSettingsTest PRIVATE /utf-8)
+    endif()
+    asrtu_enable_strict_warnings(ASRTU1_IniSettingsTest)
+    add_test(NAME ini_settings COMMAND ASRTU1_IniSettingsTest)
+    add_executable(ASRTU1_GridLocatorTest tests/grid_locator_test.cpp)
+    target_include_directories(ASRTU1_GridLocatorTest PRIVATE libs/common)
+    target_link_libraries(ASRTU1_GridLocatorTest PRIVATE Qt5::Core)
+    asrtu_enable_strict_warnings(ASRTU1_GridLocatorTest)
+    add_test(NAME grid_locator COMMAND ASRTU1_GridLocatorTest)
     if(UNIX AND NOT APPLE)
         add_executable(ASRTU1_RuntimePathsTest
             tests/runtime_paths_test.cpp

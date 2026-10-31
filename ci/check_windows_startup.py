@@ -2,6 +2,7 @@
 """Exercise packaged Windows binaries without developer DLLs or user settings."""
 
 import argparse
+import configparser
 import ctypes
 from ctypes import wintypes
 import json
@@ -131,7 +132,7 @@ def check(runtime, output, installed_layout=False):
     ctypes.windll.kernel32.SetErrorMode(0x8003)
     environment = {
         key: value for key, value in os.environ.items()
-        if key.upper() not in {"PATH", "TEMP", "TMP", "LOCALAPPDATA", "APPDATA"}
+        if key.upper() not in {"PATH", "TEMP", "TMP", "LOCALAPPDATA", "APPDATA", "ASRTU_CONFIG_DIR"}
         and not key.upper().startswith(("QT_", "CONDA", "PYTHON", "GR_", "TINY_DOPPLER_"))
     }
     windows = Path(os.environ["SystemRoot"])
@@ -141,6 +142,8 @@ def check(runtime, output, installed_layout=False):
         directory = output / folder
         directory.mkdir(exist_ok=True)
         environment[variable] = str(directory)
+
+    environment["ASRTU_CONFIG_DIR"] = str(output / "config")
 
     application_dir = runtime / "bin" if installed_layout else runtime
 
@@ -166,6 +169,20 @@ def check(runtime, output, installed_layout=False):
 
     run(executable("ASRTU1_Launcher.exe"), ["--check-session-directory"],
         output, environment)
+    # Exercise the installer's station-to-INI adapter without installing or
+    # changing real station settings. ASRTU_CONFIG_DIR isolates every write.
+    station_fixture = output / "station.cfg"
+    station_fixture.write_text(
+        'proxy_nickname = "CI-TEST";\nproxy_long = 120.5;\n'
+        'proxy_lat = -12.5;\nproxy_alt = 42;\nsat_name = "JAMX";\n',
+        encoding="utf-8")
+    run(executable("ASRTU1_Launcher.exe"), ["--import-proxy-config", station_fixture],
+        output, environment)
+    station_ini = configparser.ConfigParser()
+    station_ini.read(output / "config" / "launcher.ini", encoding="utf-8-sig")
+    if (station_ini.get("General", "nickname", fallback="") != "CI-TEST"
+            or station_ini.get("General", "latitude", fallback="") != "-12.5"):
+        raise RuntimeError("Installer station import did not persist INI settings")
     ready = output / "demod-ready.txt"
     screenshot = output / "demod.png"
     # The marker is written after MainWindow constructs the GNU Radio flow graph.
@@ -238,7 +255,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("runtime", type=Path)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--installer-stage", action="store_true",
+    layout = parser.add_mutually_exclusive_group()
+    layout.add_argument("--installed-layout", action="store_true",
+                        help="Test an already extracted shared-bin layout")
+    layout.add_argument("--installer-stage", action="store_true",
                         help="Recreate and test the generated Inno core file layout")
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
@@ -248,7 +268,7 @@ def main():
     runtime = args.runtime.resolve()
     if args.installer_stage:
         runtime = materialize_installer(runtime, output / "installed")
-    check(runtime, output, installed_layout=args.installer_stage)
+    check(runtime, output, installed_layout=args.installer_stage or args.installed_layout)
 
 
 if __name__ == "__main__":

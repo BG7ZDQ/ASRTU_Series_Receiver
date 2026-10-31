@@ -902,6 +902,26 @@ NORAD ID：%4
             <source>未找到完整的随包 SDR++ 安装。</source>
             <translation>同梱の完全な SDR++ インストールが見つかりません。</translation>
         </message>
+        <message>
+            <source>网格</source>
+            <translation>グリッド</translation>
+        </message>
+        <message>
+            <source>网格定位</source>
+            <translation>グリッドロケーター</translation>
+        </message>
+        <message>
+            <source>例如 OL63PD</source>
+            <translation>例：OL63PD</translation>
+        </message>
+        <message>
+            <source>支持 4/6/8 位网格；回车或移开输入框即按网格中心更新经纬度。</source>
+            <translation>4/6/8文字のグリッドに対応。Enterキーまたは欄外へ移動すると、グリッド中心の緯度経度が反映されます。</translation>
+        </message>
+        <message>
+            <source>网格无效：示例 OL63PD，支持 4、6、8 位。</source>
+            <translation>グリッドロケーターが無効です。例：OL63PD（4・6・8文字）。</translation>
+        </message>
     </context>
     <context>
         <name>ProxyWindow</name>

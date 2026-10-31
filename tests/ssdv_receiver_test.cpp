@@ -16,6 +16,8 @@
 
 namespace {
 constexpr std::uint32_t kJamxCrcInitialValue = 0x6AAAC1C5U;
+constexpr std::uint32_t kJamxAltCrcInitialValue = 0xF87754B4U;
+constexpr std::uint32_t kUnknownCrcInitialValue = 0x13572468U;
 
 std::uint32_t ssdvCrc32(const char* data, std::size_t length,
                         std::uint32_t initialValue)
@@ -33,19 +35,20 @@ std::uint32_t ssdvCrc32(const char* data, std::size_t length,
     return crc ^ 0xFFFFFFFFU;
 }
 
-QByteArray convertToJamxCrc(QByteArray frames)
+QByteArray convertCrc(QByteArray frames, std::uint32_t initialValue)
 {
     constexpr int frameSize = 223;
     constexpr int packetOffset = 5;
     constexpr int crcDataSize = 214;
     for (int offset = 0; offset < frames.size(); offset += frameSize) {
-        const auto crc = ssdvCrc32(frames.constData() + offset + packetOffset,
-                                   crcDataSize, kJamxCrcInitialValue);
-        const int crcOffset = offset + packetOffset + crcDataSize;
-        frames[crcOffset] = char((crc >> 24U) & 0xFFU);
-        frames[crcOffset + 1] = char((crc >> 16U) & 0xFFU);
-        frames[crcOffset + 2] = char((crc >> 8U) & 0xFFU);
-        frames[crcOffset + 3] = char(crc & 0xFFU);
+	    const auto crc =
+		ssdvCrc32(frames.constData() + offset + packetOffset,
+			  crcDataSize, initialValue);
+	    const int crcOffset = offset + packetOffset + crcDataSize;
+	    frames[crcOffset] = char((crc >> 24U) & 0xFFU);
+	    frames[crcOffset + 1] = char((crc >> 16U) & 0xFFU);
+	    frames[crcOffset + 2] = char((crc >> 8U) & 0xFFU);
+	    frames[crcOffset + 3] = char(crc & 0xFFU);
     }
     return frames;
 }
@@ -225,7 +228,7 @@ int main(int argc, char* argv[])
     }
 
     receiver.clear();
-    const QByteArray jamx = convertToJamxCrc(data);
+    const QByteArray jamx = convertCrc(data, kJamxCrcInitialValue);
     for (int offset = 0; offset < jamx.size(); offset += 223)
         receiver.ingestFrame(jamx.mid(offset, 223));
     {
@@ -323,6 +326,185 @@ int main(int argc, char* argv[])
 	    return 18;
     }
 
+    // A second JAMX CRC initial value is recognised. Its packets must
+    // validate and stay attributed to JAMX instead of being treated as
+    // damaged data.
+    const QByteArray jamxAltFixture = convertCrc(data, kJamxAltCrcInitialValue);
+    QTemporaryDir jamxAltOutput;
+    SsdvImageUpdate jamxAltLast;
+    std::mutex jamxAltMutex;
+    std::condition_variable jamxAltReady;
+    SsdvReceiver jamxAltReceiver(
+	jamxAltOutput.path(), [&](const SsdvImageUpdate &update) {
+		std::lock_guard<std::mutex> lock(jamxAltMutex);
+		jamxAltLast = update;
+		jamxAltReady.notify_all();
+	});
+    for (int offset = 0; offset < jamxAltFixture.size(); offset += 223)
+	    jamxAltReceiver.ingestFrame(jamxAltFixture.mid(offset, 223));
+    {
+	    std::unique_lock<std::mutex> lock(jamxAltMutex);
+	    if (!jamxAltReady.wait_for(lock, std::chrono::seconds(3), [&] {
+			return !jamxAltLast.image.isNull() &&
+			       jamxAltLast.complete;
+		})) {
+		    std::cerr
+			<< "JAMX alt CRC image reconstruction timed out\n";
+		    return 22;
+	    }
+	    if (jamxAltLast.satellite != QStringLiteral("JAMX") ||
+		jamxAltLast.spacecraft_header != 0x0322 ||
+		jamxAltLast.crc_failed_packets != 0 ||
+		!jamxAltLast.crc_failed_packet_ids.empty()) {
+		    std::cerr << "JAMX alt CRC packets were not accepted\n";
+		    return 23;
+	    }
+    }
+
+    // A packet with a completely unknown CRC initial value may still open a
+    // session when it looks like a clean image start. The image must be shown
+    // and labelled "Unknown", with every packet counted as unverified.
+    const QByteArray unknownFrames =
+	convertCrc(realJamx, kUnknownCrcInitialValue);
+    QTemporaryDir unknownOutput;
+    SsdvImageUpdate unknownLast;
+    std::mutex unknownMutex;
+    std::condition_variable unknownReady;
+    SsdvReceiver unknownReceiver(
+	unknownOutput.path(), [&](const SsdvImageUpdate &update) {
+		std::lock_guard<std::mutex> lock(unknownMutex);
+		unknownLast = update;
+		unknownReady.notify_all();
+	});
+    for (int offset = 0; offset < unknownFrames.size(); offset += 223)
+	    unknownReceiver.ingestFrame(unknownFrames.mid(offset, 223));
+    {
+	    std::unique_lock<std::mutex> lock(unknownMutex);
+	    if (!unknownReady.wait_for(lock, std::chrono::seconds(3), [&] {
+			return unknownLast.satellite ==
+				   QStringLiteral("Unknown") &&
+			       !unknownLast.image.isNull() &&
+			       unknownLast.complete;
+		})) {
+		    std::cerr
+			<< "Unknown CRC variant session was not displayed\n";
+		    return 24;
+	    }
+	    if (unknownLast.width != 640 || unknownLast.height != 480 ||
+		unknownLast.received_packets < 50 ||
+		unknownLast.crc_failed_packets !=
+		    unknownLast.received_packets) {
+		    std::cerr << "Unknown CRC variant session was incomplete\n";
+		    return 25;
+	    }
+    }
+    unknownReceiver.finish();
+
+    // Mid-stream packets with an unknown CRC must not invent a session; only
+    // a clean first packet is allowed to open an "Unknown" one.
+    const QByteArray unknownMidStream =
+	convertCrc(data, kUnknownCrcInitialValue);
+    QTemporaryDir unknownMidOutput;
+    {
+	    SsdvReceiver unknownMidReceiver(unknownMidOutput.path(), {});
+	    for (int offset = 0; offset < unknownMidStream.size();
+		 offset += 223)
+		    unknownMidReceiver.ingestFrame(
+			unknownMidStream.mid(offset, 223));
+	    unknownMidReceiver.finish();
+    }
+    if (!QDir(unknownMidOutput.path())
+	     .entryList({QStringLiteral("*.jpg")}, QDir::Files)
+	     .isEmpty()) {
+	    std::cerr << "Unknown CRC variant created a false image session\n";
+	    return 26;
+    }
+
+    // Real 2026-10-31 JAMX recording with the second initial value (CCSDS
+    // header 0x0322, 640x480, quality 3): 82 valid image frames in two
+    // transmissions (image IDs 2 and 3); before the value was recognised no
+    // image was saved.
+    QFile jamxAltInput(
+	fixtures.filePath(QStringLiteral("jamx_ssdv_20261031.b64")));
+    if (!jamxAltInput.open(QIODevice::ReadOnly))
+	    return 27;
+    const QByteArray realJamxAlt =
+	QByteArray::fromBase64(jamxAltInput.readAll());
+    QTemporaryDir realJamxAltOutput;
+    SsdvReceiver realJamxAltReceiver(realJamxAltOutput.path(), {});
+    for (int offset = 0; offset < realJamxAlt.size(); offset += 223)
+	    realJamxAltReceiver.ingestFrame(realJamxAlt.mid(offset, 223));
+    realJamxAltReceiver.finish();
+    const QDir realJamxAltDir(realJamxAltOutput.path());
+    const auto jamxAltImages =
+	realJamxAltDir.entryList({QStringLiteral("*.jpg")}, QDir::Files);
+    if (realJamxAlt.size() != 82 * 223 || jamxAltImages.size() != 2) {
+	    std::cerr << "Real JAMX alt recording was not reconstructed\n";
+	    return 28;
+    }
+    for (const auto &name : jamxAltImages)
+	    if (QImage(realJamxAltDir.filePath(name)).size() !=
+		QSize(640, 480)) {
+		    std::cerr << "Real JAMX alt image has the wrong size\n";
+		    return 29;
+	    }
+
+    // A preview whose disk write was deferred by the one second save throttle
+    // must still reach the disk when no further packets arrive. Without the
+    // retry and the forced final write, a fast replay can leave the last
+    // image only in memory (for example image 3 of the 2026-10-31 replay).
+    QTemporaryDir throttleOutput;
+    SsdvImageUpdate throttleLast;
+    std::mutex throttleMutex;
+    std::condition_variable throttleReady;
+    SsdvReceiver throttleReceiver(
+	throttleOutput.path(), [&](const SsdvImageUpdate &update) {
+		std::lock_guard<std::mutex> lock(throttleMutex);
+		throttleLast = update;
+		throttleReady.notify_all();
+	});
+    constexpr int throttleFrames = 15;
+    for (int index = 0; index < throttleFrames; ++index)
+	    throttleReceiver.ingestFrame(data.mid(index * 223, 223));
+    {
+	    std::unique_lock<std::mutex> lock(throttleMutex);
+	    if (!throttleReady.wait_for(lock, std::chrono::seconds(3), [&] {
+			return !throttleLast.image.isNull();
+		})) {
+		    std::cerr << "First throttled image was not decoded\n";
+		    return 30;
+	    }
+    }
+    QByteArray throttled = data;
+    for (int offset = 0; offset < throttled.size(); offset += 223)
+	    throttled[offset + 5] = char(44);
+    throttled = convertCrc(throttled, kJamxCrcInitialValue);
+    for (int index = 0; index < throttleFrames; ++index)
+	    throttleReceiver.ingestFrame(throttled.mid(index * 223, 223));
+    QString throttledPath;
+    {
+	    std::unique_lock<std::mutex> lock(throttleMutex);
+	    if (!throttleReady.wait_for(lock, std::chrono::seconds(3), [&] {
+			return !throttleLast.image.isNull() &&
+			       throttleLast.image_id == 44;
+		})) {
+		    std::cerr << "Second throttled image was not decoded\n";
+		    return 31;
+	    }
+	    throttledPath = throttleLast.path;
+    }
+    for (int attempt = 0; attempt < 400; ++attempt) {
+	    if (QFileInfo::exists(throttledPath))
+		    break;
+	    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    if (!QFileInfo::exists(throttledPath) ||
+	QImage(throttledPath).size() != QSize(320, 240)) {
+	    std::cerr << "Throttled final image was not written to disk\n";
+	    return 32;
+    }
+    throttleReceiver.finish();
+
     // Crossing image boundaries while draining must save the full preceding
     // image, even when a preview was written only milliseconds earlier.
     QTemporaryDir batchOutput;
@@ -330,7 +512,7 @@ int main(int argc, char* argv[])
     QByteArray nextImage = data;
     for (int offset = 0; offset < nextImage.size(); offset += 223)
 	    nextImage[offset + 5] = char(44);
-    nextImage = convertToJamxCrc(nextImage);
+    nextImage = convertCrc(nextImage, kJamxCrcInitialValue);
     for (const auto &frames : {data, nextImage})
 	    for (int offset = 0; offset < frames.size(); offset += 223)
 		    batchReceiver.ingestFrame(frames.mid(offset, 223));

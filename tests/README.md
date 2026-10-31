@@ -6,6 +6,28 @@ Large satellite recordings, generated logs, screenshots, build outputs, callsign
 
 Maintenance scripts that generate translations, icons, and release archives belong in `tools/` and are version controlled. One-off investigation output belongs in ignored `outputs/` or `work/` directories.
 
+`ini_settings` verifies explicit file storage even when Qt's default format is
+native: UTF-8 station names, SDR arrays/paths, binary window geometry, distinct
+launcher/decoder files, proxy station import and blocked-path errors. Tests use
+an isolated `ASRTU_CONFIG_DIR`; no application preference registry is touched.
+
+`grid_locator` checks Maidenhead encoding and decoding against the operator
+reference squares (OL63/OM89/IO91 at 4, 6 and 8 characters), lowercase and
+separator tolerance, pole/antimeridian clamping, cell-centre round trips and
+rejection of malformed locators.
+
+`launcher_grid` runs the real launcher offscreen and types a locator into the
+station form: the decimal fields must receive the centre of the square, a
+decimal edit must rewrite the locator, invalid input must flag the field
+without changing the station, and entering 4, 6 or 8 characters must keep the
+operator's precision.
+
+`spectrum_card` runs with Qt's offscreen platform and isolated INI settings.
+It checks both spectrum modules' floating controls, reclaimed space on collapse,
+fixed collapsed height on resize, restoration and persisted visibility.
+It also checks balanced columns at narrow widths and preservation of manually
+adjusted horizontal and vertical splits when the window resizes.
+
 `snr_estimation_and_scale` checks synchronized BPSK Es/N0 against known
 signal/noise powers from -5 to 20 dB and across input gains, sustained estimates
 without frames, silence/nonfinite input, and integer grid scales including zero.

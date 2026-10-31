@@ -23,12 +23,14 @@ SNR does not require valid packets. It shows `SNR (Es/N0)` for synchronized I/Q 
 
 ### 1. Installation and initial setup
 
+Windows also provides `ASRTU_Series_Receiver-<version>-x86_64-WinPortable.zip`: extract the entire folder to a writable location and run `bin/ASRTU1_Launcher.exe` without installing the suite.
+
 1. Windows: extract `ASRTU_Series_Receiver-<version>-x86_64-WinInstaller.zip` and run the matching installer EXE; choose whether to install the bundled SDR# telemetry preset.
    Linux: extract `ASRTU_Series_Receiver-<version>-x86_64-LinuxAppImage.zip` and run `bash setup.sh`; choose the installation language and whether to install the bundled SDR++.
    macOS: choose `ASRTU_Series_Receiver-<version>-x86_64-macOS.zip` (Intel) or `ASRTU_Series_Receiver-<version>-arm64-macOS.zip` (Apple Silicon).
    Standalone SDR plugins: use `SDR_Software_Plugins-<version>-AllPlatform.zip`.
 2. Open **ASRTU Series Satellite Launcher** from the desktop.
-3. Enter your callsign, longitude, latitude, and altitude. These coordinates are used for satellite tracking and Doppler calculation and are stored locally.
+3. Enter your callsign and station position. You can type a 4, 6 or 8 character Maidenhead grid locator (for example `OL63PD`) or the longitude, latitude and altitude directly. These coordinates are used for satellite tracking and Doppler calculation and are stored locally.
 4. Select an input appropriate for your receiving chain. The sound-card selector is shown only for sound-card modes.
 
 The Windows installer places the launcher, decoder, TinyDoppler and SatNOGS uploader in one `bin` directory, dynamically loading one shared copy of the VC++/Qt dependencies beside the executables, without hard links. If an older build fails at startup and Event Viewer points to an old system `MSVCP140.dll`, install the corrected package over it; installing or repairing the [official Microsoft x64 VC++ runtime](https://aka.ms/vc14/vc_redist.x64.exe) is also a workaround.
@@ -142,3 +144,5 @@ BG7ZDQ publishes this project under the [MIT License](LICENSE). Third-party comp
 GNU Radio 3.x and `gr-lilacsat` are GPL-family dependencies. MIT-licensed source may interoperate with them, but binary distributions containing or linking them must also satisfy the applicable GPL source, license, and attribution obligations. SDR# and the separately supplied legacy Windows upload proxy are outside this project's MIT grant; that statement does not apply to the native Linux proxy source in this repository.
 
 This project is not officially affiliated with or endorsed by SDR#, GNU Radio, or the authors and operators of supported satellites unless separately stated in writing by the relevant rights holder.
+
+Preferences use explicit INI files, not registry or macOS native preferences. See [settings storage](docs/SETTINGS.md) for platform paths and upgrade behavior.

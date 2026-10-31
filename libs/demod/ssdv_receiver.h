@@ -37,6 +37,12 @@ struct SsdvImageUpdate {
 	bool complete = false;
 };
 
+// SSDV CRC initial value variant of a received packet. "Unknown" means the
+// packet did not validate against any recognised initial value; such images
+// are still displayed and labelled "Unknown". JAMX covers both recognised
+// JAMX initial values.
+enum class SsdvCrcVariant { Dslwp, Jamx, Unknown };
+
 class SsdvReceiver final
 {
       public:
@@ -85,10 +91,16 @@ class SsdvReceiver final
 	std::uint64_t state_generation_ = 0;
 	std::uint64_t session_serial_ = 0;
 	bool complete_ = false;
-	bool jamx_mode_ = false;
+	// CRC variant of the current image. It is Unknown for a session opened
+	// by a packet whose initial value is not recognised.
+	SsdvCrcVariant variant_ = SsdvCrcVariant::Unknown;
 	bool bin_dirty_ = false;
 	std::vector<std::uint8_t> jpeg_buffer_;
 	std::chrono::steady_clock::time_point last_image_save_{};
+	// The latest decoded image is not on disk yet because the save throttle
+	// deferred the write. The worker retries on the next refresh cycle and
+	// the shutdown path forces the final write.
+	bool image_unsaved_ = false;
 
 	std::mutex queue_mutex_;
 	std::condition_variable queue_cv_;

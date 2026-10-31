@@ -42,6 +42,10 @@ private:
     QString segmentPath() const;
 
     static constexpr std::size_t kMaximumQueuedFrames = 96000;
+    // Rewrite the RIFF header every this many data bytes. A crash or a forced
+    // kill then leaves a playable WAV holding everything except the last
+    // fraction of a second instead of a zero-length header.
+    static constexpr std::uint32_t kHeaderRefreshDataBytes = 64U * 1024U;
 
     FILE* file_ = nullptr;
     QString original_path_;
@@ -49,6 +53,7 @@ private:
     int sample_rate_ = 0;
     std::uint32_t maximum_data_bytes_ = 0;
     std::uint32_t segment_data_bytes_ = 0;
+    std::uint32_t header_refresh_data_bytes_ = 0;
     int segment_index_ = 1;
     std::mutex queue_mutex_;
     std::condition_variable queue_ready_;

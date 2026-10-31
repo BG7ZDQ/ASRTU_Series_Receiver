@@ -27,7 +27,7 @@ SNR 无需收到有效数据包：锁定时以 `SNR (Es/N0)` 显示同步 I/Q �
    macOS：按机器选择 `ASRTU_Series_Receiver-<版本号>-x86_64-macOS.zip`（Intel）或 `ASRTU_Series_Receiver-<版本号>-arm64-macOS.zip`（Apple Silicon），解压后使用其中的 `.app`。支持范围见 [macOS 说明](docs/MACOS_STATUS.md)。
    独立 SDR 插件：使用 `SDR_Software_Plugins-<版本号>-AllPlatform.zip`，从 `SDR#` 或 `SDR++` 下选择对应系统和架构。
 2. 从桌面或应用菜单打开 **ASRTU 系列卫星启动器**。
-3. 填写呼号、经度、纬度和海拔。坐标用于卫星跟踪与多普勒计算；启动器会在本机保存设置。
+3. 填写呼号和地面站位置：可直接输入 4/6/8 位梅登海德网格（如 OL63PD），也可填写经度、纬度和海拔。坐标用于卫星跟踪与多普勒计算；启动器会在本机保存设置。
 4. 根据接收链路选择“输入”。只有声卡输入模式会显示“声卡”下拉框。
 
 Windows 安装包将启动器、解调器、TinyDoppler 和 SatNOGS 上传器统一放在 `bin`，动态加载同目录的一套 VC++、Qt 等依赖，不使用硬链接。如果旧版启动失败且事件日志指向系统目录的旧 `MSVCP140.dll`，请覆盖安装修复版；也可先安装或修复[微软官方 x64 VC++ 运行库](https://aka.ms/vc14/vc_redist.x64.exe)。
@@ -140,7 +140,7 @@ Inno Setup 6 和 radioconda/GNU Radio 开发依赖后，从源码构建安装器
 .\packaging\inno\build_installer.ps1 -RebuildDsp
 ```
 
-打包脚本拒绝将旧版 payload 标为新版本。Windows 不再构建便携发布 ZIP。
+打包脚本拒绝将旧版 payload 标为新版本。Windows 同时构建安装包和 `WinPortable.zip` 绿色版；绿色版完整解压后运行 `bin/ASRTU1_Launcher.exe`。
 [电台控频](docs/RADIO_CONTROL.md)通过 Hamlib 接入；
 [macOS](docs/MACOS_STATUS.md)与跨平台 SDR++ 插件正在 1.5.5 中验证。
 
@@ -162,3 +162,5 @@ Inno Setup 6 和 radioconda/GNU Radio 开发依赖后，从源码构建安装器
 GNU Radio 3.x 和 `gr-lilacsat` 属 GPL 系依赖。MIT 源码可以与 GPL 组件配合使用，但包含和链接这些组件的完整二进制发行物还必须满足相应 GPL 源码、许可证和版权告知义务。SDR# 与另行提供的 Windows 旧上传代理不属于本项目 MIT 授权范围；该说明不适用于仓库内的 Linux 原生代理源码。
 
 本项目与 SDR#、GNU Radio 及所支持卫星的原作者或运营方不存在官方隶属或背书关系，除非相应权利方另有书面说明。
+
+设置使用实际 INI 文件，不再读写注册表或 macOS 系统偏好。Windows 启动器/解码器设置位于 `config/*.ini`；其他平台及兼容规则见 [配置存储说明](docs/SETTINGS.md)。

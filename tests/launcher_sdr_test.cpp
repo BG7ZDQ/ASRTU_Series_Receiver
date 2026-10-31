@@ -194,9 +194,8 @@ int main(int argc, char **argv)
 #endif
 	QStandardPaths::setTestModeEnabled(true);
 	QTemporaryDir settings;
-	QSettings::setDefaultFormat(QSettings::IniFormat);
-	QSettings::setPath(QSettings::IniFormat, QSettings::UserScope,
-			   settings.path());
+	qputenv("ASRTU_CONFIG_DIR", settings.path().toUtf8());
+	QSettings::setDefaultFormat(QSettings::NativeFormat);
 	QCoreApplication::setOrganizationName(QStringLiteral("ASRTU_Test"));
 	QCoreApplication::setApplicationName(QStringLiteral("Chooser"));
 	app.setFont(QFont(QStringLiteral("Microsoft YaHei UI"), 9));

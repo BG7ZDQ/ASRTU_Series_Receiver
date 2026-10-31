@@ -167,6 +167,13 @@ TRANSLATIONS = {
     "立即更新 TLE": "Update TLE Now",
     "打开星历目录": "Open Ephemeris Directory",
     "地面站：%1°, %2°，%3 m": "Ground station: %1°, %2°, %3 m",
+    "网格": "Grid",
+    "网格定位": "Grid locator",
+    "例如 OL63PD": "e.g. OL63PD",
+    "支持 4/6/8 位网格；回车或移开输入框即按网格中心更新经纬度。":
+        "Supports 4/6/8 character grids; press Enter or leave the field to apply the square centre.",
+    "网格无效：示例 OL63PD，支持 4、6、8 位。":
+        "Invalid grid locator. Example: OL63PD; use 4, 6 or 8 characters.",
     "正在下载：%1": "Downloading: %1",
     "在线合并": "online merge",
     "所有 TLE 来源均下载失败": "All TLE sources failed to download",

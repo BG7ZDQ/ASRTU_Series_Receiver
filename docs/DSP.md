@@ -57,7 +57,12 @@ EOF clears the lamp; after an input gap the detector must acquire again.
 `LOCKED` can appear before any valid frame. It does not certify successful
 CCSDS synchronization or FEC: use decoded frames/logs for that.
 
-The single status row shows SNR, loop frequency offset (`Loop df`) and lock state.
+The status card keeps SNR and loop frequency offset (`Loop df`) on one row
+when they fit. In narrow panels it moves `Loop df` to a second row, with lock
+state on the right. The thresholds follow the widest text each field has shown,
+not the live value, so updating SNR or `Loop df` neither flips the row back and
+forth nor shifts the neighbouring field sideways while the window keeps its
+width.
 `SNR (Es/N0)` is synchronized BPSK symbol **Es/N0** from the OpenHoshimi
 Gardner/Costas output. For
 locked BPSK and equal I/Q noise variances it estimates signal energy as
@@ -77,8 +82,7 @@ Unsettled timing, noise-only input and interference can bias this blind result;
 a finite value does not certify BPSK reception or loop lock. Like 1.5.4,
 invalid results retain the last valid value and its algorithm label, and do
 not advance history. Before the first valid result the label shows `--`.
-The status row also follows 1.5.4: SNR and `Loop df` are adjacent on the left,
-with the lock indicator on the right and the original 10-point bold font.
+SNR and `Loop df` retain the original 10-point bold font.
 
 After 500 ms without fresh input, the GUI freezes the last SNR label and
 history rather than clearing or advancing them. The lock lamp still turns
@@ -137,6 +141,19 @@ normal zoom controls. Right-click anywhere inside one of these plots to restore
 its original axes. The lightweight Qt RSSI meter uses a smoothed adaptive range:
 large changes expand the scale immediately and stable readings contract it
 gradually.
+
+Each spectrum has a floating collapse button in its upper-right corner.
+Collapsing leaves a compact title button in that same module; click it to
+expand again. The waterfall or constellation takes the released space. Both spectra are initially expanded,
+and each choice is remembered across restarts and audio-device changes. Hidden
+plots continue receiving data, without interrupting decoding, recording or SNR.
+
+At minimum window width, the waterfall and demodulator columns share the space
+approximately equally. Drag the visible divider to adjust their widths, or the
+divider above the loop spectrum to adjust its height. Once manually adjusted,
+that splitter uses Qt's normal resize behavior instead of resetting to the
+automatic layout on every resize. These manual proportions last for the current
+window; spectrum visibility is saved across restarts.
 
 The Windows shared-memory source forwards SDR#'s short post-decimation
 callbacks immediately without waiting inside the GNU Radio scheduler, which

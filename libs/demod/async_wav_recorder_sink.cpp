@@ -6,6 +6,10 @@
 #include <QDir>
 #include <QFileInfo>
 
+#ifdef _WIN32
+#include <share.h>
+#endif
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -159,7 +163,21 @@ void AsyncWavRecorderSink::writerLoop()
                 break;
             }
             sampleOffset += samples;
-        }
+	    // Keep the RIFF header close to the written size so that an
+	    // abnormal exit (crash, forced kill) still leaves a WAV that
+	    // players can open. The regular finalize path rewrites the exact
+	    // size and also flushes the last partial block.
+	    if (segment_data_bytes_ - header_refresh_data_bytes_ >=
+		kHeaderRefreshDataBytes) {
+		    if (!writeHeader(segment_data_bytes_) ||
+			std::fflush(file_) != 0) {
+			    write_failed_.store(true,
+						std::memory_order_release);
+			    break;
+		    }
+		    header_refresh_data_bytes_ = segment_data_bytes_;
+	    }
+	}
     }
 }
 
@@ -193,10 +211,14 @@ QString AsyncWavRecorderSink::segmentPath() const
 bool AsyncWavRecorderSink::openSegment() noexcept
 {
     segment_data_bytes_ = 0;
+    header_refresh_data_bytes_ = 0;
     const QString path = segmentPath();
 #ifdef _WIN32
-    if (_wfopen_s(&file_, reinterpret_cast<const wchar_t*>(path.utf16()), L"w+b") != 0)
-        file_ = nullptr;
+    // Allow other processes to open the WAV for reading while it is being
+    // recorded: the in-progress file already carries a usable RIFF size, so an
+    // operator can copy or inspect it without stopping the receiver.
+    file_ = _wfsopen(reinterpret_cast<const wchar_t *>(path.utf16()), L"w+b",
+		     _SH_DENYWR);
 #else
     file_ = std::fopen(path.toUtf8().constData(), "w+b");
 #endif

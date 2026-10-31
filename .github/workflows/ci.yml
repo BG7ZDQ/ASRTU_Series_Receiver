@@ -183,11 +183,12 @@ jobs:
           if-no-files-found: error
 
   windows-installer:
-    name: Windows Inno Setup installer
+    name: Windows installer and portable ZIP
     needs: windows
     runs-on: windows-2022
     outputs:
       artifact-name: ${{ steps.package.outputs.artifact-name }}
+      portable-artifact-name: ${{ steps.portable.outputs.artifact-name }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -259,6 +260,36 @@ jobs:
           name: ${{ steps.package.outputs.artifact-name }}
           path: dist/windows-installer/*-WinInstaller.zip
           if-no-files-found: error
+
+      - name: Package and verify Windows portable ZIP
+        id: portable
+        shell: pwsh
+        run: |
+          python ci/package_windows_portable.py packaging/inno/stage dist/windows-portable
+          if ($LASTEXITCODE -ne 0) { throw 'Portable packaging failed.' }
+          $archives = @(Get-ChildItem dist/windows-portable/*-WinPortable.zip)
+          if ($archives.Count -ne 1) { throw 'Expected exactly one portable archive.' }
+          $archive = $archives[0]
+          $extracted = Join-Path $env:RUNNER_TEMP 'asrtu-portable-extracted'
+          Expand-Archive -LiteralPath $archive.FullName -DestinationPath $extracted
+          python ci/check_windows_startup.py (Join-Path $extracted $archive.BaseName) --installed-layout --output "$env:RUNNER_TEMP/asrtu-portable-startup"
+          if ($LASTEXITCODE -ne 0) { throw 'Portable ZIP startup verification failed.' }
+          "artifact-name=$($archive.BaseName)" >> $env:GITHUB_OUTPUT
+      - name: Upload Windows portable ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.portable.outputs.artifact-name }}
+          path: dist/windows-portable/*-WinPortable.zip
+          if-no-files-found: error
+      - name: Upload Windows layout diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-layout-diagnostics
+          path: |
+            ${{ runner.temp }}/asrtu-installed-startup/
+            ${{ runner.temp }}/asrtu-portable-startup/
+          if-no-files-found: ignore
 
   packages:
     name: Linux AppImage
@@ -540,6 +571,7 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - name: Download macOS apps
         uses: actions/download-artifact@v4
         with:
@@ -556,21 +588,32 @@ jobs:
         with:
           name: ${{ needs.windows-installer.outputs.artifact-name }}
           path: dist/windows-installer
+      - name: Download Windows portable ZIP
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.windows-installer.outputs.portable-artifact-name }}
+          path: dist/windows-portable
       - name: Download standalone plugins
         uses: actions/download-artifact@v4
         with:
           name: ${{ needs.plugins.outputs.artifact-name }}
           path: dist/plugins
+      - name: Calculate release asset SHA256 values
+        id: checksums
+        run: python3 ci/release_checksums.py generate --notes "$RUNNER_TEMP/release-checksums.md"
       - name: Publish tag artifacts
+        id: publish
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ contains(github.ref_name, 'nightly') && format('ASRTU Series Receiver {0} (nightly)', github.ref_name) || github.ref_name }}
           prerelease: ${{ contains(github.ref_name, 'nightly') }}
-          files: |
-            dist/plugins/SDR_Software_Plugins-*-AllPlatform.zip
-            dist/linux-bundle/ASRTU_Series_Receiver-*-*-LinuxAppImage.zip
-            dist/windows-installer/ASRTU_Series_Receiver-*-*-WinInstaller.zip
-            dist/macos/ASRTU_Series_Receiver-*-*-macOS.zip
+          fail_on_unmatched_files: true
+          files: ${{ steps.checksums.outputs.files }}
+      - name: Update SHA256 section in release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ steps.publish.outputs.id }}
+        run: python3 ci/release_checksums.py publish --notes "$RUNNER_TEMP/release-checksums.md"
 
   arch-package:
     name: Arch PKGBUILD syntax

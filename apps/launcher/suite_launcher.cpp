@@ -43,6 +43,9 @@
 #include <QStandardPaths>
 #include <QScrollArea>
 #include <QSettings>
+#include "grid_locator.h"
+#include "ini_settings.h"
+#include "station_settings.h"
 #include <QScreen>
 #include <QSignalBlocker>
 #include <QSizePolicy>
@@ -222,7 +225,7 @@ void applySdrProgramOverride(SdrProgram *program)
 {
 	if (program->overrideKey.isEmpty())
 		return;
-	QSettings settings;
+	asrtu::IniSettings settings(QStringLiteral("launcher"));
 	settings.beginGroup(QStringLiteral("sdr/programOverrides/") +
 			    program->overrideKey);
 	program->name =
@@ -303,8 +306,9 @@ QStringList sdrppCandidates()
 				       executableName(QStringLiteral("sdrpp")));
 	candidates << current.filePath(QStringLiteral("../sdrpp/") +
 				       executableName(QStringLiteral("sdrpp")));
-	const QString saved =
-	    QSettings().value(QStringLiteral("sdr/lastExecutable")).toString();
+	const QString saved = asrtu::IniSettings(QStringLiteral("launcher"))
+				  .value(QStringLiteral("sdr/lastExecutable"))
+				  .toString();
 	if (QFileInfo(saved).fileName().compare(
 		executableName(QStringLiteral("sdrpp")), Qt::CaseInsensitive) ==
 	    0)
@@ -358,7 +362,7 @@ QList<SdrProgram> availableSdrPrograms()
 		applySdrProgramOverride(&placeholder);
 		programs.append(placeholder);
 	}
-	QSettings settings;
+	asrtu::IniSettings settings(QStringLiteral("launcher"));
 	const int customCount =
 	    settings.beginReadArray(QStringLiteral("sdr/customPrograms"));
 	for (int i = 0; i < customCount; ++i) {
@@ -974,7 +978,7 @@ bool editSdrProgramDialog(QWidget *parent, SdrProgram *program, bool adding)
 		parsed.overrideKey = program->overrideKey;
 		parsed.customIndex = program->customIndex;
 		parsed.sdrSharp = program->sdrSharp;
-		QSettings settings;
+		asrtu::IniSettings settings(QStringLiteral("launcher"));
 		if (!parsed.overrideKey.isEmpty()) {
 			settings.beginGroup(
 			    QStringLiteral("sdr/programOverrides/") +
@@ -1204,7 +1208,8 @@ void showSdrChooser(QWidget *parent)
 			QObject::connect(
 			    remove, &QPushButton::clicked, &dialog,
 			    [&, program, card] {
-				    QSettings settings;
+				    asrtu::IniSettings settings(
+					QStringLiteral("launcher"));
 				    const int oldCount =
 					settings.beginReadArray(QStringLiteral(
 					    "sdr/customPrograms"));
@@ -1804,6 +1809,8 @@ class LauncherWindow final : public QWidget
 		    "color:#17202a; }"
 		    "QLineEdit:focus,QDoubleSpinBox:focus,QComboBox:focus { "
 		    "border:1px solid #2b7de9; }"
+		    "QLineEdit[gridInvalid=\"true\"] { border:1px solid "
+		    "#d64545; background:#fff7f7; }"
 		    "QComboBox::drop-down { border:0; width:25px; }"
 		    "QComboBox::down-arrow { "
 		    "image:url(:/launcher/combo_arrow.png); "
@@ -1898,10 +1905,20 @@ class LauncherWindow final : public QWidget
 		form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
 		nickname_ = new QLineEdit(this);
 		nickname_->setMaxLength(32);
+		grid_locator_ = new QLineEdit(this);
+		grid_locator_->setObjectName(QStringLiteral("gridLocator"));
+		grid_locator_->setMaxLength(8);
+		grid_locator_->setPlaceholderText(
+		    QCoreApplication::translate("ASRTU", "例如 OL63PD"));
+		grid_locator_->setAccessibleName(
+		    QCoreApplication::translate("ASRTU", "网格定位"));
+		grid_locator_->setToolTip(gridLocatorHint());
 		longitude_ = makeCoordinate(-180.0, 180.0, 6);
 		latitude_ = makeCoordinate(-90.0, 90.0, 6);
 		altitude_ = makeCoordinate(-500.0, 10000.0, 2);
 		altitude_->setSuffix(QStringLiteral(" m"));
+		longitude_->setObjectName(QStringLiteral("stationLongitude"));
+		latitude_->setObjectName(QStringLiteral("stationLatitude"));
 		input_mode_ = new QComboBox(this);
 		input_mode_->setObjectName(QStringLiteral("inputMode"));
 		input_mode_->setSizeAdjustPolicy(
@@ -1944,6 +1961,7 @@ class LauncherWindow final : public QWidget
 		for (QWidget *field : {static_cast<QWidget *>(input_mode_),
 				       static_cast<QWidget *>(audio_device_),
 				       static_cast<QWidget *>(nickname_),
+				       static_cast<QWidget *>(grid_locator_),
 				       static_cast<QWidget *>(longitude_),
 				       static_cast<QWidget *>(latitude_),
 				       static_cast<QWidget *>(altitude_)}) {
@@ -1960,6 +1978,8 @@ class LauncherWindow final : public QWidget
 			     audio_device_);
 		form->addRow(QCoreApplication::translate("ASRTU", "呼号"),
 			     nickname_);
+		form->addRow(QCoreApplication::translate("ASRTU", "网格"),
+			     grid_locator_);
 		form->addRow(QCoreApplication::translate("ASRTU", "经度"),
 			     longitude_);
 		form->addRow(QCoreApplication::translate("ASRTU", "纬度"),
@@ -2153,9 +2173,7 @@ class LauncherWindow final : public QWidget
 			    chooseSatellite(&accepted, &satnogsEnabled);
 			if (!accepted || !saveConfiguration(false, satellite))
 				return;
-			QSettings settings(
-			    QStringLiteral("ASRTU"),
-			    QStringLiteral("AstroSeriesLauncher"));
+			asrtu::IniSettings settings(QStringLiteral("launcher"));
 			settings.setValue(QStringLiteral("satnogs_enabled"),
 					  satnogsEnabled);
 			settings.setValue(QStringLiteral("satnogs_norad_id"),
@@ -2300,9 +2318,7 @@ class LauncherWindow final : public QWidget
 					"电台 IF 输入”。"));
 				return;
 			}
-			QSettings settings(
-			    QStringLiteral("ASRTU"),
-			    QStringLiteral("AstroSeriesLauncher"));
+			asrtu::IniSettings settings(QStringLiteral("launcher"));
 			settings.setValue(QStringLiteral("input_mode"),
 					  input_mode_->currentData().toInt());
 			settings.setValue(QStringLiteral("recording_enabled"),
@@ -2335,9 +2351,7 @@ class LauncherWindow final : public QWidget
 		autoSaveTimer_->setSingleShot(true);
 		autoSaveTimer_->setInterval(350);
 		connect(autoSaveTimer_, &QTimer::timeout, this, [this] {
-			QSettings settings(
-			    QStringLiteral("ASRTU"),
-			    QStringLiteral("AstroSeriesLauncher"));
+			asrtu::IniSettings settings(QStringLiteral("launcher"));
 			settings.setValue(QStringLiteral("input_mode"),
 					  input_mode_->currentData());
 			settings.setValue(QStringLiteral("recording_enabled"),
@@ -2375,12 +2389,23 @@ class LauncherWindow final : public QWidget
 			[scheduleAutoSave](const QString &) {
 				scheduleAutoSave();
 			});
+		connect(grid_locator_, &QLineEdit::editingFinished, this,
+			[this] { applyGridLocator(); });
+		connect(
+		    grid_locator_, &QLineEdit::textEdited, this,
+		    [this](const QString &) { setGridLocatorInvalid(false); });
 		connect(longitude_,
 			qOverload<double>(&QDoubleSpinBox::valueChanged), this,
-			[scheduleAutoSave](double) { scheduleAutoSave(); });
+			[this, scheduleAutoSave](double) {
+				updateGridLocator();
+				scheduleAutoSave();
+			});
 		connect(latitude_,
 			qOverload<double>(&QDoubleSpinBox::valueChanged), this,
-			[scheduleAutoSave](double) { scheduleAutoSave(); });
+			[this, scheduleAutoSave](double) {
+				updateGridLocator();
+				scheduleAutoSave();
+			});
 		connect(altitude_,
 			qOverload<double>(&QDoubleSpinBox::valueChanged), this,
 			[scheduleAutoSave](double) { scheduleAutoSave(); });
@@ -2493,6 +2518,87 @@ class LauncherWindow final : public QWidget
 		}
 	}
 
+	// A locator is only a convenience over the decimal fields: the degrees
+	// stay authoritative and are the only station values written to the INI
+	// files or handed to the decoder, tracker, proxies and uploaders.
+	static QString gridLocatorHint()
+	{
+		return QCoreApplication::translate(
+		    "ASRTU",
+		    "支持 4/6/8 "
+		    "位网格；回车或移开输入框即按网格中心更新经纬度。");
+	}
+
+	static QString gridLocatorInvalidHint()
+	{
+		return QCoreApplication::translate(
+		    "ASRTU", "网格无效：示例 OL63PD，支持 4、6、8 位。");
+	}
+
+	void applyGridLocator()
+	{
+		if (!grid_locator_ || !longitude_ || !latitude_)
+			return;
+		const QString requested =
+		    asrtu::grid::normalize(grid_locator_->text());
+		if (requested.isEmpty()) {
+			// Clearing the box only clears the display; the degrees
+			// stay as they are.
+			setGridLocatorInvalid(false);
+			return;
+		}
+		double latitude = 0.0;
+		double longitude = 0.0;
+		QString error;
+		if (!asrtu::grid::decode(requested, &latitude, &longitude,
+					 &error)) {
+			setGridLocatorInvalid(true);
+			return;
+		}
+		setGridLocatorInvalid(false);
+		grid_locator_characters_ = requested.size();
+		syncing_location_ = true;
+		longitude_->setValue(longitude);
+		latitude_->setValue(latitude);
+		syncing_location_ = false;
+		updateGridLocator();
+	}
+
+	void updateGridLocator()
+	{
+		if (!grid_locator_ || !longitude_ || !latitude_ ||
+		    syncing_location_)
+			return;
+		const QSignalBlocker blocker(grid_locator_);
+		// An empty box is honest about a station that was never
+		// configured; the locator for 0,0 would look like a real
+		// position.
+		if (qFuzzyIsNull(longitude_->value()) &&
+		    qFuzzyIsNull(latitude_->value())) {
+			grid_locator_->clear();
+			setGridLocatorInvalid(false);
+			return;
+		}
+		grid_locator_->setText(
+		    asrtu::grid::encode(latitude_->value(), longitude_->value(),
+					grid_locator_characters_));
+		// A generated locator is valid: an earlier rejected entry must
+		// not leave the field styled as an error.
+		setGridLocatorInvalid(false);
+	}
+
+	void setGridLocatorInvalid(bool invalid)
+	{
+		if (!grid_locator_ ||
+		    grid_locator_->property("gridInvalid").toBool() == invalid)
+			return;
+		grid_locator_->setProperty("gridInvalid", invalid);
+		grid_locator_->setToolTip(invalid ? gridLocatorInvalidHint()
+						  : gridLocatorHint());
+		grid_locator_->style()->unpolish(grid_locator_);
+		grid_locator_->style()->polish(grid_locator_);
+	}
+
 	void refreshAudioDevices()
 	{
 		const QString previous =
@@ -2565,9 +2671,7 @@ class LauncherWindow final : public QWidget
 		}
 		QString wanted = previous;
 		if (wanted.isEmpty()) {
-			QSettings settings(
-			    QStringLiteral("ASRTU"),
-			    QStringLiteral("AstroSeriesLauncher"));
+			asrtu::IniSettings settings(QStringLiteral("launcher"));
 			wanted =
 			    settings.value(QStringLiteral("audio_device_name"))
 				.toString();
@@ -2587,8 +2691,7 @@ class LauncherWindow final : public QWidget
 
 	QString savedSatellite() const
 	{
-		QSettings settings(QStringLiteral("ASRTU"),
-				   QStringLiteral("AstroSeriesLauncher"));
+		asrtu::IniSettings settings(QStringLiteral("launcher"));
 		const QString saved = settings
 					  .value(QStringLiteral("satellite"),
 						 QStringLiteral("ASRTU-1"))
@@ -2661,8 +2764,11 @@ class LauncherWindow final : public QWidget
 
 	void loadConfiguration()
 	{
-		QSettings settings(QStringLiteral("ASRTU"),
-				   QStringLiteral("AstroSeriesLauncher"));
+		asrtu::IniSettings settings(QStringLiteral("launcher"));
+		if (settings.value(QStringLiteral("nickname"))
+			.toString()
+			.isEmpty())
+			asrtu::importProxySettings(configPath(), settings);
 		const int savedInputMode =
 		    normalizedInputMode(settings
 					    .value(QStringLiteral("input_mode"),
@@ -2704,43 +2810,8 @@ class LauncherWindow final : public QWidget
 		    settings.value(QStringLiteral("latitude"), 0.0).toDouble());
 		altitude_->setValue(
 		    settings.value(QStringLiteral("altitude"), 0.0).toDouble());
+		updateGridLocator();
 		updateAudioDeviceVisibility();
-		QFile file(configPath());
-		if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-			return;
-		const QString text = QString::fromUtf8(file.readAll());
-		auto textValue = [&text](const QString &key) {
-			const QRegularExpression expression(
-			    QStringLiteral(
-				"(?:^|\\n)\\s*%1\\s*=\\s*\"([^\"]*)\"\\s*;")
-				.arg(QRegularExpression::escape(key)));
-			return expression.match(text).captured(1);
-		};
-		auto numberValue = [&text](const QString &key,
-					   double fallback) {
-			const QRegularExpression expression(
-			    QStringLiteral(
-				"(?:^|\\n)\\s*%1\\s*=\\s*([-+0-9.eE]+)\\s*;")
-				.arg(QRegularExpression::escape(key)));
-			const auto match = expression.match(text);
-			bool ok = false;
-			const double value = match.captured(1).toDouble(&ok);
-			return ok ? value : fallback;
-		};
-		const QString configNickname =
-		    textValue(QStringLiteral("proxy_nickname"));
-		if (!configNickname.isEmpty())
-			nickname_->setText(configNickname);
-		const QString satellite = textValue(QStringLiteral("sat_name"));
-		if (!satellite.isEmpty())
-			settings.setValue(QStringLiteral("satellite"),
-					  satellite);
-		longitude_->setValue(numberValue(QStringLiteral("proxy_long"),
-						 longitude_->value()));
-		latitude_->setValue(numberValue(QStringLiteral("proxy_lat"),
-						latitude_->value()));
-		altitude_->setValue(numberValue(QStringLiteral("proxy_alt"),
-						altitude_->value()));
 	}
 
 	bool saveConfiguration(bool notify, QString satellite = {})
@@ -2756,8 +2827,7 @@ class LauncherWindow final : public QWidget
 			return false;
 		}
 		QDir().mkpath(proxyDirectory());
-		QSettings settings(QStringLiteral("ASRTU"),
-				   QStringLiteral("AstroSeriesLauncher"));
+		asrtu::IniSettings settings(QStringLiteral("launcher"));
 		if (satellite.isEmpty())
 			satellite = savedSatellite();
 		settings.setValue(QStringLiteral("satellite"), satellite);
@@ -2769,6 +2839,15 @@ class LauncherWindow final : public QWidget
 		settings.setValue(QStringLiteral("altitude"),
 				  altitude_->value());
 		settings.sync();
+		if (settings.status() != QSettings::NoError) {
+			QMessageBox::critical(
+			    this,
+			    QCoreApplication::translate("ASRTU", "保存失败"),
+			    QCoreApplication::translate("ASRTU",
+							"无法写入：\n%1")
+				.arg(settings.fileName()));
+			return false;
+		}
 		QSaveFile file(configPath());
 		if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
 			QMessageBox::critical(
@@ -2814,6 +2893,7 @@ class LauncherWindow final : public QWidget
 	}
 
 	QLineEdit *nickname_ = nullptr;
+	QLineEdit *grid_locator_ = nullptr;
 	QDoubleSpinBox *longitude_ = nullptr;
 	QDoubleSpinBox *latitude_ = nullptr;
 	QDoubleSpinBox *altitude_ = nullptr;
@@ -2826,6 +2906,8 @@ class LauncherWindow final : public QWidget
 	QTimer *autoSaveTimer_ = nullptr;
 	QLabel *status_label_ = nullptr;
 	QString status_text_;
+	int grid_locator_characters_ = asrtu::grid::kLocatorSubsquareCharacters;
+	bool syncing_location_ = false;
 };
 } // namespace
 
@@ -2850,6 +2932,20 @@ int main(int argc, char *argv[])
 	application.setFont(uiFont);
 	QCoreApplication::setOrganizationName(QStringLiteral("ASRTU"));
 	QCoreApplication::setApplicationName(QStringLiteral("ASRTU1_Launcher"));
+
+	// Installer adapter: write station fields through Qt's UTF-8 INI codec,
+	// without starting receivers, uploading, or touching native
+	// preferences.
+	const int importIndex = application.arguments().indexOf(
+	    QStringLiteral("--import-proxy-config"));
+	if (importIndex >= 0) {
+		asrtu::IniSettings settings(QStringLiteral("launcher"));
+		const QString source =
+		    importIndex + 1 < application.arguments().size()
+			? application.arguments().at(importIndex + 1)
+			: configPath();
+		return asrtu::importProxySettings(source, settings) ? 0 : 1;
+	}
 
 	if (application.arguments().contains(
 		QStringLiteral("--check-session-directory"))) {

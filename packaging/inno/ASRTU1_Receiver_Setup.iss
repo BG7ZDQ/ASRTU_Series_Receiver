@@ -90,12 +90,15 @@ japanese.StationTitle=地上局情報
 english.StationSubtitle=Enter the information required by the upload proxy
 chinesesimp.StationSubtitle=填写上传代理所需资料
 japanese.StationSubtitle=アップロードプロキシに必要な情報を入力してください
-english.StationDescription=The satellite and server are selected per session in the launcher. Enter only the ground-station details here.
-chinesesimp.StationDescription=卫星和服务器在启动器中按每次接收任务选择；这里仅填写地面站资料。
-japanese.StationDescription=衛星とサーバーはセッションごとにランチャーで選択します。ここでは地上局情報のみ入力してください。
+english.StationDescription=The satellite and server are selected per session in the launcher. Enter only the ground-station details here. A Maidenhead grid fills in the coordinates.
+chinesesimp.StationDescription=卫星和服务器在启动器中按每次接收任务选择；这里仅填写地面站资料。填写梅登海德网格会自动换算经度、纬度。
+japanese.StationDescription=衛星とサーバーはセッションごとにランチャーで選択します。ここでは地上局情報のみ入力してください。メイデンヘッド・グリッドを入力すると経度・緯度に反映されます。
 english.Callsign=Callsign:
 chinesesimp.Callsign=呼号：
 japanese.Callsign=コールサイン：
+english.StationGrid=Maidenhead grid:
+chinesesimp.StationGrid=梅登海德网格：
+japanese.StationGrid=メイデンヘッド・グリッド：
 english.Longitude=Longitude (-180 to 180):
 chinesesimp.Longitude=经度（-180 至 180）：
 japanese.Longitude=経度（-180～180）：
@@ -120,6 +123,9 @@ japanese.InvalidLatitude=緯度は-90～90の数値で入力してください�
 english.InvalidAltitude=Altitude must be a number from -500 to 10000 metres.
 chinesesimp.InvalidAltitude=海拔必须是 -500 至 10000 米之间的数字。
 japanese.InvalidAltitude=標高は-500～10000メートルの数値で入力してください。
+english.InvalidStationGrid=The grid locator is invalid. Use 4, 6 or 8 characters.
+chinesesimp.InvalidStationGrid=网格无效：请填 4、6、8 位。
+japanese.InvalidStationGrid=グリッドロケーターが無効です。4・6・8文字で入力してください。
 english.ConfigWriteFailed=Unable to write the upload proxy configuration file.
 chinesesimp.ConfigWriteFailed=无法写入上传代理配置文件。
 japanese.ConfigWriteFailed=アップロードプロキシの設定ファイルを書き込めません。
@@ -261,19 +267,19 @@ begin
     ConfigText := String(ConfigRaw);
     StationPage.Values[0] := ConfigStringValue(
       ConfigText, 'proxy_nickname', StationPage.Values[0]);
-    StationPage.Values[1] := ConfigNumberValue(
-      ConfigText, 'proxy_long', StationPage.Values[1]);
     StationPage.Values[2] := ConfigNumberValue(
-      ConfigText, 'proxy_lat', StationPage.Values[2]);
+      ConfigText, 'proxy_long', StationPage.Values[2]);
     StationPage.Values[3] := ConfigNumberValue(
-      ConfigText, 'proxy_alt', StationPage.Values[3]);
+      ConfigText, 'proxy_lat', StationPage.Values[3]);
+    StationPage.Values[4] := ConfigNumberValue(
+      ConfigText, 'proxy_alt', StationPage.Values[4]);
   end;
 
   { Explicit unattended-install parameters override saved values. }
   if ParamNickname <> '' then StationPage.Values[0] := ParamNickname;
-  if ParamLongitude <> '' then StationPage.Values[1] := ParamLongitude;
-  if ParamLatitude <> '' then StationPage.Values[2] := ParamLatitude;
-  if ParamAltitude <> '' then StationPage.Values[3] := ParamAltitude;
+  if ParamLongitude <> '' then StationPage.Values[2] := ParamLongitude;
+  if ParamLatitude <> '' then StationPage.Values[3] := ParamLatitude;
+  if ParamAltitude <> '' then StationPage.Values[4] := ParamAltitude;
 end;
 
 function ParseNumber(ValueText: String; var Value: Extended): Boolean;
@@ -302,6 +308,116 @@ begin
   StringChangeEx(Result, ',', '.', True);
 end;
 
+{ Maidenhead locator support: the proxy and the launcher only store decimal
+  degrees, so a locator entered on the station page is converted here. }
+function FormatCoordinate(Value: Extended): String;
+var
+  Negative: Boolean;
+  Scaled: Int64;
+begin
+  Negative := Value < 0;
+  if Negative then
+    Value := -Value;
+  Scaled := Round(Value * 1000000);
+  Result := IntToStr(Scaled);
+  while Length(Result) < 7 do
+    Result := '0' + Result;
+  Result := Copy(Result, 1, Length(Result) - 6) + '.' +
+            Copy(Result, Length(Result) - 5, 6);
+  if Negative and (Scaled <> 0) then
+    Result := '-' + Result;
+end;
+
+function NormalizeGridLocator(Text: String): String;
+var
+  Index: Integer;
+  Character: Char;
+begin
+  Result := '';
+  for Index := 1 to Length(Text) do
+  begin
+    Character := Text[Index];
+    if not ((Character = ' ') or (Character = '-') or (Character = '_')) then
+    begin
+      if (Ord(Character) >= Ord('a')) and (Ord(Character) <= Ord('z')) then
+        Character := Chr(Ord(Character) - 32);
+      Result := Result + Character;
+    end;
+  end;
+end;
+
+function DecodeGridLocator(Locator: String; var Latitude,
+  Longitude: Extended): Boolean;
+var
+  PairIndex, Pairs, Limit, FirstValue, SecondValue: Integer;
+  LongitudeWidth, LatitudeWidth: Extended;
+  First, Second: Char;
+begin
+  Result := False;
+  if (Length(Locator) < 4) or (Length(Locator) > 8) or
+     ((Length(Locator) mod 2) <> 0) then
+    Exit;
+  Pairs := Length(Locator) div 2;
+  for PairIndex := 0 to Pairs - 1 do
+  begin
+    First := Locator[PairIndex * 2 + 1];
+    Second := Locator[PairIndex * 2 + 2];
+    if (PairIndex mod 2) = 1 then
+    begin
+      if (Ord(First) < Ord('0')) or (Ord(First) > Ord('9')) or
+         (Ord(Second) < Ord('0')) or (Ord(Second) > Ord('9')) then
+        Exit;
+    end
+    else
+    begin
+      if PairIndex = 0 then
+        Limit := Ord('R')
+      else
+        Limit := Ord('X');
+      if (Ord(First) < Ord('A')) or (Ord(First) > Limit) or
+         (Ord(Second) < Ord('A')) or (Ord(Second) > Limit) then
+        Exit;
+    end;
+  end;
+  Longitude := -180.0;
+  Latitude := -90.0;
+  LongitudeWidth := 20.0;
+  LatitudeWidth := 10.0;
+  for PairIndex := 0 to Pairs - 1 do
+  begin
+    First := Locator[PairIndex * 2 + 1];
+    Second := Locator[PairIndex * 2 + 2];
+    if (PairIndex mod 2) = 0 then
+    begin
+      FirstValue := Ord(First) - Ord('A');
+      SecondValue := Ord(Second) - Ord('A');
+    end
+    else
+    begin
+      FirstValue := Ord(First) - Ord('0');
+      SecondValue := Ord(Second) - Ord('0');
+    end;
+    Longitude := Longitude + FirstValue * LongitudeWidth;
+    Latitude := Latitude + SecondValue * LatitudeWidth;
+    if PairIndex < Pairs - 1 then
+    begin
+      if (PairIndex mod 2) = 0 then
+      begin
+        LongitudeWidth := LongitudeWidth / 10.0;
+        LatitudeWidth := LatitudeWidth / 10.0;
+      end
+      else
+      begin
+        LongitudeWidth := LongitudeWidth / 24.0;
+        LatitudeWidth := LatitudeWidth / 24.0;
+      end;
+    end;
+  end;
+  Longitude := Longitude + LongitudeWidth / 2.0;
+  Latitude := Latitude + LatitudeWidth / 2.0;
+  Result := True;
+end;
+
 procedure InitializeWizard;
 begin
   StationValuesLoaded := False;
@@ -313,13 +429,15 @@ begin
     CustomMessage('StationTitle'), CustomMessage('StationSubtitle'),
     CustomMessage('StationDescription'));
   StationPage.Add(CustomMessage('Callsign'), False);
+  StationPage.Add(CustomMessage('StationGrid'), False);
   StationPage.Add(CustomMessage('Longitude'), False);
   StationPage.Add(CustomMessage('Latitude'), False);
   StationPage.Add(CustomMessage('Altitude'), False);
   StationPage.Values[0] := ParamNickname;
-  StationPage.Values[1] := '0.000000';
+  StationPage.Values[1] := '';
   StationPage.Values[2] := '0.000000';
-  StationPage.Values[3] := '0.00';
+  StationPage.Values[3] := '0.000000';
+  StationPage.Values[4] := '0.00';
 end;
 
 procedure CurPageChanged(CurPageID: Integer);
@@ -331,6 +449,7 @@ end;
 function NextButtonClick(CurPageID: Integer): Boolean;
 var
   LongitudeValue, LatitudeValue, AltitudeValue: Extended;
+  GridText: String;
 begin
   Result := True;
   if CurPageID <> StationPage.ID then
@@ -349,21 +468,35 @@ begin
     Result := False;
     Exit;
   end;
-  if (not ParseNumber(StationPage.Values[1], LongitudeValue)) or
+  { A locator is only an alternative input: it fills the decimal fields that
+    the proxy and launcher store, and it overrides what they displayed. }
+  GridText := NormalizeGridLocator(StationPage.Values[1]);
+  if GridText <> '' then
+  begin
+    if not DecodeGridLocator(GridText, LatitudeValue, LongitudeValue) then
+    begin
+      MsgBox(CustomMessage('InvalidStationGrid'), mbError, MB_OK);
+      Result := False;
+      Exit;
+    end;
+    StationPage.Values[2] := FormatCoordinate(LongitudeValue);
+    StationPage.Values[3] := FormatCoordinate(LatitudeValue);
+  end;
+  if (not ParseNumber(StationPage.Values[2], LongitudeValue)) or
      (LongitudeValue < -180) or (LongitudeValue > 180) then
   begin
     MsgBox(CustomMessage('InvalidLongitude'), mbError, MB_OK);
     Result := False;
     Exit;
   end;
-  if (not ParseNumber(StationPage.Values[2], LatitudeValue)) or
+  if (not ParseNumber(StationPage.Values[3], LatitudeValue)) or
      (LatitudeValue < -90) or (LatitudeValue > 90) then
   begin
     MsgBox(CustomMessage('InvalidLatitude'), mbError, MB_OK);
     Result := False;
     Exit;
   end;
-  if (not ParseNumber(StationPage.Values[3], AltitudeValue)) or
+  if (not ParseNumber(StationPage.Values[4], AltitudeValue)) or
      (AltitudeValue < -500) or (AltitudeValue > 10000) then
   begin
     MsgBox(CustomMessage('InvalidAltitude'), mbError, MB_OK);
@@ -483,13 +616,19 @@ begin
       '# Proxy Config' + #13#10 +
       'physical_channel = 0;' + #13#10 +
       'proxy_nickname = "' + Trim(StationPage.Values[0]) + '";' + #13#10 +
-      'proxy_long = ' + ConfigNumber(StationPage.Values[1]) + ';' + #13#10 +
-      'proxy_lat = ' + ConfigNumber(StationPage.Values[2]) + ';' + #13#10 +
-      'proxy_alt = ' + ConfigNumber(StationPage.Values[3]) + ';' + #13#10;
+      'proxy_long = ' + ConfigNumber(StationPage.Values[2]) + ';' + #13#10 +
+      'proxy_lat = ' + ConfigNumber(StationPage.Values[3]) + ';' + #13#10 +
+      'proxy_alt = ' + ConfigNumber(StationPage.Values[4]) + ';' + #13#10;
 
     ForceDirectories(ExpandConstant('{app}\proxy'));
     if not SaveStringToFile(ExpandConstant('{app}\proxy\config.cfg'),
                             ConfigText, False) then
+      MsgBox(CustomMessage('ConfigWriteFailed'), mbError, MB_OK);
+    { Let Qt write the UTF-8 INI and escape values; do not mix Win32 INI
+      encoding with the application's codec. Only station fields are imported. }
+    if (not Exec(ExpandConstant('{app}\bin\ASRTU1_Launcher.exe'),
+                 '--import-proxy-config', '', SW_HIDE, ewWaitUntilTerminated,
+                 IntegrityResult)) or (IntegrityResult <> 0) then
       MsgBox(CustomMessage('ConfigWriteFailed'), mbError, MB_OK);
   end;
 end;
@@ -512,12 +651,8 @@ begin
     DirExists(ExpandConstant('{userappdata}\ASRTU\ASRTU1_Launcher')) or
     DirExists(ExpandConstant('{userappdata}\ASRTU\ASRTU_Doppler')) or
     DirExists(ExpandConstant('{localappdata}\ASRTU\ASRTU1_Demod_CQt')) or
-    RegKeyExists(HKCU, 'Software\ASRTU\AstroSeriesLauncher') or
-    RegKeyExists(HKCU, 'Software\ASRTU\ASRTU1_Launcher') or
-    RegKeyExists(HKCU, 'Software\ASRTU\ASRTU1_Demod_CQt_v3') or
-    RegKeyExists(HKCU, 'Software\ASRTU\ASRTU1_Demod_CQt') or
-    RegKeyExists(HKCU, 'Software\TinyDoppler') or
-    RegKeyExists(HKCU, 'Software\ASRTU\AstroSeriesTracker');
+    FileExists(ExpandConstant('{app}\config\launcher.ini')) or
+    FileExists(ExpandConstant('{app}\config\decoder.ini'));
 end;
 
 function InitializeUninstall(): Boolean;
@@ -552,16 +687,8 @@ begin
             True, True, True);
     DelTree(ExpandConstant('{localappdata}\ASRTU\ASRTU1_Demod_CQt'),
             True, True, True);
-    RegDeleteKeyIncludingSubkeys(HKCU,
-                                 'Software\ASRTU\AstroSeriesLauncher');
-    RegDeleteKeyIncludingSubkeys(HKCU,
-                                 'Software\ASRTU\ASRTU1_Launcher');
-    RegDeleteKeyIncludingSubkeys(HKCU,
-                                 'Software\ASRTU\ASRTU1_Demod_CQt_v3');
-    RegDeleteKeyIncludingSubkeys(HKCU,
-                                 'Software\ASRTU\ASRTU1_Demod_CQt');
-    RegDeleteKeyIncludingSubkeys(HKCU, 'Software\TinyDoppler');
-    RegDeleteKeyIncludingSubkeys(HKCU,
-                                 'Software\ASRTU\AstroSeriesTracker');
+    DeleteFile(ExpandConstant('{app}\config\launcher.ini'));
+    DeleteFile(ExpandConstant('{app}\config\decoder.ini'));
+    RemoveDir(ExpandConstant('{app}\config'));
   end;
 end;

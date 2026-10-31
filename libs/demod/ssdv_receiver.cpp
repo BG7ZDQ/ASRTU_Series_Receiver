@@ -24,6 +24,11 @@ constexpr std::size_t kMaxQueuedFrames = 4096;
 constexpr auto kPreviewRefreshInterval = std::chrono::milliseconds(500);
 constexpr auto kImageSaveInterval = std::chrono::milliseconds(1000);
 constexpr std::uint32_t kJamxCrcInitialValue = 0x6AAAC1C5U;
+// A second JAMX CRC initial value, first captured on 2026-10-31 (CCSDS header
+// 0x0322, 640x480, quality 3). The value is not a callsign encoding: it is
+// outside the 6 character SSDV callsign range, like the other variant
+// constants.
+constexpr std::uint32_t kJamxAltCrcInitialValue = 0xF87754B4U;
 
 std::uint32_t ssdvCrc32(const char *data, std::size_t length,
 			std::uint32_t initialValue)
@@ -40,7 +45,7 @@ std::uint32_t ssdvCrc32(const char *data, std::size_t length,
 	return crc ^ 0xFFFFFFFFU;
 }
 
-bool hasJamxCrc(const QByteArray &packet)
+bool hasSsdvCrc(const QByteArray &packet, std::uint32_t initialValue)
 {
 	if (packet.size() != kDslwpPacketSize)
 		return false;
@@ -51,8 +56,8 @@ bool hasJamxCrc(const QByteArray &packet)
 	    (std::uint32_t(bytes[kDslwpCrcDataSize + 1]) << 16U) |
 	    (std::uint32_t(bytes[kDslwpCrcDataSize + 2]) << 8U) |
 	    std::uint32_t(bytes[kDslwpCrcDataSize + 3]);
-	return ssdvCrc32(packet.constData(), kDslwpCrcDataSize,
-			 kJamxCrcInitialValue) == expected;
+	return ssdvCrc32(packet.constData(), kDslwpCrcDataSize, initialValue) ==
+	       expected;
 }
 
 bool plausibleSsdvHeader(const ssdv_packet_info_t &info)
@@ -76,10 +81,17 @@ int virtualChannelId(const QByteArray &frame)
 	return (word >> 1) & 0x07;
 }
 
-QString satelliteName(std::uint16_t header, bool jamxMode)
+QString satelliteName(std::uint16_t header, SsdvCrcVariant variant)
 {
-	if (jamxMode)
+	switch (variant) {
+	case SsdvCrcVariant::Jamx:
 		return QStringLiteral("JAMX");
+	case SsdvCrcVariant::Unknown:
+		return QStringLiteral("Unknown");
+	case SsdvCrcVariant::Dslwp:
+		break;
+	}
+
 	if (header == 0x0322)
 		return QStringLiteral("ASRTU-1");
 	if (header == 0x2052)
@@ -165,7 +177,7 @@ void SsdvReceiver::workerLoop()
 
 		{
 			std::unique_lock<std::mutex> lock(queue_mutex_);
-			if (!dirty) {
+			if (!dirty && !image_unsaved_) {
 				queue_cv_.wait(lock, [this] {
 					return stop_requested_ ||
 					       clear_requested_ ||
@@ -216,7 +228,7 @@ void SsdvReceiver::workerLoop()
 						 queued.generation))
 					finishDirty = true;
 			}
-			if (finishDirty) {
+			if (finishDirty || image_unsaved_) {
 				last_image_save_ = {};
 				rebuildImage(true, false);
 			}
@@ -250,7 +262,12 @@ void SsdvReceiver::workerLoop()
 		}
 
 		const auto now = std::chrono::steady_clock::now();
-		if (dirty && (urgent || now >= nextRefresh)) {
+		// A decoded preview whose disk write was deferred by the save
+		// throttle keeps the loop awake until it has been written, so
+		// the last image is not lost when the stream ends without
+		// further packets.
+		if ((dirty || image_unsaved_) &&
+		    (urgent || now >= nextRefresh)) {
 			savePacketBin();
 			// Keep dirty state when shutdown suppresses the UI
 			// refresh; the shutdown branch still owes us the final
@@ -284,9 +301,18 @@ bool SsdvReceiver::processFrame(const QByteArray &frame,
 		return false;
 
 	auto *bytes = reinterpret_cast<std::uint8_t *>(packet.data());
-	const bool crcValid =
+	const bool dslwpCrcValid =
 	    ssdv_dec_is_packet(bytes, &errors, ssdv_dslwp_mode) == SSDV_OK;
-	const bool jamxCrcValid = !crcValid && hasJamxCrc(packet);
+	const bool jamxCrcValid =
+	    !dslwpCrcValid && (hasSsdvCrc(packet, kJamxCrcInitialValue) ||
+			       hasSsdvCrc(packet, kJamxAltCrcInitialValue));
+
+	SsdvCrcVariant packetVariant = SsdvCrcVariant::Unknown;
+	if (dslwpCrcValid)
+		packetVariant = SsdvCrcVariant::Dslwp;
+	else if (jamxCrcValid)
+		packetVariant = SsdvCrcVariant::Jamx;
+	const bool crcValid = packetVariant != SsdvCrcVariant::Unknown;
 
 	ssdv_packet_info_t info{};
 	ssdv_dec_header(&info, bytes, ssdv_dslwp_mode);
@@ -297,15 +323,16 @@ bool SsdvReceiver::processFrame(const QByteArray &frame,
 	    existing != packets_.end() &&
 	    crc_failed_packet_ids_.find(info.packet_id) !=
 		crc_failed_packet_ids_.end();
-	// Both the DSLWP and JAMX CRC initial values are valid protocol
-	// variants. Only packets that fail both checks are accepted as
-	// best-effort recovery data and shown as CRC-failed in the UI.
-	const bool crcFailed = !crcValid && !jamxCrcValid;
-	// A packet with neither known CRC is useful only after a validated
-	// packet has established the image identity. This permits damaged
-	// packets to improve a local preview without allowing arbitrary VC1
-	// telemetry to create false SSDV sessions.
-	if (!crcValid && !jamxCrcValid &&
+	// A packet that fails every known CRC initial value may still be a real
+	// image packet using a variant we have not seen yet. It is not trusted,
+	// but it is kept as best-effort data once an image exists, and a clean
+	// first packet (packet ID 0 with the first MCU) may start a session
+	// that is displayed as "Unknown".
+	const bool unknownCrcStart =
+	    !crcValid && info.packet_id == 0 && info.mcu_id == 0 &&
+	    info.mcu_offset == 0 &&
+	    (image_id_ < 0 || variant_ == SsdvCrcVariant::Unknown);
+	if (!crcValid && !unknownCrcStart &&
 	    (image_id_ < 0 || image_id_ != int(info.image_id) ||
 	     width_ != info.width || height_ != info.height ||
 	     quality_ != info.quality ||
@@ -313,17 +340,26 @@ bool SsdvReceiver::processFrame(const QByteArray &frame,
 	     (!packets_.empty() && existing == packets_.end() &&
 	      info.packet_id > packets_.rbegin()->first + 64U)))
 		return false;
-	const bool packetJamxMode =
-	    jamxCrcValid || (!crcValid && !jamxCrcValid && jamx_mode_);
-	const bool formatChanged = image_id_ >= 0 &&
-				   (crcValid || jamxCrcValid) &&
-				   packetJamxMode != jamx_mode_;
+	const bool crcFailed = !crcValid;
+	// A verified packet may upgrade an unidentified session in place
+	// instead of splitting the image.
+	const bool sameImage =
+	    image_id_ >= 0 && image_id_ == int(info.image_id) &&
+	    width_ == info.width && height_ == info.height &&
+	    quality_ == info.quality && spacecraft_header_ == spacecraftHeader;
+	if (crcValid && sameImage && variant_ == SsdvCrcVariant::Unknown) {
+		variant_ = packetVariant;
+		satellite_ = satelliteName(spacecraft_header_, variant_);
+	}
+	const bool formatChanged =
+	    image_id_ >= 0 && crcValid && packetVariant != variant_;
 
 	const auto firstPacket = packets_.find(0);
 	const bool replacedFirstPacket =
-	    (crcValid || jamxCrcValid) && info.packet_id == 0 &&
-	    firstPacket != packets_.end() && !existingCrcFailed &&
-	    firstPacket->second != packet;
+	    (crcValid || unknownCrcStart ||
+	     variant_ == SsdvCrcVariant::Unknown) &&
+	    info.packet_id == 0 && firstPacket != packets_.end() &&
+	    !existingCrcFailed && firstPacket->second != packet;
 	const bool duplicatePacket =
 	    existing != packets_.end() && existing->second == packet;
 	// A byte-identical retransmission of an already stored packet is a
@@ -341,7 +377,7 @@ bool SsdvReceiver::processFrame(const QByteArray &frame,
 	// indicates a repeated pass, while an isolated decrease is simply out
 	// of order data.
 	const bool packetCounterRegressed =
-	    (crcValid || jamxCrcValid) && !packets_.empty() &&
+	    (crcValid || unknownCrcStart) && !packets_.empty() &&
 	    !existingCrcFailed && info.packet_id < packets_.rbegin()->first &&
 	    (info.packet_id == packets_.begin()->first || info.packet_id == 0);
 	const bool sessionChanged =
@@ -369,8 +405,8 @@ bool SsdvReceiver::processFrame(const QByteArray &frame,
 		quality_ = info.quality;
 		complete_ = false;
 		spacecraft_header_ = spacecraftHeader;
-		jamx_mode_ = packetJamxMode;
-		satellite_ = satelliteName(spacecraft_header_, jamx_mode_);
+		variant_ = crcValid ? packetVariant : SsdvCrcVariant::Unknown;
+		satellite_ = satelliteName(spacecraft_header_, variant_);
 		state_generation_ = generation;
 		image_path_ =
 		    QDir(session_directory_)
@@ -385,12 +421,16 @@ bool SsdvReceiver::processFrame(const QByteArray &frame,
 		packet_bin_path_ = basePath + QStringLiteral(".bin");
 		if (log_callback_) {
 			log_callback_(
-			    QStringLiteral(
-				"SSDV image started: ID %1, %2x%3, quality %4")
+			    QStringLiteral("SSDV image started: ID %1, %2x%3, "
+					   "quality %4%5")
 				.arg(image_id_)
 				.arg(width_)
 				.arg(height_)
-				.arg(quality_));
+				.arg(quality_)
+				.arg(variant_ == SsdvCrcVariant::Unknown
+					 ? QStringLiteral(
+					       " (unknown CRC variant)")
+					 : QString()));
 		}
 	}
 
@@ -549,6 +589,12 @@ bool SsdvReceiver::rebuildImage(bool allowStopped, bool publish)
 			return false;
 		}
 		last_image_save_ = now;
+		image_unsaved_ = false;
+	} else {
+		// Remember that the newest decode is not on disk yet: the
+		// worker will retry once the throttle window opens, and
+		// shutdown forces the write as a last resort.
+		image_unsaved_ = true;
 	}
 
 	if (!allowStopped && !isCurrentGeneration(state_generation_))
@@ -606,7 +652,8 @@ void SsdvReceiver::clearState(std::uint64_t generation)
 	quality_ = 0;
 	state_generation_ = generation;
 	complete_ = false;
-	jamx_mode_ = false;
+	variant_ = SsdvCrcVariant::Unknown;
 	bin_dirty_ = false;
 	last_image_save_ = {};
+	image_unsaved_ = false;
 }
