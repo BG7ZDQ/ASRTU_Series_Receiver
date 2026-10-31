@@ -25,8 +25,12 @@ int main(int argc, char **argv)
 			QStandardPaths::GenericConfigLocation))
 		   .filePath(QStringLiteral("ASRTU")));
 #endif
+	// ASCII directory name: ASRTU_CONFIG_DIR reaches Qt through the local
+	// 8-bit environment, which cannot carry arbitrary Unicode on every
+	// locale (Windows CI uses a Western ANSI codepage). Unicode station
+	// values below still exercise the UTF-8 INI codec.
 	const QString root =
-	    temporary.filePath(QStringLiteral("配置 directory"));
+	    temporary.filePath(QStringLiteral("config directory"));
 	qputenv("ASRTU_CONFIG_DIR", root.toLocal8Bit());
 	QSettings::setDefaultFormat(QSettings::NativeFormat);
 	const QByteArray geometry("\0\1\2\xff", 4);

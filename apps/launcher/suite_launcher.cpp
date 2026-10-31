@@ -1771,6 +1771,15 @@ bool startSuite(bool enableProxy, int inputMode, const QString &wavPath,
 class LauncherWindow final : public QWidget
 {
       public:
+	~LauncherWindow() override
+	{
+		// A focused child can emit a signal while it is being
+		// destroyed, which happens after this object's own destructor
+		// body already ran. Drop the child notifications first so no
+		// handler then touches the window in that state.
+		for (QObject *child : findChildren<QObject *>())
+			disconnect(child, nullptr, this, nullptr);
+	}
 	LauncherWindow()
 	{
 		// Keep the launcher available while decoder/proxy windows are

@@ -662,7 +662,8 @@ include(CPack)
 
 # CoreAudio enumeration uses device names expected by GNU Radio's macOS backend.
 if(APPLE)
-    foreach(target ASRTU1_Demod_CQt ASRTU1_Launcher ASRTU1_LauncherSdrTest)
+    foreach(target ASRTU1_Demod_CQt ASRTU1_Launcher ASRTU1_LauncherSdrTest
+                ASRTU1_LauncherGridTest)
         if(TARGET ${target})
             target_link_libraries(${target} PRIVATE "-framework CoreAudio" "-framework CoreFoundation")
         endif()
